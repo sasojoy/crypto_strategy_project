@@ -1,0 +1,11 @@
+{
+  "trades": 49,
+  "win_rate": 0.1429,
+  "avg_return_per_trade": -0.003869,
+  "total_return_simple": -0.1896,
+  "avg_holding_minutes": 108.67,
+  "max_drawdown_compounded": -0.1725,
+  "fee_bps": 8.0,
+  "slip_bps": 0.0,
+  "threshold_used": 0.87
+}
