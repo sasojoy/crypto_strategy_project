@@ -1,0 +1,19 @@
+
+entry:
+  mode: and
+  conditions:
+    - horizon: "2"
+      threshold: "+0.5"
+      probability: 60
+    - horizon: "16"
+      threshold: "+0.5"
+      probability: 60
+
+exit:
+  max_hold: 48
+  stop_gain: 0.05
+  stop_loss: -0.02
+  weaken_condition:
+    horizon: "2"
+    threshold: "+0.5"
+    probability: 50
