@@ -31,7 +31,6 @@
 
 ### `/config/`
 - `strategy_config.yaml`：策略參數設定。
-- `joystrategy-btc-11536b5d09b1.json`：Google Sheets 授權憑證。
 
 ### `/util/`
 - `notifier.py`：負責推播 Telegram 訊息與交易紀錄格式化。
