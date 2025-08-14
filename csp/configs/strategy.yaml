@@ -1,0 +1,73 @@
+symbols:
+- BTCUSDT
+- ETHUSDT
+- BCHUSDT
+io:
+  csv_paths:
+    BTCUSDT: resources/btc_15m.csv
+    ETHUSDT: resources/eth_15m.csv
+    BCHUSDT: resources/bch_15m.csv
+  models_dir: models
+  logs_dir: logs
+  position_file: resources/current_position.yaml
+  live_fetch:
+    enabled: true
+    interval: 15m
+    limit: 96
+    api_base: https://api.binance.com
+feature:
+  ema_windows:
+  - 9
+  - 21
+  - 50
+  rsi_window: 14
+  bb_window: 20
+  bb_std: 2.0
+  atr_window: 14
+  h4_rule:
+    enabled: true
+    resample: 4H
+train:
+  target_horizon_bars: 16
+  label_threshold: 0.0
+  test_size: 0.2
+  random_state: 42
+  xgb:
+    objective: binary:logistic
+    eval_metric: logloss
+    n_estimators: 600
+    max_depth: 6
+    learning_rate: 0.05
+    subsample: 0.9
+    colsample_bytree: 0.9
+execution:
+  long_prob_threshold: 0.62
+  short_prob_threshold: 0.65
+  atr_tp_sl:
+    long:
+      tp_mult: 1.6
+      sl_mult: 1.0
+    short:
+      tp_mult: 1.2
+      sl_mult: 0.8
+  max_holding_minutes: 240
+  entry_zone:
+    enabled: true
+    method: atr_discount
+    lookahead_bars: 16
+    long_x: 0.5
+    short_x: 0.5
+notify:
+  telegram:
+    enabled: true
+    bot_token_env: BOT_TOKEN
+    chat_id_env: CHAT_ID
+    bot_token: 7978688690:AAEYbCQMqoyCskxzms7gK-Moh1eYhF4X0rs
+    chat_id: '-4949591915'
+backtest:
+  initial_capital: 10000.0
+  risk_per_trade: 0.007
+  fee_rate: 0.0004
+  slippage: 0.0002
+entry_filter:
+  cooldown_bars: 4

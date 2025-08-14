@@ -1,0 +1,29 @@
+[project]
+name = "csp"
+version = "1.0.0"
+description = "Crypto Strategy Project — full rewrite (15m + 4h classification, ATR TP/SL, multi-symbol)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pandas",
+  "numpy",
+  "xgboost",
+  "scikit-learn",
+  "pyyaml",
+  "requests",
+  "joblib",
+  "python-dateutil"
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ✅ 關鍵：只找 csp* 套件，排除其他資料夾
+[tool.setuptools.packages.find]
+include = ["csp*"]
+exclude = ["logs*", "models*", "resources*", "scripts*", "tests*"]
+
+# 若要把 YAML 一起打包，可保留這段
+[tool.setuptools.package-data]
+csp = ["configs/*.yaml"]

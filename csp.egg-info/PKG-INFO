@@ -1,0 +1,57 @@
+Metadata-Version: 2.4
+Name: csp
+Version: 1.0.0
+Summary: Crypto Strategy Project — full rewrite (15m + 4h classification, ATR TP/SL, multi-symbol)
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: xgboost
+Requires-Dist: scikit-learn
+Requires-Dist: pyyaml
+Requires-Dist: requests
+Requires-Dist: joblib
+Requires-Dist: python-dateutil
+
+# CSP — Crypto Strategy Project (Full Rewrite)
+
+**目標**：乾淨模組化、可重複訓練、即時推論、ATR 動態 TP/SL、4H 低頻高勝率策略，可擴充混合 15m 模型。
+
+## 快速開始
+
+```bash
+pip install -e .
+# 訓練（如果你已經有 CSV 可直接指向；否則會嘗試使用內建的 resources 範例或 BTC CSV）
+python scripts/train_h16.py --csv ./resources/btc_15m.csv
+
+# 即時（會抓取最新 CSV 末端資料；也可串接 Binance API）
+python scripts/realtime.py --csv ./resources/btc_15m.csv
+```
+
+模型與 scaler、最佳門檻會輸出到 `./models`。設定在 `csp/configs/strategy.yaml`。日誌在 `./logs`。
+
+## 目錄
+```
+csp/
+  configs/
+  features/
+  models/
+  pipeline/
+  backtesting/
+  utils/
+  data/
+scripts/
+models/
+resources/
+logs/
+tests/
+```
+
+## 取得幣安 CSV（自動）
+```
+# 下載預設三幣種近 360 天 15m K 線
+python scripts/fetch_csv.py --cfg csp/configs/strategy.yaml --days 360
+
+# 也可手動指定區間
+python scripts/fetch_csv.py --cfg csp/configs/strategy.yaml --start 2024-09-01T00:00:00Z --end 2025-08-01T00:00:00Z
+```

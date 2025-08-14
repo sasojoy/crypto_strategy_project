@@ -1,0 +1,27 @@
+# 參考：把以下加入/合併到你的 strategy.yaml
+execution:
+  long_enter: 0.9
+  long_exit: 0.55
+  short_enter: 0.1
+  short_exit: 0.45
+  reentry_cooldown_bars: 8
+  per_4h_max_trades: 1
+  daily_max_trades: 20
+  min_signal_bars: 3
+  min_flip_bars: 2
+  atr_pct_min: 0.004
+  atr_pct_max: 0.03
+  atr_k_sl: 1.2
+  atr_k_tp1: 0.8
+  atr_k_tp2: 1.6
+  tp1_part: 0.5
+  tp2_part: 0.3
+  trail_k: 1.2
+  time_decay_minutes: 120
+  max_holding_bars: 16
+
+backtest:
+  initial_capital: 10000
+  risk_per_trade: 0.007
+  fee_rate: 0.0004
+  slippage: 0.0002

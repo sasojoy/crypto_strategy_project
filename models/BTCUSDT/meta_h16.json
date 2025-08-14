@@ -1,0 +1,20 @@
+{
+  "feature_cols": [
+    "ema_9",
+    "ema_21",
+    "ema_50",
+    "rsi",
+    "bb_mid",
+    "bb_high",
+    "bb_low",
+    "body",
+    "upper_shadow",
+    "lower_shadow",
+    "atr_h4",
+    "rsi_h4",
+    "ema_h4_21",
+    "ema_h4_50"
+  ],
+  "valid_accuracy": 0.8218599912676466,
+  "horizon_bars": 16
+}

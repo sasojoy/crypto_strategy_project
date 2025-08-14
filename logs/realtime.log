@@ -1,0 +1,1419 @@
+2025-08-12 00:38:37,013 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 00:38:37,331 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 00:38:37,652 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 00:43:20,619 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 00:43:20,933 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 00:43:21,260 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 00:57:32,307 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 00:57:32,625 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 00:57:32,935 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 00:59:02,661 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 00:59:02,989 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 00:59:03,319 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 00:59:56,142 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 00:59:56,473 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 00:59:56,818 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 01:00:28,942 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 01:00:29,246 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 01:00:29,555 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 01:01:51,453 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 01:01:51,777 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 01:01:52,095 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 01:02:23,236 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 01:02:25,429 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 01:02:27,604 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 01:15:16,513 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 01:15:18,826 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 01:15:21,110 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 01:16:59,862 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 01:17:02,030 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 01:17:04,225 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 01:30:15,391 [ERROR] realtime - live fetch failed for BTCUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 01:30:15,445 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 00:30:00+08:00
+price=120470.10, proba_up=0.132, atr_h4=1137.54
+2025-08-12 01:30:16,456 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 01:30:17,673 [ERROR] realtime - live fetch failed for ETHUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 01:30:17,718 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 00:30:00+08:00
+price=4349.19, proba_up=0.057, atr_h4=87.76
+2025-08-12 01:30:18,657 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 01:30:19,846 [ERROR] realtime - live fetch failed for BCHUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 01:30:19,901 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 00:30:00+08:00
+price=586.80, proba_up=0.087, atr_h4=12.91
+2025-08-12 01:30:20,843 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 12:00:15,366 [ERROR] realtime - live fetch failed for BTCUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 12:00:15,428 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 00:30:00+08:00
+price=120470.10, proba_up=0.132, atr_h4=1137.54
+2025-08-12 12:00:16,463 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 12:00:17,625 [ERROR] realtime - live fetch failed for ETHUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 12:00:17,661 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 00:30:00+08:00
+price=4349.19, proba_up=0.057, atr_h4=87.76
+2025-08-12 12:00:18,631 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 12:00:19,854 [ERROR] realtime - live fetch failed for BCHUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 12:00:19,890 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 00:30:00+08:00
+price=586.80, proba_up=0.087, atr_h4=12.91
+2025-08-12 12:00:20,851 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 12:15:15,264 [ERROR] realtime - live fetch failed for BTCUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 12:15:15,300 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 00:30:00+08:00
+price=120470.10, proba_up=0.132, atr_h4=1137.54
+2025-08-12 12:15:16,326 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 12:15:17,515 [ERROR] realtime - live fetch failed for ETHUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 12:15:17,556 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 00:30:00+08:00
+price=4349.19, proba_up=0.057, atr_h4=87.76
+2025-08-12 12:15:18,522 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 12:15:19,718 [ERROR] realtime - live fetch failed for BCHUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 12:15:19,754 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 00:30:00+08:00
+price=586.80, proba_up=0.087, atr_h4=12.91
+2025-08-12 12:15:20,690 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 12:30:15,228 [ERROR] realtime - live fetch failed for BTCUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 12:30:15,265 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 00:30:00+08:00
+price=120470.10, proba_up=0.132, atr_h4=1137.54
+2025-08-12 12:30:16,225 [INFO] realtime - 進場方向: SHORT | TP=119105.05, SL=121380.13
+2025-08-12 12:30:17,420 [ERROR] realtime - live fetch failed for ETHUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 12:30:17,456 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 00:30:00+08:00
+price=4349.19, proba_up=0.057, atr_h4=87.76
+2025-08-12 12:30:18,411 [INFO] realtime - 進場方向: SHORT | TP=4243.87, SL=4419.40
+2025-08-12 12:30:19,608 [ERROR] realtime - live fetch failed for BCHUSDT: fetch_latest_klines() got an unexpected keyword argument 'api_base'
+2025-08-12 12:30:19,645 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 00:30:00+08:00
+price=586.80, proba_up=0.087, atr_h4=12.91
+2025-08-12 12:30:20,627 [INFO] realtime - 進場方向: SHORT | TP=571.30, SL=597.13
+2025-08-12 19:00:21,209 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 19:00:00+08:00
+price=118465.28, proba_up=0.091, atr_h4=1232.60
+2025-08-12 19:00:22,181 [INFO] realtime - 進場方向: SHORT | TP=116986.17, SL=119451.36
+2025-08-12 19:00:23,523 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 19:00:00+08:00
+price=4278.19, proba_up=0.095, atr_h4=88.29
+2025-08-12 19:00:24,468 [INFO] realtime - 進場方向: SHORT | TP=4172.24, SL=4348.83
+2025-08-12 19:00:25,796 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 19:00:00+08:00
+price=590.60, proba_up=0.433, atr_h4=14.50
+2025-08-12 19:00:25,796 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 19:03:45,456 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 19:00:00+08:00
+price=118505.13, proba_up=0.056, atr_h4=1232.60
+2025-08-12 19:03:46,421 [INFO] realtime - 進場方向: SHORT | TP=117026.02, SL=119491.21
+2025-08-12 19:03:47,844 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 19:00:00+08:00
+price=4282.20, proba_up=0.101, atr_h4=88.29
+2025-08-12 19:03:48,796 [INFO] realtime - 進場方向: SHORT | TP=4176.25, SL=4352.84
+2025-08-12 19:03:50,105 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 19:00:00+08:00
+price=590.30, proba_up=0.432, atr_h4=14.50
+2025-08-12 19:03:50,105 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 19:15:16,482 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 19:15:00+08:00
+price=118222.01, proba_up=0.046, atr_h4=1232.60
+2025-08-12 19:15:17,439 [INFO] realtime - 進場方向: SHORT | TP=116742.90, SL=119208.09
+2025-08-12 19:15:18,782 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 19:15:00+08:00
+price=4263.56, proba_up=0.083, atr_h4=89.51
+2025-08-12 19:15:19,740 [INFO] realtime - 進場方向: SHORT | TP=4156.15, SL=4335.17
+2025-08-12 19:15:21,023 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 19:15:00+08:00
+price=588.00, proba_up=0.646, atr_h4=14.69
+2025-08-12 19:15:21,983 [INFO] realtime - 進場方向: LONG | TP=611.50, SL=573.31
+2025-08-12 19:30:16,560 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 19:30:00+08:00
+price=118500.30, proba_up=0.095, atr_h4=1232.60
+2025-08-12 19:30:17,532 [INFO] realtime - 進場方向: SHORT | TP=117021.19, SL=119486.38
+2025-08-12 19:30:18,883 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 19:30:00+08:00
+price=4276.25, proba_up=0.041, atr_h4=89.51
+2025-08-12 19:30:19,874 [INFO] realtime - 進場方向: SHORT | TP=4168.84, SL=4347.86
+2025-08-12 19:30:21,232 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 19:30:00+08:00
+price=590.40, proba_up=0.352, atr_h4=14.69
+2025-08-12 19:30:21,232 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 19:45:16,379 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 19:45:00+08:00
+price=118443.79, proba_up=0.125, atr_h4=1232.60
+2025-08-12 19:45:17,309 [INFO] realtime - 進場方向: SHORT | TP=116964.68, SL=119429.87
+2025-08-12 19:45:18,627 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 19:45:00+08:00
+price=4271.86, proba_up=0.053, atr_h4=89.51
+2025-08-12 19:45:19,588 [INFO] realtime - 進場方向: SHORT | TP=4164.45, SL=4343.47
+2025-08-12 19:45:20,888 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 19:45:00+08:00
+price=591.10, proba_up=0.406, atr_h4=14.69
+2025-08-12 19:45:20,888 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 20:00:16,583 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 20:00:00+08:00
+price=118539.59, proba_up=0.432, atr_h4=1143.84
+2025-08-12 20:00:16,583 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 20:00:17,904 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 20:00:00+08:00
+price=4293.64, proba_up=0.509, atr_h4=83.46
+2025-08-12 20:00:17,904 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 20:00:19,160 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 20:00:00+08:00
+price=592.50, proba_up=0.428, atr_h4=13.31
+2025-08-12 20:00:19,160 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 20:15:16,355 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 20:15:00+08:00
+price=118371.44, proba_up=0.454, atr_h4=1155.52
+2025-08-12 20:15:16,355 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 20:15:17,677 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 20:15:00+08:00
+price=4283.40, proba_up=0.340, atr_h4=84.42
+2025-08-12 20:15:18,624 [INFO] realtime - 進場方向: SHORT | TP=4182.09, SL=4350.94
+2025-08-12 20:15:19,928 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 20:15:00+08:00
+price=592.50, proba_up=0.310, atr_h4=13.37
+2025-08-12 20:15:20,864 [INFO] realtime - 進場方向: SHORT | TP=576.45, SL=603.20
+2025-08-12 20:30:16,458 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 20:30:00+08:00
+price=118764.00, proba_up=0.357, atr_h4=1178.38
+2025-08-12 20:30:16,458 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 20:30:17,765 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 20:30:00+08:00
+price=4328.25, proba_up=0.056, atr_h4=86.80
+2025-08-12 20:30:18,753 [INFO] realtime - 進場方向: SHORT | TP=4224.09, SL=4397.69
+2025-08-12 20:30:20,063 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 20:30:00+08:00
+price=595.00, proba_up=0.413, atr_h4=13.53
+2025-08-12 20:30:20,063 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 20:45:16,344 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 20:45:00+08:00
+price=119100.00, proba_up=0.266, atr_h4=1207.32
+2025-08-12 20:45:17,281 [INFO] realtime - 進場方向: SHORT | TP=117651.21, SL=120065.86
+2025-08-12 20:45:18,548 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 20:45:00+08:00
+price=4410.17, proba_up=0.027, atr_h4=93.02
+2025-08-12 20:45:19,622 [INFO] realtime - 進場方向: SHORT | TP=4298.55, SL=4484.58
+2025-08-12 20:45:20,889 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 20:45:00+08:00
+price=595.80, proba_up=0.622, atr_h4=13.64
+2025-08-12 20:45:21,852 [INFO] realtime - 進場方向: LONG | TP=617.62, SL=582.16
+2025-08-12 21:00:16,355 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 21:00:00+08:00
+price=119291.44, proba_up=0.048, atr_h4=1214.49
+2025-08-12 21:00:17,326 [INFO] realtime - 進場方向: SHORT | TP=117834.06, SL=120263.03
+2025-08-12 21:00:18,621 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 21:00:00+08:00
+price=4404.97, proba_up=0.038, atr_h4=93.92
+2025-08-12 21:00:19,556 [INFO] realtime - 進場方向: SHORT | TP=4292.27, SL=4480.10
+2025-08-12 21:00:20,874 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 21:00:00+08:00
+price=594.30, proba_up=0.532, atr_h4=13.64
+2025-08-12 21:00:20,874 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 21:15:16,341 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 21:15:00+08:00
+price=119046.68, proba_up=0.066, atr_h4=1214.49
+2025-08-12 21:15:17,298 [INFO] realtime - 進場方向: SHORT | TP=117589.30, SL=120018.27
+2025-08-12 21:15:18,576 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 21:15:00+08:00
+price=4397.99, proba_up=0.071, atr_h4=93.92
+2025-08-12 21:15:19,575 [INFO] realtime - 進場方向: SHORT | TP=4285.29, SL=4473.12
+2025-08-12 21:15:20,868 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 21:15:00+08:00
+price=592.50, proba_up=0.489, atr_h4=13.71
+2025-08-12 21:15:20,868 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 21:36:06,418 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 21:30:00+08:00
+price=119516.03, proba_up=0.076, atr_h4=1236.73
+2025-08-12 21:36:07,369 [INFO] realtime - 進場方向: SHORT | TP=118031.95, SL=120505.41
+2025-08-12 21:36:08,722 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 21:30:00+08:00
+price=4412.91, proba_up=0.081, atr_h4=94.31
+2025-08-12 21:36:09,678 [INFO] realtime - 進場方向: SHORT | TP=4299.73, SL=4488.36
+2025-08-12 21:36:10,976 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 21:30:00+08:00
+price=593.70, proba_up=0.405, atr_h4=13.71
+2025-08-12 21:36:10,977 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 22:26:54,458 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 22:15:00+08:00
+price=119274.57, proba_up=0.089, atr_h4=1243.47
+2025-08-12 22:26:55,480 [INFO] realtime - 進場方向: SHORT | TP=117782.41, SL=120269.34
+2025-08-12 22:26:56,862 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 22:15:00+08:00
+price=4409.00, proba_up=0.043, atr_h4=94.31
+2025-08-12 22:26:57,817 [INFO] realtime - 進場方向: SHORT | TP=4295.82, SL=4484.45
+2025-08-12 22:26:59,313 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 22:15:00+08:00
+price=590.90, proba_up=0.431, atr_h4=13.89
+2025-08-12 22:26:59,313 [INFO] realtime - 無進場訊號（等待）
+2025-08-12 22:33:47,941 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-12 22:30:00+08:00
+price=119274.58, proba_up=0.081, atr_h4=1243.47
+2025-08-12 22:33:48,925 [INFO] realtime - 進場方向: SHORT | TP=117782.42, SL=120269.35
+2025-08-12 22:33:50,243 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-12 22:30:00+08:00
+price=4406.52, proba_up=0.037, atr_h4=94.31
+2025-08-12 22:33:51,185 [INFO] realtime - 進場方向: SHORT | TP=4293.34, SL=4481.97
+2025-08-12 22:33:52,515 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-12 22:30:00+08:00
+price=591.80, proba_up=0.347, atr_h4=13.89
+2025-08-12 22:33:53,474 [INFO] realtime - 進場方向: SHORT | TP=575.13, SL=602.91
+2025-08-13 00:53:16,384 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 00:45:00+08:00
+price=119581.13, proba_up=0.028, atr_h4=1230.23
+2025-08-13 00:53:17,352 [INFO] realtime - 進場方向: SHORT | TP=118104.85, SL=120565.31
+2025-08-13 00:53:18,518 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 00:45:00+08:00
+price=4461.74, proba_up=0.076, atr_h4=94.82
+2025-08-13 00:53:19,485 [INFO] realtime - 進場方向: SHORT | TP=4347.96, SL=4537.60
+2025-08-13 00:53:20,800 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 00:45:00+08:00
+price=605.50, proba_up=0.564, atr_h4=14.13
+2025-08-13 00:53:20,800 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 07:40:42,142 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 07:30:00+08:00
+price=120184.12, proba_up=0.004, atr_h4=1267.15
+2025-08-13 07:40:43,356 [INFO] realtime - 進場方向: SHORT | TP=118663.54, SL=121197.84
+2025-08-13 07:40:44,635 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 07:30:00+08:00
+price=4606.21, proba_up=0.060, atr_h4=101.67
+2025-08-13 07:40:45,695 [INFO] realtime - 進場方向: SHORT | TP=4484.21, SL=4687.55
+2025-08-13 07:40:46,986 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 07:30:00+08:00
+price=619.00, proba_up=0.629, atr_h4=14.72
+2025-08-13 07:40:48,019 [INFO] realtime - 進場方向: LONG | TP=642.55, SL=604.28
+2025-08-13 07:45:16,751 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 07:45:00+08:00
+price=120237.95, proba_up=0.005, atr_h4=1267.15
+2025-08-13 07:45:17,795 [INFO] realtime - 進場方向: SHORT | TP=118717.37, SL=121251.67
+2025-08-13 07:45:19,064 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 07:45:00+08:00
+price=4607.39, proba_up=0.133, atr_h4=101.67
+2025-08-13 07:45:20,089 [INFO] realtime - 進場方向: SHORT | TP=4485.39, SL=4688.73
+2025-08-13 07:45:21,352 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 07:45:00+08:00
+price=618.50, proba_up=0.521, atr_h4=14.72
+2025-08-13 07:45:21,353 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 08:00:16,372 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 08:00:00+08:00
+price=120088.00, proba_up=0.014, atr_h4=1234.49
+2025-08-13 08:00:17,415 [INFO] realtime - 進場方向: SHORT | TP=118606.61, SL=121075.59
+2025-08-13 08:00:18,691 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 08:00:00+08:00
+price=4589.45, proba_up=0.109, atr_h4=98.67
+2025-08-13 08:00:19,721 [INFO] realtime - 進場方向: SHORT | TP=4471.05, SL=4668.38
+2025-08-13 08:00:20,972 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 08:00:00+08:00
+price=619.70, proba_up=0.629, atr_h4=14.46
+2025-08-13 08:00:21,991 [INFO] realtime - 進場方向: LONG | TP=642.84, SL=605.24
+2025-08-13 08:15:16,374 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 08:15:00+08:00
+price=120064.71, proba_up=0.021, atr_h4=1244.00
+2025-08-13 08:15:17,476 [INFO] realtime - 進場方向: SHORT | TP=118571.91, SL=121059.91
+2025-08-13 08:15:18,716 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 08:15:00+08:00
+price=4606.87, proba_up=0.163, atr_h4=100.18
+2025-08-13 08:15:19,748 [INFO] realtime - 進場方向: SHORT | TP=4486.65, SL=4687.02
+2025-08-13 08:15:21,076 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 08:15:00+08:00
+price=620.20, proba_up=0.633, atr_h4=14.59
+2025-08-13 08:15:22,109 [INFO] realtime - 進場方向: LONG | TP=643.55, SL=605.61
+2025-08-13 08:30:16,422 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 08:30:00+08:00
+price=119936.02, proba_up=0.021, atr_h4=1251.60
+2025-08-13 08:30:17,490 [INFO] realtime - 進場方向: SHORT | TP=118434.11, SL=120937.30
+2025-08-13 08:30:18,762 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 08:30:00+08:00
+price=4611.60, proba_up=0.102, atr_h4=100.77
+2025-08-13 08:30:19,818 [INFO] realtime - 進場方向: SHORT | TP=4490.67, SL=4692.22
+2025-08-13 08:30:21,062 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 08:30:00+08:00
+price=620.40, proba_up=0.554, atr_h4=14.67
+2025-08-13 08:30:21,062 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 08:45:16,325 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 08:45:00+08:00
+price=119880.00, proba_up=0.025, atr_h4=1254.18
+2025-08-13 08:45:17,352 [INFO] realtime - 進場方向: SHORT | TP=118374.98, SL=120883.34
+2025-08-13 08:45:18,601 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 08:45:00+08:00
+price=4624.32, proba_up=0.048, atr_h4=101.99
+2025-08-13 08:45:19,644 [INFO] realtime - 進場方向: SHORT | TP=4501.94, SL=4705.91
+2025-08-13 08:45:20,928 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 08:45:00+08:00
+price=621.20, proba_up=0.481, atr_h4=14.71
+2025-08-13 08:45:20,928 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 09:00:16,455 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 09:00:00+08:00
+price=119716.23, proba_up=0.023, atr_h4=1270.41
+2025-08-13 09:00:17,523 [INFO] realtime - 進場方向: SHORT | TP=118191.74, SL=120732.56
+2025-08-13 09:00:18,795 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 09:00:00+08:00
+price=4614.32, proba_up=0.068, atr_h4=102.39
+2025-08-13 09:00:19,825 [INFO] realtime - 進場方向: SHORT | TP=4491.45, SL=4696.23
+2025-08-13 09:00:21,164 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 09:00:00+08:00
+price=620.50, proba_up=0.357, atr_h4=14.71
+2025-08-13 09:00:21,164 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 09:15:16,407 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 09:15:00+08:00
+price=119416.22, proba_up=0.015, atr_h4=1291.72
+2025-08-13 09:15:17,522 [INFO] realtime - 進場方向: SHORT | TP=117866.16, SL=120449.59
+2025-08-13 09:15:18,784 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 09:15:00+08:00
+price=4582.05, proba_up=0.086, atr_h4=103.50
+2025-08-13 09:15:19,845 [INFO] realtime - 進場方向: SHORT | TP=4457.85, SL=4664.85
+2025-08-13 09:15:21,134 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 09:15:00+08:00
+price=619.00, proba_up=0.401, atr_h4=14.71
+2025-08-13 09:15:21,134 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 09:30:16,321 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 09:30:00+08:00
+price=119509.82, proba_up=0.021, atr_h4=1291.72
+2025-08-13 09:30:17,360 [INFO] realtime - 進場方向: SHORT | TP=117959.76, SL=120543.19
+2025-08-13 09:30:18,649 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 09:30:00+08:00
+price=4583.18, proba_up=0.058, atr_h4=103.50
+2025-08-13 09:30:19,703 [INFO] realtime - 進場方向: SHORT | TP=4458.98, SL=4665.98
+2025-08-13 09:30:20,960 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 09:30:00+08:00
+price=617.70, proba_up=0.560, atr_h4=14.82
+2025-08-13 09:30:20,960 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 09:45:16,253 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 09:45:00+08:00
+price=119437.50, proba_up=0.022, atr_h4=1291.72
+2025-08-13 09:45:17,229 [INFO] realtime - 進場方向: SHORT | TP=117887.44, SL=120470.87
+2025-08-13 09:45:18,406 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 09:45:00+08:00
+price=4575.35, proba_up=0.129, atr_h4=103.80
+2025-08-13 09:45:19,360 [INFO] realtime - 進場方向: SHORT | TP=4450.79, SL=4658.39
+2025-08-13 09:45:20,564 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 09:45:00+08:00
+price=616.50, proba_up=0.744, atr_h4=14.95
+2025-08-13 09:45:21,518 [INFO] realtime - 進場方向: LONG | TP=640.42, SL=601.55
+2025-08-13 10:00:16,226 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 10:00:00+08:00
+price=119463.86, proba_up=0.020, atr_h4=1291.72
+2025-08-13 10:00:17,167 [INFO] realtime - 進場方向: SHORT | TP=117913.80, SL=120497.23
+2025-08-13 10:00:18,331 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 10:00:00+08:00
+price=4583.49, proba_up=0.094, atr_h4=103.80
+2025-08-13 10:00:19,288 [INFO] realtime - 進場方向: SHORT | TP=4458.93, SL=4666.53
+2025-08-13 10:00:20,498 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 10:00:00+08:00
+price=616.40, proba_up=0.811, atr_h4=14.95
+2025-08-13 10:00:21,575 [INFO] realtime - 進場方向: LONG | TP=640.32, SL=601.45
+2025-08-13 10:15:16,188 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 10:15:00+08:00
+price=119222.34, proba_up=0.040, atr_h4=1299.96
+2025-08-13 10:15:17,133 [INFO] realtime - 進場方向: SHORT | TP=117662.39, SL=120262.30
+2025-08-13 10:15:18,298 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 10:15:00+08:00
+price=4577.99, proba_up=0.095, atr_h4=103.80
+2025-08-13 10:15:19,286 [INFO] realtime - 進場方向: SHORT | TP=4453.43, SL=4661.03
+2025-08-13 10:15:20,492 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 10:15:00+08:00
+price=615.50, proba_up=0.574, atr_h4=14.97
+2025-08-13 10:15:20,492 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 10:30:16,224 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 10:30:00+08:00
+price=119287.48, proba_up=0.115, atr_h4=1309.10
+2025-08-13 10:30:17,170 [INFO] realtime - 進場方向: SHORT | TP=117716.56, SL=120334.76
+2025-08-13 10:30:18,343 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 10:30:00+08:00
+price=4602.59, proba_up=0.082, atr_h4=103.80
+2025-08-13 10:30:19,308 [INFO] realtime - 進場方向: SHORT | TP=4478.03, SL=4685.63
+2025-08-13 10:30:20,475 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 10:30:00+08:00
+price=614.90, proba_up=0.579, atr_h4=14.97
+2025-08-13 10:30:20,475 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 10:45:16,285 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 10:45:00+08:00
+price=119610.71, proba_up=0.093, atr_h4=1309.10
+2025-08-13 10:45:17,273 [INFO] realtime - 進場方向: SHORT | TP=118039.79, SL=120657.99
+2025-08-13 10:45:18,467 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 10:45:00+08:00
+price=4613.68, proba_up=0.085, atr_h4=103.80
+2025-08-13 10:45:19,420 [INFO] realtime - 進場方向: SHORT | TP=4489.12, SL=4696.72
+2025-08-13 10:45:20,596 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 10:45:00+08:00
+price=615.70, proba_up=0.447, atr_h4=14.99
+2025-08-13 10:45:20,597 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 11:00:16,227 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 11:00:00+08:00
+price=119549.37, proba_up=0.095, atr_h4=1309.10
+2025-08-13 11:00:17,164 [INFO] realtime - 進場方向: SHORT | TP=117978.45, SL=120596.65
+2025-08-13 11:00:18,366 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 11:00:00+08:00
+price=4620.83, proba_up=0.114, atr_h4=103.80
+2025-08-13 11:00:19,348 [INFO] realtime - 進場方向: SHORT | TP=4496.27, SL=4703.87
+2025-08-13 11:00:20,509 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 11:00:00+08:00
+price=616.80, proba_up=0.729, atr_h4=14.99
+2025-08-13 11:00:21,440 [INFO] realtime - 進場方向: LONG | TP=640.78, SL=601.81
+2025-08-13 11:15:16,518 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 11:15:00+08:00
+price=119383.07, proba_up=0.092, atr_h4=1309.10
+2025-08-13 11:15:17,463 [INFO] realtime - 進場方向: SHORT | TP=117812.15, SL=120430.35
+2025-08-13 11:15:18,681 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 11:15:00+08:00
+price=4614.22, proba_up=0.066, atr_h4=104.38
+2025-08-13 11:15:19,655 [INFO] realtime - 進場方向: SHORT | TP=4488.96, SL=4697.72
+2025-08-13 11:15:20,810 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 11:15:00+08:00
+price=616.10, proba_up=0.460, atr_h4=14.99
+2025-08-13 11:15:20,810 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 11:30:16,241 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 11:30:00+08:00
+price=119404.00, proba_up=0.096, atr_h4=1309.10
+2025-08-13 11:30:17,221 [INFO] realtime - 進場方向: SHORT | TP=117833.08, SL=120451.28
+2025-08-13 11:30:18,387 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 11:30:00+08:00
+price=4618.68, proba_up=0.119, atr_h4=104.38
+2025-08-13 11:30:19,327 [INFO] realtime - 進場方向: SHORT | TP=4493.42, SL=4702.18
+2025-08-13 11:30:20,540 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 11:30:00+08:00
+price=616.30, proba_up=0.774, atr_h4=14.99
+2025-08-13 11:30:21,534 [INFO] realtime - 進場方向: LONG | TP=640.28, SL=601.31
+2025-08-13 11:45:16,231 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 11:45:00+08:00
+price=119443.48, proba_up=0.094, atr_h4=1309.10
+2025-08-13 11:45:17,165 [INFO] realtime - 進場方向: SHORT | TP=117872.56, SL=120490.76
+2025-08-13 11:45:18,386 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 11:45:00+08:00
+price=4639.55, proba_up=0.075, atr_h4=104.38
+2025-08-13 11:45:19,363 [INFO] realtime - 進場方向: SHORT | TP=4514.29, SL=4723.05
+2025-08-13 11:45:20,586 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 11:45:00+08:00
+price=616.40, proba_up=0.739, atr_h4=14.99
+2025-08-13 11:45:21,520 [INFO] realtime - 進場方向: LONG | TP=640.38, SL=601.41
+2025-08-13 12:00:16,289 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 12:00:00+08:00
+price=119480.99, proba_up=0.057, atr_h4=1221.90
+2025-08-13 12:00:17,256 [INFO] realtime - 進場方向: SHORT | TP=118014.71, SL=120458.51
+2025-08-13 12:00:18,573 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 12:00:00+08:00
+price=4648.43, proba_up=0.079, atr_h4=100.35
+2025-08-13 12:00:19,532 [INFO] realtime - 進場方向: SHORT | TP=4528.01, SL=4728.71
+2025-08-13 12:00:20,675 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 12:00:00+08:00
+price=615.80, proba_up=0.870, atr_h4=14.68
+2025-08-13 12:00:21,765 [INFO] realtime - 進場方向: LONG | TP=639.29, SL=601.12
+2025-08-13 12:15:16,196 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 12:15:00+08:00
+price=119700.06, proba_up=0.074, atr_h4=1246.05
+2025-08-13 12:15:17,190 [INFO] realtime - 進場方向: SHORT | TP=118204.79, SL=120696.90
+2025-08-13 12:15:18,363 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 12:15:00+08:00
+price=4660.70, proba_up=0.056, atr_h4=102.25
+2025-08-13 12:15:19,312 [INFO] realtime - 進場方向: SHORT | TP=4538.00, SL=4742.50
+2025-08-13 12:15:20,467 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 12:15:00+08:00
+price=614.70, proba_up=0.657, atr_h4=14.82
+2025-08-13 12:15:21,439 [INFO] realtime - 進場方向: LONG | TP=638.41, SL=599.88
+2025-08-13 12:30:16,214 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 12:30:00+08:00
+price=119595.39, proba_up=0.023, atr_h4=1246.05
+2025-08-13 12:30:17,215 [INFO] realtime - 進場方向: SHORT | TP=118100.12, SL=120592.23
+2025-08-13 12:30:18,497 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 12:30:00+08:00
+price=4663.83, proba_up=0.043, atr_h4=102.32
+2025-08-13 12:30:19,579 [INFO] realtime - 進場方向: SHORT | TP=4541.05, SL=4745.69
+2025-08-13 12:30:20,829 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 12:30:00+08:00
+price=613.00, proba_up=0.584, atr_h4=15.06
+2025-08-13 12:30:20,829 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 12:45:16,466 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 12:45:00+08:00
+price=119393.09, proba_up=0.095, atr_h4=1253.83
+2025-08-13 12:45:17,402 [INFO] realtime - 進場方向: SHORT | TP=117888.50, SL=120396.15
+2025-08-13 12:45:18,668 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 12:45:00+08:00
+price=4670.00, proba_up=0.046, atr_h4=102.82
+2025-08-13 12:45:19,612 [INFO] realtime - 進場方向: SHORT | TP=4546.62, SL=4752.26
+2025-08-13 12:45:20,809 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 12:45:00+08:00
+price=611.60, proba_up=0.647, atr_h4=15.08
+2025-08-13 12:45:21,765 [INFO] realtime - 進場方向: LONG | TP=635.73, SL=596.52
+2025-08-13 13:00:16,418 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 13:00:00+08:00
+price=119335.01, proba_up=0.033, atr_h4=1255.96
+2025-08-13 13:00:17,495 [INFO] realtime - 進場方向: SHORT | TP=117827.86, SL=120339.77
+2025-08-13 13:00:18,732 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 13:00:00+08:00
+price=4673.58, proba_up=0.043, atr_h4=102.82
+2025-08-13 13:00:19,671 [INFO] realtime - 進場方向: SHORT | TP=4550.20, SL=4755.84
+2025-08-13 13:00:20,867 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 13:00:00+08:00
+price=612.20, proba_up=0.580, atr_h4=15.16
+2025-08-13 13:00:20,867 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 18:30:16,762 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 18:30:00+08:00
+price=120389.98, proba_up=0.002, atr_h4=1131.99
+2025-08-13 18:30:17,702 [INFO] realtime - 進場方向: SHORT | TP=119031.59, SL=121295.57
+2025-08-13 18:30:18,945 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 18:30:00+08:00
+price=4693.80, proba_up=0.077, atr_h4=105.64
+2025-08-13 18:30:19,896 [INFO] realtime - 進場方向: SHORT | TP=4567.03, SL=4778.32
+2025-08-13 18:30:21,137 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 18:30:00+08:00
+price=610.10, proba_up=0.202, atr_h4=15.66
+2025-08-13 18:30:22,152 [INFO] realtime - 進場方向: SHORT | TP=591.31, SL=622.63
+2025-08-13 18:45:16,281 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 18:45:00+08:00
+price=120446.00, proba_up=0.003, atr_h4=1131.99
+2025-08-13 18:45:17,248 [INFO] realtime - 進場方向: SHORT | TP=119087.61, SL=121351.59
+2025-08-13 18:45:18,515 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 18:45:00+08:00
+price=4699.27, proba_up=0.070, atr_h4=105.64
+2025-08-13 18:45:19,474 [INFO] realtime - 進場方向: SHORT | TP=4572.50, SL=4783.79
+2025-08-13 18:45:20,631 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 18:45:00+08:00
+price=610.60, proba_up=0.165, atr_h4=15.66
+2025-08-13 18:45:21,593 [INFO] realtime - 進場方向: SHORT | TP=591.81, SL=623.13
+2025-08-13 19:00:16,419 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 19:00:00+08:00
+price=120462.24, proba_up=0.003, atr_h4=1132.06
+2025-08-13 19:00:17,373 [INFO] realtime - 進場方向: SHORT | TP=119103.77, SL=121367.89
+2025-08-13 19:00:18,579 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 19:00:00+08:00
+price=4694.26, proba_up=0.064, atr_h4=105.64
+2025-08-13 19:00:19,556 [INFO] realtime - 進場方向: SHORT | TP=4567.49, SL=4778.78
+2025-08-13 19:00:20,712 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 19:00:00+08:00
+price=609.90, proba_up=0.187, atr_h4=15.66
+2025-08-13 19:00:21,657 [INFO] realtime - 進場方向: SHORT | TP=591.11, SL=622.43
+2025-08-13 19:15:16,342 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 19:15:00+08:00
+price=120662.62, proba_up=0.002, atr_h4=1146.63
+2025-08-13 19:15:17,324 [INFO] realtime - 進場方向: SHORT | TP=119286.66, SL=121579.93
+2025-08-13 19:15:18,512 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 19:15:00+08:00
+price=4693.89, proba_up=0.055, atr_h4=105.64
+2025-08-13 19:15:19,537 [INFO] realtime - 進場方向: SHORT | TP=4567.12, SL=4778.41
+2025-08-13 19:15:20,745 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 19:15:00+08:00
+price=610.70, proba_up=0.155, atr_h4=15.66
+2025-08-13 19:15:21,683 [INFO] realtime - 進場方向: SHORT | TP=591.91, SL=623.23
+2025-08-13 19:30:16,259 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 19:30:00+08:00
+price=120667.01, proba_up=0.004, atr_h4=1148.76
+2025-08-13 19:30:17,211 [INFO] realtime - 進場方向: SHORT | TP=119288.50, SL=121586.02
+2025-08-13 19:30:18,442 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 19:30:00+08:00
+price=4678.21, proba_up=0.052, atr_h4=105.64
+2025-08-13 19:30:19,382 [INFO] realtime - 進場方向: SHORT | TP=4551.44, SL=4762.73
+2025-08-13 19:30:20,552 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 19:30:00+08:00
+price=609.30, proba_up=0.347, atr_h4=15.66
+2025-08-13 19:30:21,506 [INFO] realtime - 進場方向: SHORT | TP=590.51, SL=621.83
+2025-08-13 19:45:16,258 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 19:45:00+08:00
+price=120714.29, proba_up=0.001, atr_h4=1148.99
+2025-08-13 19:45:17,221 [INFO] realtime - 進場方向: SHORT | TP=119335.51, SL=121633.48
+2025-08-13 19:45:18,675 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 19:45:00+08:00
+price=4680.12, proba_up=0.031, atr_h4=105.64
+2025-08-13 19:45:19,622 [INFO] realtime - 進場方向: SHORT | TP=4553.35, SL=4764.64
+2025-08-13 19:45:20,805 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 19:45:00+08:00
+price=607.90, proba_up=0.210, atr_h4=15.66
+2025-08-13 19:45:21,764 [INFO] realtime - 進場方向: SHORT | TP=589.11, SL=620.43
+2025-08-13 20:00:16,347 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 20:00:00+08:00
+price=120610.44, proba_up=0.001, atr_h4=1091.89
+2025-08-13 20:00:17,333 [INFO] realtime - 進場方向: SHORT | TP=119300.17, SL=121483.95
+2025-08-13 20:00:18,596 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 20:00:00+08:00
+price=4691.81, proba_up=0.045, atr_h4=99.92
+2025-08-13 20:00:19,563 [INFO] realtime - 進場方向: SHORT | TP=4571.90, SL=4771.75
+2025-08-13 20:00:20,811 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 20:00:00+08:00
+price=608.60, proba_up=0.160, atr_h4=15.23
+2025-08-13 20:00:21,877 [INFO] realtime - 進場方向: SHORT | TP=590.33, SL=620.78
+2025-08-13 20:15:16,259 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 20:15:00+08:00
+price=120493.99, proba_up=0.001, atr_h4=1108.85
+2025-08-13 20:15:17,233 [INFO] realtime - 進場方向: SHORT | TP=119163.36, SL=121381.07
+2025-08-13 20:15:18,461 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 20:15:00+08:00
+price=4688.51, proba_up=0.069, atr_h4=101.15
+2025-08-13 20:15:19,441 [INFO] realtime - 進場方向: SHORT | TP=4567.12, SL=4769.43
+2025-08-13 20:15:20,674 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 20:15:00+08:00
+price=607.30, proba_up=0.229, atr_h4=15.33
+2025-08-13 20:15:21,637 [INFO] realtime - 進場方向: SHORT | TP=588.91, SL=619.56
+2025-08-13 20:30:16,271 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 20:30:00+08:00
+price=120544.59, proba_up=0.001, atr_h4=1108.85
+2025-08-13 20:30:17,236 [INFO] realtime - 進場方向: SHORT | TP=119213.96, SL=121431.67
+2025-08-13 20:30:18,431 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 20:30:00+08:00
+price=4708.01, proba_up=0.091, atr_h4=102.23
+2025-08-13 20:30:19,377 [INFO] realtime - 進場方向: SHORT | TP=4585.34, SL=4789.79
+2025-08-13 20:30:20,540 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 20:30:00+08:00
+price=607.90, proba_up=0.356, atr_h4=15.33
+2025-08-13 20:30:20,540 [INFO] realtime - 無進場訊號（等待）
+2025-08-13 20:45:16,582 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 20:45:00+08:00
+price=120540.63, proba_up=0.001, atr_h4=1108.85
+2025-08-13 20:45:17,560 [INFO] realtime - 進場方向: SHORT | TP=119210.00, SL=121427.71
+2025-08-13 20:45:18,750 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 20:45:00+08:00
+price=4719.67, proba_up=0.113, atr_h4=103.00
+2025-08-13 20:45:19,706 [INFO] realtime - 進場方向: SHORT | TP=4596.07, SL=4802.07
+2025-08-13 20:45:21,004 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 20:45:00+08:00
+price=608.80, proba_up=0.260, atr_h4=15.34
+2025-08-13 20:45:21,947 [INFO] realtime - 進場方向: SHORT | TP=590.40, SL=621.07
+2025-08-13 21:00:16,484 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 21:00:00+08:00
+price=120288.72, proba_up=0.001, atr_h4=1120.94
+2025-08-13 21:00:17,612 [INFO] realtime - 進場方向: SHORT | TP=118943.59, SL=121185.48
+2025-08-13 21:00:18,888 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 21:00:00+08:00
+price=4686.41, proba_up=0.049, atr_h4=103.00
+2025-08-13 21:00:19,941 [INFO] realtime - 進場方向: SHORT | TP=4562.81, SL=4768.81
+2025-08-13 21:00:21,235 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 21:00:00+08:00
+price=607.50, proba_up=0.240, atr_h4=15.34
+2025-08-13 21:00:22,319 [INFO] realtime - 進場方向: SHORT | TP=589.10, SL=619.77
+2025-08-13 21:15:16,414 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 21:15:00+08:00
+price=120477.18, proba_up=0.001, atr_h4=1120.94
+2025-08-13 21:15:17,704 [INFO] realtime - 進場方向: SHORT | TP=119132.05, SL=121373.94
+2025-08-13 21:15:19,164 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 21:15:00+08:00
+price=4707.13, proba_up=0.117, atr_h4=103.00
+2025-08-13 21:15:20,189 [INFO] realtime - 進場方向: SHORT | TP=4583.53, SL=4789.53
+2025-08-13 21:15:21,538 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 21:15:00+08:00
+price=608.40, proba_up=0.339, atr_h4=15.35
+2025-08-13 21:15:22,720 [INFO] realtime - 進場方向: SHORT | TP=589.98, SL=620.68
+2025-08-13 21:30:16,204 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 21:30:00+08:00
+price=120619.44, proba_up=0.002, atr_h4=1126.83
+2025-08-13 21:30:17,170 [INFO] realtime - 進場方向: SHORT | TP=119267.24, SL=121520.91
+2025-08-13 21:30:18,361 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 21:30:00+08:00
+price=4712.35, proba_up=0.105, atr_h4=103.30
+2025-08-13 21:30:19,348 [INFO] realtime - 進場方向: SHORT | TP=4588.39, SL=4794.99
+2025-08-13 21:30:20,522 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 21:30:00+08:00
+price=613.30, proba_up=0.335, atr_h4=16.09
+2025-08-13 21:30:21,497 [INFO] realtime - 進場方向: SHORT | TP=593.99, SL=626.17
+2025-08-13 21:45:16,224 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 21:45:00+08:00
+price=120357.25, proba_up=0.003, atr_h4=1134.23
+2025-08-13 21:45:17,197 [INFO] realtime - 進場方向: SHORT | TP=118996.18, SL=121264.63
+2025-08-13 21:45:18,445 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 21:45:00+08:00
+price=4680.47, proba_up=0.090, atr_h4=104.91
+2025-08-13 21:45:19,503 [INFO] realtime - 進場方向: SHORT | TP=4554.58, SL=4764.40
+2025-08-13 21:45:20,694 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 21:45:00+08:00
+price=624.10, proba_up=0.312, atr_h4=17.06
+2025-08-13 21:45:21,627 [INFO] realtime - 進場方向: SHORT | TP=603.62, SL=637.75
+2025-08-13 22:00:16,262 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 22:00:00+08:00
+price=121999.97, proba_up=0.003, atr_h4=1225.91
+2025-08-13 22:00:17,237 [INFO] realtime - 進場方向: SHORT | TP=120528.88, SL=122980.70
+2025-08-13 22:00:18,426 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 22:00:00+08:00
+price=4678.94, proba_up=0.084, atr_h4=106.19
+2025-08-13 22:00:19,399 [INFO] realtime - 進場方向: SHORT | TP=4551.51, SL=4763.89
+2025-08-13 22:00:20,622 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 22:00:00+08:00
+price=627.10, proba_up=0.148, atr_h4=17.14
+2025-08-13 22:00:21,588 [INFO] realtime - 進場方向: SHORT | TP=606.53, SL=640.81
+2025-08-13 22:15:16,308 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 22:15:00+08:00
+price=122114.55, proba_up=0.004, atr_h4=1236.48
+2025-08-13 22:15:17,278 [INFO] realtime - 進場方向: SHORT | TP=120630.77, SL=123103.73
+2025-08-13 22:15:18,488 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 22:15:00+08:00
+price=4659.42, proba_up=0.178, atr_h4=106.19
+2025-08-13 22:15:19,432 [INFO] realtime - 進場方向: SHORT | TP=4531.99, SL=4744.37
+2025-08-13 22:15:20,629 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 22:15:00+08:00
+price=626.80, proba_up=0.225, atr_h4=17.14
+2025-08-13 22:15:21,661 [INFO] realtime - 進場方向: SHORT | TP=606.23, SL=640.51
+2025-08-13 22:30:16,324 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 22:30:00+08:00
+price=121760.97, proba_up=0.004, atr_h4=1236.48
+2025-08-13 22:30:17,362 [INFO] realtime - 進場方向: SHORT | TP=120277.19, SL=122750.15
+2025-08-13 22:30:18,530 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 22:30:00+08:00
+price=4679.39, proba_up=0.078, atr_h4=107.03
+2025-08-13 22:30:19,538 [INFO] realtime - 進場方向: SHORT | TP=4550.95, SL=4765.02
+2025-08-13 22:30:20,759 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 22:30:00+08:00
+price=626.20, proba_up=0.149, atr_h4=17.14
+2025-08-13 22:30:21,719 [INFO] realtime - 進場方向: SHORT | TP=605.63, SL=639.91
+2025-08-13 22:45:16,270 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 22:45:00+08:00
+price=121619.36, proba_up=0.006, atr_h4=1236.48
+2025-08-13 22:45:17,235 [INFO] realtime - 進場方向: SHORT | TP=120135.58, SL=122608.54
+2025-08-13 22:45:18,371 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 22:45:00+08:00
+price=4696.83, proba_up=0.078, atr_h4=107.03
+2025-08-13 22:45:19,334 [INFO] realtime - 進場方向: SHORT | TP=4568.39, SL=4782.46
+2025-08-13 22:45:20,487 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 22:45:00+08:00
+price=624.90, proba_up=0.127, atr_h4=17.14
+2025-08-13 22:45:21,438 [INFO] realtime - 進場方向: SHORT | TP=604.33, SL=638.61
+2025-08-13 23:00:16,299 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 23:00:00+08:00
+price=120974.20, proba_up=0.013, atr_h4=1236.48
+2025-08-13 23:00:17,253 [INFO] realtime - 進場方向: SHORT | TP=119490.42, SL=121963.38
+2025-08-13 23:00:18,429 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 23:00:00+08:00
+price=4657.88, proba_up=0.122, atr_h4=107.03
+2025-08-13 23:00:19,390 [INFO] realtime - 進場方向: SHORT | TP=4529.44, SL=4743.51
+2025-08-13 23:00:20,594 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 23:00:00+08:00
+price=620.50, proba_up=0.115, atr_h4=17.14
+2025-08-13 23:00:21,539 [INFO] realtime - 進場方向: SHORT | TP=599.93, SL=634.21
+2025-08-13 23:15:16,351 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 23:15:00+08:00
+price=120898.00, proba_up=0.012, atr_h4=1236.48
+2025-08-13 23:15:17,308 [INFO] realtime - 進場方向: SHORT | TP=119414.22, SL=121887.18
+2025-08-13 23:15:18,557 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 23:15:00+08:00
+price=4631.22, proba_up=0.321, atr_h4=107.75
+2025-08-13 23:15:19,683 [INFO] realtime - 進場方向: SHORT | TP=4501.93, SL=4717.42
+2025-08-13 23:15:20,966 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 23:15:00+08:00
+price=623.80, proba_up=0.122, atr_h4=17.14
+2025-08-13 23:15:21,932 [INFO] realtime - 進場方向: SHORT | TP=603.23, SL=637.51
+2025-08-13 23:30:16,526 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 23:30:00+08:00
+price=120649.99, proba_up=0.006, atr_h4=1236.48
+2025-08-13 23:30:17,479 [INFO] realtime - 進場方向: SHORT | TP=119166.21, SL=121639.17
+2025-08-13 23:30:18,709 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 23:30:00+08:00
+price=4644.62, proba_up=0.069, atr_h4=108.34
+2025-08-13 23:30:19,690 [INFO] realtime - 進場方向: SHORT | TP=4514.62, SL=4731.29
+2025-08-13 23:30:20,937 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 23:30:00+08:00
+price=619.50, proba_up=0.123, atr_h4=17.14
+2025-08-13 23:30:21,882 [INFO] realtime - 進場方向: SHORT | TP=598.93, SL=633.21
+2025-08-13 23:45:16,466 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-13 23:45:00+08:00
+price=121331.47, proba_up=0.004, atr_h4=1236.48
+2025-08-13 23:45:17,442 [INFO] realtime - 進場方向: SHORT | TP=119847.69, SL=122320.65
+2025-08-13 23:45:18,670 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-13 23:45:00+08:00
+price=4668.39, proba_up=0.105, atr_h4=108.34
+2025-08-13 23:45:19,622 [INFO] realtime - 進場方向: SHORT | TP=4538.39, SL=4755.06
+2025-08-13 23:45:20,882 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-13 23:45:00+08:00
+price=621.20, proba_up=0.164, atr_h4=17.14
+2025-08-13 23:45:21,835 [INFO] realtime - 進場方向: SHORT | TP=600.63, SL=634.91
+2025-08-14 00:00:16,288 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-14 00:00:00+08:00
+price=120980.95, proba_up=0.014, atr_h4=1131.13
+2025-08-14 00:00:17,272 [INFO] realtime - 進場方向: SHORT | TP=119623.59, SL=121885.86
+2025-08-14 00:00:18,507 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-14 00:00:00+08:00
+price=4663.67, proba_up=0.149, atr_h4=100.20
+2025-08-14 00:00:19,512 [INFO] realtime - 進場方向: SHORT | TP=4543.43, SL=4743.83
+2025-08-14 00:00:20,904 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-14 00:00:00+08:00
+price=619.00, proba_up=0.053, atr_h4=15.24
+2025-08-14 00:00:21,841 [INFO] realtime - 進場方向: SHORT | TP=600.71, SL=631.19
+2025-08-14 00:15:16,450 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-14 00:15:00+08:00
+price=121517.40, proba_up=0.004, atr_h4=1169.35
+2025-08-14 00:15:17,407 [INFO] realtime - 進場方向: SHORT | TP=120114.18, SL=122452.88
+2025-08-14 00:15:18,659 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-14 00:15:00+08:00
+price=4689.78, proba_up=0.047, atr_h4=102.02
+2025-08-14 00:15:19,695 [INFO] realtime - 進場方向: SHORT | TP=4567.36, SL=4771.39
+2025-08-14 00:15:20,901 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-14 00:15:00+08:00
+price=620.60, proba_up=0.037, atr_h4=15.43
+2025-08-14 00:15:21,889 [INFO] realtime - 進場方向: SHORT | TP=602.09, SL=632.94
+2025-08-14 01:54:34,398 [INFO] realtime - 最新訊號 [BTCUSDT] @ 2025-08-14 01:45:00+08:00
+price=121755.99, proba_up=0.008, atr_h4=1193.13
+進場方向: SHORT | TP=120324.23, SL=122710.49
+2025-08-14 01:54:35,609 [INFO] realtime - 最新訊號 [ETHUSDT] @ 2025-08-14 01:45:00+08:00
+price=4723.47, proba_up=0.023, atr_h4=105.25
+進場方向: SHORT | TP=4597.17, SL=4807.67
+2025-08-14 01:54:36,795 [INFO] realtime - 最新訊號 [BCHUSDT] @ 2025-08-14 01:45:00+08:00
+price=613.30, proba_up=0.392, atr_h4=15.94
+無進場訊號（等待）
+2025-08-14 02:02:22,858 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 02:00
+price=121824.10, proba_up=0.011, atr_h4=1195.79
+進場方向: SHORT | TP=120389.15, SL=122780.73
+2025-08-14 02:02:24,085 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 02:00
+price=4731.36, proba_up=0.031, atr_h4=105.25
+進場方向: SHORT | TP=4605.06, SL=4815.56
+2025-08-14 02:02:25,320 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 02:00
+price=613.80, proba_up=0.374, atr_h4=15.94
+無進場訊號（等待）
+2025-08-14 02:09:41,094 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 02:00
+price=121824.10, proba_up=0.011, atr_h4=1195.79
+進場方向: SHORT | TP=120389.15, SL=122780.73
+2025-08-14 02:09:42,345 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 02:00
+price=4731.36, proba_up=0.031, atr_h4=105.25
+進場方向: SHORT | TP=4605.06, SL=4815.56
+2025-08-14 02:09:43,510 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 02:00
+price=613.80, proba_up=0.374, atr_h4=15.94
+無進場訊號（等待）
+2025-08-14 02:15:16,437 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 02:15
+price=121918.06, proba_up=0.005, atr_h4=1197.97
+進場方向: SHORT | TP=120480.50, SL=122876.43
+2025-08-14 02:15:17,623 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 02:15
+price=4746.27, proba_up=0.042, atr_h4=106.05
+進場方向: SHORT | TP=4619.01, SL=4831.11
+2025-08-14 02:15:18,800 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 02:15
+price=613.30, proba_up=0.381, atr_h4=15.94
+無進場訊號（等待）
+2025-08-14 02:30:16,221 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 02:30
+price=121684.40, proba_up=0.003, atr_h4=1199.18
+進場方向: SHORT | TP=120245.38, SL=122643.74
+2025-08-14 02:30:17,430 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 02:30
+price=4713.06, proba_up=0.028, atr_h4=106.14
+進場方向: SHORT | TP=4585.69, SL=4797.98
+2025-08-14 02:30:18,592 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 02:30
+price=613.40, proba_up=0.505, atr_h4=15.94
+無進場訊號（等待）
+2025-08-14 02:45:16,207 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 02:45
+price=121511.96, proba_up=0.004, atr_h4=1199.18
+進場方向: SHORT | TP=120072.94, SL=122471.30
+2025-08-14 02:45:17,396 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 02:45
+price=4701.83, proba_up=0.036, atr_h4=106.14
+進場方向: SHORT | TP=4574.46, SL=4786.75
+2025-08-14 02:45:18,578 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 02:45
+price=610.80, proba_up=0.828, atr_h4=16.04
+進場方向: LONG | TP=636.47, SL=594.76
+2025-08-14 03:00:16,244 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 03:00
+price=121584.09, proba_up=0.008, atr_h4=1199.18
+進場方向: SHORT | TP=120145.07, SL=122543.43
+2025-08-14 03:00:17,447 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 03:00
+price=4716.06, proba_up=0.025, atr_h4=106.14
+進場方向: SHORT | TP=4588.69, SL=4800.98
+2025-08-14 03:00:18,629 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 03:00
+price=609.70, proba_up=0.816, atr_h4=16.24
+進場方向: LONG | TP=635.68, SL=593.46
+2025-08-14 03:15:16,299 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 03:15
+price=121956.03, proba_up=0.003, atr_h4=1203.82
+進場方向: SHORT | TP=120511.44, SL=122919.09
+2025-08-14 03:15:17,462 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 03:15
+price=4723.36, proba_up=0.029, atr_h4=106.14
+進場方向: SHORT | TP=4595.99, SL=4808.28
+2025-08-14 03:15:18,645 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 03:15
+price=609.60, proba_up=0.776, atr_h4=16.24
+進場方向: LONG | TP=635.58, SL=593.36
+2025-08-14 03:30:16,299 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 03:30
+price=122522.43, proba_up=0.003, atr_h4=1242.93
+進場方向: SHORT | TP=121030.91, SL=123516.78
+2025-08-14 03:30:17,569 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 03:30
+price=4742.88, proba_up=0.019, atr_h4=106.30
+進場方向: SHORT | TP=4615.32, SL=4827.92
+2025-08-14 03:30:18,776 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 03:30
+price=612.00, proba_up=0.608, atr_h4=16.24
+無進場訊號（等待）
+2025-08-14 03:45:16,316 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 03:45
+price=122500.00, proba_up=0.003, atr_h4=1243.46
+進場方向: SHORT | TP=121007.84, SL=123494.77
+2025-08-14 03:45:17,513 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 03:45
+price=4715.74, proba_up=0.035, atr_h4=106.30
+進場方向: SHORT | TP=4588.18, SL=4800.78
+2025-08-14 03:45:18,713 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 03:45
+price=612.70, proba_up=0.533, atr_h4=16.24
+無進場訊號（等待）
+2025-08-14 04:00:16,218 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 04:00
+price=122798.99, proba_up=0.002, atr_h4=1177.15
+進場方向: SHORT | TP=121386.41, SL=123740.71
+2025-08-14 04:00:17,405 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 04:00
+price=4741.14, proba_up=0.085, atr_h4=94.70
+進場方向: SHORT | TP=4627.50, SL=4816.90
+2025-08-14 04:00:18,565 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 04:00
+price=613.00, proba_up=0.477, atr_h4=14.82
+無進場訊號（等待）
+2025-08-14 04:15:16,450 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 04:15
+price=122758.66, proba_up=0.003, atr_h4=1199.05
+進場方向: SHORT | TP=121319.80, SL=123717.90
+2025-08-14 04:15:17,618 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 04:15
+price=4720.03, proba_up=0.141, atr_h4=96.70
+進場方向: SHORT | TP=4604.00, SL=4797.39
+2025-08-14 04:15:18,789 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 04:15
+price=611.90, proba_up=0.518, atr_h4=14.95
+無進場訊號（等待）
+2025-08-14 04:30:16,276 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 04:30
+price=122649.64, proba_up=0.002, atr_h4=1199.05
+進場方向: SHORT | TP=121210.78, SL=123608.88
+2025-08-14 04:30:17,451 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 04:30
+price=4713.53, proba_up=0.100, atr_h4=97.67
+進場方向: SHORT | TP=4596.32, SL=4791.67
+2025-08-14 04:30:18,616 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 04:30
+price=612.00, proba_up=0.560, atr_h4=14.95
+無進場訊號（等待）
+2025-08-14 04:45:16,188 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 04:45
+price=122800.00, proba_up=0.003, atr_h4=1199.05
+進場方向: SHORT | TP=121361.14, SL=123759.24
+2025-08-14 04:45:17,396 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 04:45
+price=4728.27, proba_up=0.247, atr_h4=97.67
+進場方向: SHORT | TP=4611.06, SL=4806.41
+2025-08-14 04:45:18,543 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 04:45
+price=612.00, proba_up=0.532, atr_h4=14.95
+無進場訊號（等待）
+2025-08-14 05:00:16,290 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 05:00
+price=122948.81, proba_up=0.003, atr_h4=1208.36
+進場方向: SHORT | TP=121498.78, SL=123915.50
+2025-08-14 05:00:17,442 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 05:00
+price=4718.39, proba_up=0.182, atr_h4=97.67
+進場方向: SHORT | TP=4601.18, SL=4796.53
+2025-08-14 05:00:18,632 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 05:00
+price=610.50, proba_up=0.737, atr_h4=15.00
+進場方向: LONG | TP=634.50, SL=595.50
+2025-08-14 05:15:16,460 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 05:15
+price=122749.12, proba_up=0.003, atr_h4=1210.29
+進場方向: SHORT | TP=121296.78, SL=123717.35
+2025-08-14 05:15:17,622 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 05:15
+price=4753.23, proba_up=0.149, atr_h4=99.16
+進場方向: SHORT | TP=4634.23, SL=4832.56
+2025-08-14 05:15:18,809 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 05:15
+price=611.20, proba_up=0.696, atr_h4=15.00
+進場方向: LONG | TP=635.20, SL=596.20
+2025-08-14 05:30:16,270 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 05:30
+price=122681.12, proba_up=0.004, atr_h4=1210.29
+進場方向: SHORT | TP=121228.78, SL=123649.35
+2025-08-14 05:30:17,427 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 05:30
+price=4757.62, proba_up=0.145, atr_h4=100.03
+進場方向: SHORT | TP=4637.58, SL=4837.65
+2025-08-14 05:30:18,592 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 05:30
+price=611.50, proba_up=0.456, atr_h4=15.01
+無進場訊號（等待）
+2025-08-14 05:45:16,195 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 05:45
+price=122558.00, proba_up=0.003, atr_h4=1211.31
+進場方向: SHORT | TP=121104.43, SL=123527.05
+2025-08-14 05:45:17,411 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 05:45
+price=4741.75, proba_up=0.144, atr_h4=100.03
+進場方向: SHORT | TP=4621.71, SL=4821.78
+2025-08-14 05:45:18,552 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 05:45
+price=611.40, proba_up=0.619, atr_h4=15.03
+無進場訊號（等待）
+2025-08-14 06:00:16,274 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 06:00
+price=122615.56, proba_up=0.002, atr_h4=1222.15
+進場方向: SHORT | TP=121148.98, SL=123593.28
+2025-08-14 06:00:17,450 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 06:00
+price=4716.12, proba_up=0.216, atr_h4=100.03
+進場方向: SHORT | TP=4596.08, SL=4796.15
+2025-08-14 06:00:18,644 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 06:00
+price=612.10, proba_up=0.214, atr_h4=15.03
+進場方向: SHORT | TP=594.07, SL=624.12
+2025-08-14 06:15:16,279 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 06:15
+price=122979.99, proba_up=0.003, atr_h4=1222.15
+進場方向: SHORT | TP=121513.41, SL=123957.71
+2025-08-14 06:15:17,434 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 06:15
+price=4737.61, proba_up=0.139, atr_h4=100.03
+進場方向: SHORT | TP=4617.57, SL=4817.64
+2025-08-14 06:15:18,642 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 06:15
+price=614.30, proba_up=0.126, atr_h4=15.11
+進場方向: SHORT | TP=596.16, SL=626.39
+2025-08-14 06:30:16,275 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 06:30
+price=122926.90, proba_up=0.004, atr_h4=1225.48
+進場方向: SHORT | TP=121456.32, SL=123907.29
+2025-08-14 06:30:17,464 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 06:30
+price=4737.03, proba_up=0.397, atr_h4=100.03
+無進場訊號（等待）
+2025-08-14 06:30:18,646 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 06:30
+price=613.50, proba_up=0.138, atr_h4=15.11
+進場方向: SHORT | TP=595.36, SL=625.59
+2025-08-14 06:45:16,212 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 06:45
+price=123453.72, proba_up=0.005, atr_h4=1263.90
+進場方向: SHORT | TP=121937.04, SL=124464.84
+2025-08-14 06:45:17,381 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 06:45
+price=4753.45, proba_up=0.139, atr_h4=100.03
+進場方向: SHORT | TP=4633.41, SL=4833.48
+2025-08-14 06:45:18,520 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 06:45
+price=616.50, proba_up=0.134, atr_h4=15.32
+進場方向: SHORT | TP=598.11, SL=628.76
+2025-08-14 07:00:16,370 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 07:00
+price=122924.17, proba_up=0.009, atr_h4=1267.70
+進場方向: SHORT | TP=121402.93, SL=123938.33
+2025-08-14 07:00:17,538 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 07:00
+price=4734.52, proba_up=0.250, atr_h4=100.61
+進場方向: SHORT | TP=4613.79, SL=4815.01
+2025-08-14 07:00:18,712 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 07:00
+price=616.40, proba_up=0.123, atr_h4=15.43
+進場方向: SHORT | TP=597.89, SL=628.74
+2025-08-14 07:15:16,256 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 07:15
+price=122968.01, proba_up=0.041, atr_h4=1267.70
+進場方向: SHORT | TP=121446.77, SL=123982.17
+2025-08-14 07:15:17,429 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 07:15
+price=4736.77, proba_up=0.444, atr_h4=100.61
+無進場訊號（等待）
+2025-08-14 07:15:18,566 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 07:15
+price=616.80, proba_up=0.145, atr_h4=15.43
+進場方向: SHORT | TP=598.29, SL=629.14
+2025-08-14 07:30:16,269 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 07:30
+price=123310.62, proba_up=0.008, atr_h4=1267.70
+進場方向: SHORT | TP=121789.38, SL=124324.78
+2025-08-14 07:30:17,436 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 07:30
+price=4757.52, proba_up=0.081, atr_h4=100.61
+進場方向: SHORT | TP=4636.79, SL=4838.01
+2025-08-14 07:30:18,609 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 07:30
+price=617.50, proba_up=0.144, atr_h4=15.43
+進場方向: SHORT | TP=598.99, SL=629.84
+2025-08-14 07:45:16,219 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 07:45
+price=123481.12, proba_up=0.004, atr_h4=1269.85
+進場方向: SHORT | TP=121957.30, SL=124497.00
+2025-08-14 07:45:17,399 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 07:45
+price=4764.39, proba_up=0.093, atr_h4=100.66
+進場方向: SHORT | TP=4643.59, SL=4844.92
+2025-08-14 07:45:18,553 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 07:45
+price=616.70, proba_up=0.124, atr_h4=15.43
+進場方向: SHORT | TP=598.19, SL=629.04
+2025-08-14 08:00:16,335 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 08:00
+price=123328.26, proba_up=0.004, atr_h4=1115.08
+進場方向: SHORT | TP=121990.17, SL=124220.32
+2025-08-14 08:00:17,524 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 08:00
+price=4746.82, proba_up=0.106, atr_h4=91.48
+進場方向: SHORT | TP=4637.04, SL=4820.01
+2025-08-14 08:00:18,715 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 08:00
+price=616.10, proba_up=0.121, atr_h4=14.16
+進場方向: SHORT | TP=599.10, SL=627.43
+2025-08-14 08:15:16,291 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 08:15
+price=123862.18, proba_up=0.004, atr_h4=1157.02
+進場方向: SHORT | TP=122473.75, SL=124787.80
+2025-08-14 08:15:17,470 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 08:15
+price=4736.02, proba_up=0.110, atr_h4=92.68
+進場方向: SHORT | TP=4624.80, SL=4810.17
+2025-08-14 08:15:18,666 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 08:15
+price=616.30, proba_up=0.110, atr_h4=14.29
+進場方向: SHORT | TP=599.16, SL=627.73
+2025-08-14 08:30:16,233 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 08:30
+price=124154.68, proba_up=0.005, atr_h4=1184.73
+進場方向: SHORT | TP=122733.01, SL=125102.46
+2025-08-14 08:30:17,402 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 08:30
+price=4743.67, proba_up=0.132, atr_h4=92.88
+進場方向: SHORT | TP=4632.22, SL=4817.97
+2025-08-14 08:30:18,551 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 08:30
+price=618.70, proba_up=0.070, atr_h4=14.36
+進場方向: SHORT | TP=601.46, SL=630.19
+2025-08-14 08:45:16,301 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 08:45
+price=123677.78, proba_up=0.005, atr_h4=1200.73
+進場方向: SHORT | TP=122236.91, SL=124638.36
+2025-08-14 08:45:17,476 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 08:45
+price=4730.18, proba_up=0.143, atr_h4=94.60
+進場方向: SHORT | TP=4616.66, SL=4805.86
+2025-08-14 08:45:18,610 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 08:45
+price=618.20, proba_up=0.124, atr_h4=14.49
+進場方向: SHORT | TP=600.81, SL=629.79
+2025-08-14 09:00:16,262 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 09:00
+price=123887.99, proba_up=0.005, atr_h4=1200.73
+進場方向: SHORT | TP=122447.12, SL=124848.57
+2025-08-14 09:00:17,466 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 09:00
+price=4718.75, proba_up=0.163, atr_h4=94.97
+進場方向: SHORT | TP=4604.78, SL=4794.73
+2025-08-14 09:00:18,666 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 09:00
+price=620.40, proba_up=0.068, atr_h4=14.49
+進場方向: SHORT | TP=603.01, SL=631.99
+2025-08-14 09:15:16,226 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 09:15
+price=123647.26, proba_up=0.004, atr_h4=1200.73
+進場方向: SHORT | TP=122206.39, SL=124607.84
+2025-08-14 09:15:17,375 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 09:15
+price=4725.61, proba_up=0.219, atr_h4=95.22
+進場方向: SHORT | TP=4611.34, SL=4801.79
+2025-08-14 09:15:18,549 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 09:15
+price=620.60, proba_up=0.061, atr_h4=14.50
+進場方向: SHORT | TP=603.20, SL=632.20
+2025-08-14 09:30:16,215 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 09:30
+price=123530.80, proba_up=0.010, atr_h4=1200.73
+進場方向: SHORT | TP=122089.93, SL=124491.38
+2025-08-14 09:30:17,380 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 09:30
+price=4731.02, proba_up=0.192, atr_h4=95.22
+進場方向: SHORT | TP=4616.75, SL=4807.20
+2025-08-14 09:30:18,563 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 09:30
+price=620.80, proba_up=0.065, atr_h4=14.60
+進場方向: SHORT | TP=603.28, SL=632.48
+2025-08-14 09:45:16,276 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 09:45
+price=123556.45, proba_up=0.006, atr_h4=1200.73
+進場方向: SHORT | TP=122115.58, SL=124517.03
+2025-08-14 09:45:17,502 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 09:45
+price=4737.79, proba_up=0.131, atr_h4=95.22
+進場方向: SHORT | TP=4623.52, SL=4813.97
+2025-08-14 09:45:18,669 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 09:45
+price=622.70, proba_up=0.032, atr_h4=14.69
+進場方向: SHORT | TP=605.08, SL=634.45
+2025-08-14 10:00:16,280 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 10:00
+price=123337.65, proba_up=0.025, atr_h4=1200.73
+進場方向: SHORT | TP=121896.78, SL=124298.23
+2025-08-14 10:00:17,462 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 10:00
+price=4723.23, proba_up=0.199, atr_h4=95.22
+進場方向: SHORT | TP=4608.96, SL=4799.41
+2025-08-14 10:00:18,662 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 10:00
+price=625.00, proba_up=0.032, atr_h4=14.80
+進場方向: SHORT | TP=607.24, SL=636.84
+2025-08-14 10:15:16,247 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 10:15
+price=123364.96, proba_up=0.009, atr_h4=1200.73
+進場方向: SHORT | TP=121924.09, SL=124325.54
+2025-08-14 10:15:17,400 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 10:15
+price=4723.96, proba_up=0.248, atr_h4=95.22
+進場方向: SHORT | TP=4609.69, SL=4800.14
+2025-08-14 10:15:18,601 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 10:15
+price=624.20, proba_up=0.041, atr_h4=14.89
+進場方向: SHORT | TP=606.33, SL=636.11
+2025-08-14 10:30:16,196 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 10:30
+price=123305.11, proba_up=0.013, atr_h4=1200.83
+進場方向: SHORT | TP=121864.12, SL=124265.77
+2025-08-14 10:30:17,361 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 10:30
+price=4737.15, proba_up=0.115, atr_h4=95.22
+進場方向: SHORT | TP=4622.88, SL=4813.33
+2025-08-14 10:30:18,520 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 10:30
+price=619.90, proba_up=0.049, atr_h4=14.89
+進場方向: SHORT | TP=602.03, SL=631.81
+2025-08-14 10:45:16,232 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 10:45
+price=123596.25, proba_up=0.014, atr_h4=1200.83
+進場方向: SHORT | TP=122155.26, SL=124556.91
+2025-08-14 10:45:17,412 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 10:45
+price=4760.99, proba_up=0.242, atr_h4=95.29
+進場方向: SHORT | TP=4646.65, SL=4837.22
+2025-08-14 10:45:18,570 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 10:45
+price=621.80, proba_up=0.047, atr_h4=14.89
+進場方向: SHORT | TP=603.93, SL=633.71
+2025-08-14 11:00:16,299 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 11:00
+price=123658.06, proba_up=0.042, atr_h4=1200.83
+進場方向: SHORT | TP=122217.07, SL=124618.72
+2025-08-14 11:00:17,502 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 11:00
+price=4747.96, proba_up=0.132, atr_h4=95.59
+進場方向: SHORT | TP=4633.25, SL=4824.43
+2025-08-14 11:00:18,650 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 11:00
+price=623.90, proba_up=0.034, atr_h4=14.89
+進場方向: SHORT | TP=606.03, SL=635.81
+2025-08-14 11:15:16,465 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 11:15
+price=123759.11, proba_up=0.006, atr_h4=1200.83
+進場方向: SHORT | TP=122318.12, SL=124719.77
+2025-08-14 11:15:17,677 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 11:15
+price=4755.10, proba_up=0.217, atr_h4=95.59
+進場方向: SHORT | TP=4640.39, SL=4831.57
+2025-08-14 11:15:18,827 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 11:15
+price=623.40, proba_up=0.035, atr_h4=14.89
+進場方向: SHORT | TP=605.53, SL=635.31
+2025-08-14 11:30:16,444 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 11:30
+price=123582.83, proba_up=0.044, atr_h4=1200.83
+進場方向: SHORT | TP=122141.84, SL=124543.49
+2025-08-14 11:30:17,624 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 11:30
+price=4757.44, proba_up=0.223, atr_h4=95.59
+進場方向: SHORT | TP=4642.73, SL=4833.91
+2025-08-14 11:30:18,868 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 11:30
+price=623.60, proba_up=0.035, atr_h4=14.89
+進場方向: SHORT | TP=605.73, SL=635.51
+2025-08-14 11:45:16,251 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 11:45
+price=123532.80, proba_up=0.062, atr_h4=1200.83
+進場方向: SHORT | TP=122091.81, SL=124493.46
+2025-08-14 11:45:17,454 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 11:45
+price=4768.95, proba_up=0.134, atr_h4=95.74
+進場方向: SHORT | TP=4654.06, SL=4845.55
+2025-08-14 11:45:18,594 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 11:45
+price=623.40, proba_up=0.050, atr_h4=14.89
+進場方向: SHORT | TP=605.53, SL=635.31
+2025-08-14 12:00:16,289 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 12:00
+price=123384.52, proba_up=0.041, atr_h4=1124.03
+進場方向: SHORT | TP=122035.68, SL=124283.74
+2025-08-14 12:00:17,561 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 12:00
+price=4772.98, proba_up=0.085, atr_h4=91.45
+進場方向: SHORT | TP=4663.24, SL=4846.14
+2025-08-14 12:00:18,703 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 12:00
+price=623.20, proba_up=0.117, atr_h4=14.09
+進場方向: SHORT | TP=606.30, SL=634.47
+2025-08-14 12:15:16,221 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 12:15
+price=123164.07, proba_up=0.049, atr_h4=1142.97
+進場方向: SHORT | TP=121792.51, SL=124078.44
+2025-08-14 12:15:17,357 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 12:15
+price=4773.43, proba_up=0.097, atr_h4=92.01
+進場方向: SHORT | TP=4663.02, SL=4847.04
+2025-08-14 12:15:18,528 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 12:15
+price=621.20, proba_up=0.140, atr_h4=14.24
+進場方向: SHORT | TP=604.11, SL=632.59
+2025-08-14 12:30:16,302 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 12:30
+price=123322.00, proba_up=0.057, atr_h4=1142.97
+進場方向: SHORT | TP=121950.44, SL=124236.37
+2025-08-14 12:30:17,474 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 12:30
+price=4773.43, proba_up=0.131, atr_h4=92.47
+進場方向: SHORT | TP=4662.46, SL=4847.41
+2025-08-14 12:30:18,641 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 12:30
+price=625.30, proba_up=0.275, atr_h4=14.41
+進場方向: SHORT | TP=608.01, SL=636.83
+2025-08-14 12:45:16,305 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 12:45
+price=123203.35, proba_up=0.061, atr_h4=1142.97
+進場方向: SHORT | TP=121831.79, SL=124117.72
+2025-08-14 12:45:17,519 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 12:45
+price=4758.01, proba_up=0.180, atr_h4=93.45
+進場方向: SHORT | TP=4645.87, SL=4832.77
+2025-08-14 12:45:18,735 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 12:45
+price=624.80, proba_up=0.246, atr_h4=14.41
+進場方向: SHORT | TP=607.51, SL=636.33
+2025-08-14 13:00:16,582 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 13:00
+price=123024.75, proba_up=0.053, atr_h4=1151.15
+進場方向: SHORT | TP=121643.36, SL=123945.67
+2025-08-14 13:00:17,773 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 13:00
+price=4758.01, proba_up=0.126, atr_h4=93.81
+進場方向: SHORT | TP=4645.44, SL=4833.06
+2025-08-14 13:00:18,948 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 13:00
+price=625.30, proba_up=0.327, atr_h4=14.42
+進場方向: SHORT | TP=607.99, SL=636.84
+2025-08-14 13:15:16,428 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 13:15
+price=122907.07, proba_up=0.023, atr_h4=1161.96
+進場方向: SHORT | TP=121512.72, SL=123836.64
+2025-08-14 13:15:17,669 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 13:15
+price=4736.92, proba_up=0.211, atr_h4=94.89
+進場方向: SHORT | TP=4623.05, SL=4812.83
+2025-08-14 13:15:18,885 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 13:15
+price=624.90, proba_up=0.467, atr_h4=14.47
+無進場訊號（等待）
+2025-08-14 13:30:16,319 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 13:30
+price=122719.99, proba_up=0.027, atr_h4=1172.34
+進場方向: SHORT | TP=121313.18, SL=123657.86
+2025-08-14 13:30:17,598 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 13:30
+price=4735.32, proba_up=0.253, atr_h4=95.04
+進場方向: SHORT | TP=4621.27, SL=4811.36
+2025-08-14 13:30:18,799 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 13:30
+price=625.00, proba_up=0.413, atr_h4=14.51
+無進場訊號（等待）
+2025-08-14 13:45:16,879 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 13:45
+price=122592.62, proba_up=0.023, atr_h4=1183.84
+進場方向: SHORT | TP=121172.01, SL=123539.69
+2025-08-14 13:45:18,083 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 13:45
+price=4729.71, proba_up=0.123, atr_h4=95.72
+進場方向: SHORT | TP=4614.84, SL=4806.29
+2025-08-14 13:45:19,276 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 13:45
+price=621.60, proba_up=0.082, atr_h4=14.51
+進場方向: SHORT | TP=604.18, SL=633.21
+2025-08-14 14:00:16,321 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 14:00
+price=122123.08, proba_up=0.362, atr_h4=1216.97
+無進場訊號（等待）
+2025-08-14 14:00:17,524 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 14:00
+price=4731.20, proba_up=0.207, atr_h4=95.72
+進場方向: SHORT | TP=4616.33, SL=4807.78
+2025-08-14 14:00:18,774 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 14:00
+price=622.20, proba_up=0.150, atr_h4=14.58
+進場方向: SHORT | TP=604.71, SL=633.86
+2025-08-14 14:15:16,321 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 14:15
+price=121662.70, proba_up=0.404, atr_h4=1246.78
+無進場訊號（等待）
+2025-08-14 14:15:17,489 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 14:15
+price=4728.02, proba_up=0.169, atr_h4=96.33
+進場方向: SHORT | TP=4612.42, SL=4805.08
+2025-08-14 14:15:18,668 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 14:15
+price=614.80, proba_up=0.358, atr_h4=15.04
+無進場訊號（等待）
+2025-08-14 14:30:16,392 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 14:30
+price=121617.20, proba_up=0.336, atr_h4=1271.70
+進場方向: SHORT | TP=120091.16, SL=122634.56
+2025-08-14 14:30:17,569 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 14:30
+price=4741.87, proba_up=0.148, atr_h4=96.33
+進場方向: SHORT | TP=4626.27, SL=4818.93
+2025-08-14 14:30:18,824 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 14:30
+price=614.10, proba_up=0.265, atr_h4=15.19
+進場方向: SHORT | TP=595.87, SL=626.25
+2025-08-14 14:45:16,420 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 14:45
+price=121748.61, proba_up=0.332, atr_h4=1271.70
+進場方向: SHORT | TP=120222.57, SL=122765.97
+2025-08-14 14:45:17,668 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 14:45
+price=4767.72, proba_up=0.200, atr_h4=96.43
+進場方向: SHORT | TP=4652.00, SL=4844.87
+2025-08-14 14:45:18,874 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 14:45
+price=614.40, proba_up=0.300, atr_h4=15.19
+進場方向: SHORT | TP=596.17, SL=626.55
+2025-08-14 15:00:16,355 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 15:00
+price=121769.51, proba_up=0.329, atr_h4=1271.70
+進場方向: SHORT | TP=120243.47, SL=122786.87
+2025-08-14 15:00:17,833 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 15:00
+price=4772.15, proba_up=0.212, atr_h4=96.43
+進場方向: SHORT | TP=4656.43, SL=4849.30
+2025-08-14 15:00:19,069 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 15:00
+price=613.30, proba_up=0.288, atr_h4=15.19
+進場方向: SHORT | TP=595.07, SL=625.45
+2025-08-14 15:15:16,199 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 15:15
+price=121660.67, proba_up=0.373, atr_h4=1271.70
+無進場訊號（等待）
+2025-08-14 15:15:17,374 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 15:15
+price=4735.88, proba_up=0.283, atr_h4=96.43
+進場方向: SHORT | TP=4620.16, SL=4813.03
+2025-08-14 15:15:18,661 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 15:15
+price=609.10, proba_up=0.471, atr_h4=15.41
+無進場訊號（等待）
+2025-08-14 15:30:16,532 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 15:30
+price=121657.08, proba_up=0.377, atr_h4=1271.70
+無進場訊號（等待）
+2025-08-14 15:30:17,752 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 15:30
+price=4747.37, proba_up=0.256, atr_h4=96.43
+進場方向: SHORT | TP=4631.65, SL=4824.52
+2025-08-14 15:30:18,942 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 15:30
+price=608.60, proba_up=0.485, atr_h4=15.50
+無進場訊號（等待）
+2025-08-14 15:45:16,267 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 15:45
+price=121904.77, proba_up=0.188, atr_h4=1271.70
+進場方向: SHORT | TP=120378.73, SL=122922.13
+2025-08-14 15:45:17,470 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 15:45
+price=4746.25, proba_up=0.173, atr_h4=96.43
+進場方向: SHORT | TP=4630.53, SL=4823.40
+2025-08-14 15:45:18,634 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 15:45
+price=609.60, proba_up=0.544, atr_h4=15.50
+無進場訊號（等待）
+2025-08-14 16:00:16,220 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 16:00
+price=121785.29, proba_up=0.076, atr_h4=1227.26
+進場方向: SHORT | TP=120312.57, SL=122767.10
+2025-08-14 16:00:17,412 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 16:00
+price=4749.55, proba_up=0.198, atr_h4=89.94
+進場方向: SHORT | TP=4641.62, SL=4821.50
+2025-08-14 16:00:18,611 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 16:00
+price=608.60, proba_up=0.755, atr_h4=13.80
+進場方向: LONG | TP=630.68, SL=594.80
+2025-08-14 16:15:16,391 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 16:15
+price=121860.99, proba_up=0.023, atr_h4=1242.54
+進場方向: SHORT | TP=120369.94, SL=122855.02
+2025-08-14 16:15:17,627 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 16:15
+price=4737.10, proba_up=0.097, atr_h4=91.10
+進場方向: SHORT | TP=4627.77, SL=4809.98
+2025-08-14 16:15:18,805 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 16:15
+price=606.20, proba_up=0.893, atr_h4=14.08
+進場方向: LONG | TP=628.73, SL=592.12
+2025-08-14 16:30:16,378 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 16:30
+price=121941.69, proba_up=0.033, atr_h4=1255.75
+進場方向: SHORT | TP=120434.79, SL=122946.29
+2025-08-14 16:30:17,559 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 16:30
+price=4732.51, proba_up=0.137, atr_h4=91.33
+進場方向: SHORT | TP=4622.92, SL=4805.57
+2025-08-14 16:30:18,698 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 16:30
+price=606.10, proba_up=0.896, atr_h4=14.08
+進場方向: LONG | TP=628.63, SL=592.02
+2025-08-14 16:45:16,217 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 16:45
+price=121744.07, proba_up=0.029, atr_h4=1255.75
+進場方向: SHORT | TP=120237.17, SL=122748.67
+2025-08-14 16:45:17,459 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 16:45
+price=4725.14, proba_up=0.126, atr_h4=91.77
+進場方向: SHORT | TP=4615.01, SL=4798.56
+2025-08-14 16:45:18,638 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 16:45
+price=605.20, proba_up=0.799, atr_h4=14.16
+進場方向: LONG | TP=627.85, SL=591.04
+2025-08-14 17:00:16,208 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 17:00
+price=121637.77, proba_up=0.040, atr_h4=1257.63
+進場方向: SHORT | TP=120128.62, SL=122643.87
+2025-08-14 17:00:17,387 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 17:00
+price=4725.58, proba_up=0.200, atr_h4=91.90
+進場方向: SHORT | TP=4615.30, SL=4799.10
+2025-08-14 17:00:18,570 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 17:00
+price=606.50, proba_up=0.728, atr_h4=14.16
+進場方向: LONG | TP=629.15, SL=592.34
+2025-08-14 17:15:16,410 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 17:15
+price=121891.00, proba_up=0.041, atr_h4=1259.93
+進場方向: SHORT | TP=120379.08, SL=122898.95
+2025-08-14 17:15:17,611 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 17:15
+price=4741.34, proba_up=0.141, atr_h4=91.97
+進場方向: SHORT | TP=4630.98, SL=4814.92
+2025-08-14 17:15:18,810 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 17:15
+price=609.80, proba_up=0.831, atr_h4=14.24
+進場方向: LONG | TP=632.59, SL=595.56
+2025-08-14 17:30:16,344 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 17:30
+price=121800.01, proba_up=0.023, atr_h4=1259.93
+進場方向: SHORT | TP=120288.09, SL=122807.96
+2025-08-14 17:30:17,536 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 17:30
+price=4745.00, proba_up=0.186, atr_h4=92.09
+進場方向: SHORT | TP=4634.49, SL=4818.67
+2025-08-14 17:30:18,762 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 17:30
+price=608.20, proba_up=0.823, atr_h4=14.26
+進場方向: LONG | TP=631.02, SL=593.94
+2025-08-14 17:45:16,240 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 17:45
+price=121587.16, proba_up=0.029, atr_h4=1259.93
+進場方向: SHORT | TP=120075.24, SL=122595.11
+2025-08-14 17:45:17,400 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 17:45
+price=4750.79, proba_up=0.209, atr_h4=92.92
+進場方向: SHORT | TP=4639.28, SL=4825.13
+2025-08-14 17:45:18,647 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 17:45
+price=607.40, proba_up=0.737, atr_h4=14.26
+進場方向: LONG | TP=630.22, SL=593.14
+2025-08-14 18:00:16,261 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 18:00
+price=121649.85, proba_up=0.038, atr_h4=1259.93
+進場方向: SHORT | TP=120137.93, SL=122657.80
+2025-08-14 18:00:17,465 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 18:00
+price=4760.01, proba_up=0.284, atr_h4=92.92
+進場方向: SHORT | TP=4648.50, SL=4834.35
+2025-08-14 18:00:18,707 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 18:00
+price=609.40, proba_up=0.816, atr_h4=14.34
+進場方向: LONG | TP=632.34, SL=595.06
+2025-08-14 18:15:16,282 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 18:15
+price=121484.34, proba_up=0.039, atr_h4=1265.54
+進場方向: SHORT | TP=119965.69, SL=122496.77
+2025-08-14 18:15:17,447 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 18:15
+price=4747.39, proba_up=0.289, atr_h4=93.19
+進場方向: SHORT | TP=4635.56, SL=4821.94
+2025-08-14 18:15:18,598 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 18:15
+price=609.30, proba_up=0.781, atr_h4=14.34
+進場方向: LONG | TP=632.24, SL=594.96
+2025-08-14 18:30:16,271 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 18:30
+price=121523.99, proba_up=0.030, atr_h4=1265.54
+進場方向: SHORT | TP=120005.34, SL=122536.42
+2025-08-14 18:30:17,514 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 18:30
+price=4748.58, proba_up=0.246, atr_h4=93.19
+進場方向: SHORT | TP=4636.75, SL=4823.13
+2025-08-14 18:30:18,714 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 18:30
+price=610.00, proba_up=0.609, atr_h4=14.34
+無進場訊號（等待）
+2025-08-14 18:45:16,296 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 18:45
+price=121134.14, proba_up=0.028, atr_h4=1289.76
+進場方向: SHORT | TP=119586.43, SL=122165.95
+2025-08-14 18:45:17,444 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 18:45
+price=4704.63, proba_up=0.131, atr_h4=96.35
+進場方向: SHORT | TP=4589.01, SL=4781.71
+2025-08-14 18:45:18,615 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 18:45
+price=607.80, proba_up=0.550, atr_h4=14.34
+無進場訊號（等待）
+2025-08-14 19:00:16,479 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 19:00
+price=120927.76, proba_up=0.051, atr_h4=1315.04
+進場方向: SHORT | TP=119349.71, SL=121979.79
+2025-08-14 19:00:17,681 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 19:00
+price=4705.70, proba_up=0.157, atr_h4=96.35
+進場方向: SHORT | TP=4590.08, SL=4782.78
+2025-08-14 19:00:18,881 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 19:00
+price=609.20, proba_up=0.645, atr_h4=14.34
+進場方向: LONG | TP=632.14, SL=594.86
+2025-08-14 19:15:16,200 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 19:15
+price=120859.03, proba_up=0.027, atr_h4=1315.04
+進場方向: SHORT | TP=119280.98, SL=121911.06
+2025-08-14 19:15:17,350 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 19:15
+price=4713.82, proba_up=0.145, atr_h4=96.35
+進場方向: SHORT | TP=4598.20, SL=4790.90
+2025-08-14 19:15:18,631 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 19:15
+price=606.80, proba_up=0.659, atr_h4=14.34
+進場方向: LONG | TP=629.74, SL=592.46
+2025-08-14 19:30:16,328 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 19:30
+price=120898.50, proba_up=0.052, atr_h4=1316.12
+進場方向: SHORT | TP=119319.15, SL=121951.40
+2025-08-14 19:30:17,518 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 19:30
+price=4705.47, proba_up=0.151, atr_h4=96.35
+進場方向: SHORT | TP=4589.85, SL=4782.55
+2025-08-14 19:30:18,697 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 19:30
+price=606.70, proba_up=0.225, atr_h4=14.34
+進場方向: SHORT | TP=589.50, SL=618.17
+2025-08-14 19:45:16,298 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 19:45
+price=120765.16, proba_up=0.158, atr_h4=1319.54
+進場方向: SHORT | TP=119181.71, SL=121820.79
+2025-08-14 19:45:17,485 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 19:45
+price=4705.43, proba_up=0.157, atr_h4=96.35
+進場方向: SHORT | TP=4589.81, SL=4782.51
+2025-08-14 19:45:18,636 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 19:45
+price=606.90, proba_up=0.416, atr_h4=14.34
+無進場訊號（等待）
+2025-08-14 20:00:16,281 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 20:00
+price=120912.14, proba_up=0.030, atr_h4=1269.85
+進場方向: SHORT | TP=119388.32, SL=121928.02
+2025-08-14 20:00:17,450 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 20:00
+price=4716.77, proba_up=0.187, atr_h4=92.57
+進場方向: SHORT | TP=4605.68, SL=4790.83
+2025-08-14 20:00:18,636 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 20:00
+price=608.50, proba_up=0.265, atr_h4=13.66
+進場方向: SHORT | TP=592.10, SL=619.43
+2025-08-14 20:15:16,235 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 20:15
+price=121011.45, proba_up=0.053, atr_h4=1283.99
+進場方向: SHORT | TP=119470.66, SL=122038.64
+2025-08-14 20:15:17,414 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 20:15
+price=4728.97, proba_up=0.120, atr_h4=93.84
+進場方向: SHORT | TP=4616.36, SL=4804.05
+2025-08-14 20:15:18,569 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 20:15
+price=608.00, proba_up=0.476, atr_h4=13.71
+無進場訊號（等待）
+2025-08-14 20:30:16,382 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 20:30
+price=120760.00, proba_up=0.117, atr_h4=1319.53
+進場方向: SHORT | TP=119176.56, SL=121815.63
+2025-08-14 20:30:17,565 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 20:30
+price=4700.17, proba_up=0.350, atr_h4=95.47
+無進場訊號（等待）
+2025-08-14 20:30:18,818 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 20:30
+price=607.20, proba_up=0.771, atr_h4=13.86
+進場方向: LONG | TP=629.37, SL=593.34
+2025-08-14 20:45:16,405 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 20:45
+price=119477.97, proba_up=0.232, atr_h4=1520.82
+進場方向: SHORT | TP=117652.99, SL=120694.62
+2025-08-14 20:45:17,646 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 20:45
+price=4610.61, proba_up=0.273, atr_h4=108.39
+進場方向: SHORT | TP=4480.54, SL=4697.32
+2025-08-14 20:45:18,934 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 20:45
+price=595.00, proba_up=0.738, atr_h4=15.88
+進場方向: LONG | TP=620.41, SL=579.12
+2025-08-14 21:00:16,220 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 21:00
+price=118778.15, proba_up=0.114, atr_h4=1520.82
+進場方向: SHORT | TP=116953.17, SL=119994.80
+2025-08-14 21:00:17,424 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 21:00
+price=4568.35, proba_up=0.480, atr_h4=108.39
+無進場訊號（等待）
+2025-08-14 21:00:19,041 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 21:00
+price=590.50, proba_up=0.592, atr_h4=15.88
+無進場訊號（等待）
+2025-08-14 21:15:16,284 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 21:15
+price=119155.80, proba_up=0.207, atr_h4=1520.82
+進場方向: SHORT | TP=117330.82, SL=120372.45
+2025-08-14 21:15:17,437 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 21:15
+price=4573.47, proba_up=0.659, atr_h4=112.80
+進場方向: LONG | TP=4753.96, SL=4460.67
+2025-08-14 21:15:18,608 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 21:15
+price=594.20, proba_up=0.807, atr_h4=15.88
+進場方向: LONG | TP=619.61, SL=578.32
+2025-08-14 21:30:16,284 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 21:30
+price=118269.38, proba_up=0.082, atr_h4=1520.82
+進場方向: SHORT | TP=116444.40, SL=119486.03
+2025-08-14 21:30:17,489 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 21:30
+price=4535.01, proba_up=0.186, atr_h4=112.80
+進場方向: SHORT | TP=4399.64, SL=4625.25
+2025-08-14 21:30:18,742 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 21:30
+price=591.00, proba_up=0.578, atr_h4=15.88
+無進場訊號（等待）
+2025-08-14 21:45:16,297 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 21:45
+price=118194.99, proba_up=0.148, atr_h4=1520.82
+進場方向: SHORT | TP=116370.01, SL=119411.64
+2025-08-14 21:45:17,495 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 21:45
+price=4569.85, proba_up=0.173, atr_h4=112.80
+進場方向: SHORT | TP=4434.48, SL=4660.09
+2025-08-14 21:45:18,668 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 21:45
+price=592.40, proba_up=0.662, atr_h4=15.88
+進場方向: LONG | TP=617.81, SL=576.52
+2025-08-14 22:00:16,433 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 22:00
+price=118412.07, proba_up=0.130, atr_h4=1520.82
+進場方向: SHORT | TP=116587.09, SL=119628.72
+2025-08-14 22:00:17,643 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 22:00
+price=4610.01, proba_up=0.095, atr_h4=112.80
+進場方向: SHORT | TP=4474.64, SL=4700.25
+2025-08-14 22:00:18,854 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 22:00
+price=594.10, proba_up=0.696, atr_h4=15.88
+進場方向: LONG | TP=619.51, SL=578.22
+2025-08-14 22:15:16,260 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 22:15
+price=118042.46, proba_up=0.120, atr_h4=1520.82
+進場方向: SHORT | TP=116217.48, SL=119259.11
+2025-08-14 22:15:17,402 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 22:15
+price=4600.04, proba_up=0.166, atr_h4=112.80
+進場方向: SHORT | TP=4464.67, SL=4690.28
+2025-08-14 22:15:18,614 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 22:15
+price=591.00, proba_up=0.598, atr_h4=15.88
+無進場訊號（等待）
+2025-08-14 22:30:16,256 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 22:30
+price=118814.06, proba_up=0.135, atr_h4=1520.82
+進場方向: SHORT | TP=116989.08, SL=120030.71
+2025-08-14 22:30:17,435 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 22:30
+price=4654.74, proba_up=0.092, atr_h4=112.80
+進場方向: SHORT | TP=4519.37, SL=4744.98
+2025-08-14 22:30:18,655 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 22:30
+price=595.10, proba_up=0.582, atr_h4=15.88
+無進場訊號（等待）
+2025-08-14 22:45:16,358 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 22:45
+price=119009.57, proba_up=0.087, atr_h4=1520.82
+進場方向: SHORT | TP=117184.59, SL=120226.22
+2025-08-14 22:45:17,546 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 22:45
+price=4670.56, proba_up=0.083, atr_h4=112.80
+進場方向: SHORT | TP=4535.19, SL=4760.80
+2025-08-14 22:45:18,729 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 22:45
+price=596.10, proba_up=0.542, atr_h4=15.88
+無進場訊號（等待）
+2025-08-14 23:00:16,255 [INFO] realtime - 最新訊號 BTCUSDT @ 2025-08-14 23:00
+price=118834.73, proba_up=0.096, atr_h4=1520.82
+進場方向: SHORT | TP=117009.75, SL=120051.38
+2025-08-14 23:00:17,421 [INFO] realtime - 最新訊號 ETHUSDT @ 2025-08-14 23:00
+price=4666.36, proba_up=0.133, atr_h4=112.80
+進場方向: SHORT | TP=4530.99, SL=4756.60
+2025-08-14 23:00:18,598 [INFO] realtime - 最新訊號 BCHUSDT @ 2025-08-14 23:00
+price=595.90, proba_up=0.559, atr_h4=15.88
+無進場訊號（等待）
