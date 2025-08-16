@@ -1,13 +1,17 @@
 from __future__ import annotations
 from pathlib import Path
 import json
-from typing import Dict, List
+from typing import Dict, List, Any
 
 import optuna
 import pandas as pd
 import yaml
+import shutil
+import datetime
+import difflib
 
 from .evaluator import walk_forward_evaluate
+from csp.utils.config import get_symbol_features
 
 
 def _suggest_params(trial: optuna.Trial) -> Dict:
@@ -29,7 +33,7 @@ def optimize_symbol(cfg_path: str, symbol: str,
                     n_trials: int = 20, out_dir: Path | None = None) -> optuna.Study:
     """Run Optuna optimization for a single symbol."""
     cfg = yaml.safe_load(open(cfg_path, "r", encoding="utf-8"))
-    base_feature = cfg.get("feature", {})
+    base_feature = get_symbol_features(cfg, symbol)
 
     def objective(trial: optuna.Trial) -> float:
         params = _suggest_params(trial)
@@ -68,3 +72,57 @@ def optimize_symbols(cfg_path: str, symbols: List[str],
         study = optimize_symbol(cfg_path, sym, start_ts, end_ts, n_trials, out_dir)
         results[sym] = study
     return results
+
+
+def apply_best_params_to_cfg(cfg_path: str, symbol: str, best_params: Dict[str, Any],
+                             *, apply: bool = False, log_file: Path | None = None) -> None:
+    """Update ``cfg_path`` with ``best_params`` for ``symbol``.
+
+    A backup ``strategy.yaml.bak-YYYYmmdd-HHMMSS`` is created before overwriting.
+    The diff of the change is printed and optionally appended to ``log_file``.
+    """
+    if not apply:
+        return
+    if not best_params:
+        print(f"[SKIP] {symbol}: no best params to apply")
+        return
+
+    cfg_path = Path(cfg_path)
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    feats = cfg.setdefault("features", {})
+    feats.setdefault("default", {})
+    per = feats.setdefault("per_symbol", {})
+    sym_cfg = per.setdefault(symbol, {})
+
+    # ensure sub-structures exist
+    sym_cfg.setdefault("rsi", {})
+    sym_cfg.setdefault("bollinger", {})
+    sym_cfg.setdefault("atr", {})
+    sym_cfg["rsi"].update({"enabled": True, "window": int(best_params["rsi_window"])})
+    sym_cfg["bollinger"].update({
+        "enabled": True,
+        "window": int(best_params["bb_window"]),
+        "std": float(best_params["bb_std"]),
+    })
+    sym_cfg["atr"].update({"enabled": True, "window": int(best_params["atr_window"])})
+
+    old_text = cfg_path.read_text(encoding="utf-8")
+    new_text = yaml.dump(cfg, allow_unicode=True, sort_keys=False)
+    if old_text == new_text:
+        print(f"[INFO] {symbol}: config unchanged")
+        return
+
+    ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = cfg_path.with_suffix(cfg_path.suffix + f".bak-{ts}")
+    shutil.copy(cfg_path, backup_path)
+    cfg_path.write_text(new_text, encoding="utf-8")
+
+    diff = "".join(difflib.unified_diff(
+        old_text.splitlines(True), new_text.splitlines(True),
+        fromfile="before", tofile="after"
+    ))
+    print(diff)
+    if log_file:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with log_file.open("a", encoding="utf-8") as f:
+            f.write(f"# {symbol}\n{diff}\n")

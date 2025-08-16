@@ -11,6 +11,7 @@ import joblib
 
 from csp.data.loader import load_15m_csv
 from csp.features.h16 import build_features_15m_4h
+from csp.utils.config import get_symbol_features
 
 @dataclass
 class EntryZoneCfg:
@@ -81,6 +82,8 @@ def _apply_exit(bar: pd.Series, side: str, tp: float, sl: float) -> Optional[str
 def run_backtest_for_symbol(csv_path: str, cfg_path: str, symbol: Optional[str] = None,
                             start_ts: Optional[pd.Timestamp] = None, end_ts: Optional[pd.Timestamp] = None) -> Dict[str, Any]:
     cfg = _load_cfg(cfg_path)
+    sym = symbol or _infer_symbol_from_path(csv_path)
+    feat_params = get_symbol_features(cfg, sym)
     long_thr  = float(cfg["execution"]["long_prob_threshold"])
     short_thr = float(cfg["execution"]["short_prob_threshold"])
     atr_cfg   = cfg["execution"]["atr_tp_sl"]
@@ -138,15 +141,13 @@ def run_backtest_for_symbol(csv_path: str, cfg_path: str, symbol: Optional[str] 
 
     feats = build_features_15m_4h(
         df15,
-        ema_windows=tuple(cfg["feature"]["ema_windows"]),
-        rsi_window=cfg["feature"]["rsi_window"],
-        bb_window=cfg["feature"]["bb_window"],
-        bb_std=cfg["feature"]["bb_std"],
-        atr_window=cfg["feature"]["atr_window"],
-        h4_resample=cfg["feature"]["h4_rule"]["resample"],
+        ema_windows=tuple(feat_params["ema_windows"]),
+        rsi_window=feat_params["rsi_window"],
+        bb_window=feat_params["bb_window"],
+        bb_std=feat_params["bb_std"],
+        atr_window=feat_params["atr_window"],
+        h4_resample=feat_params["h4_resample"],
     )
-
-    sym = symbol or _infer_symbol_from_path(csv_path)
     bst, scaler, meta = _load_model_bundle(cfg, sym)
     feature_cols = meta["feature_cols"]
 

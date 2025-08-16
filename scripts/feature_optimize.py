@@ -9,7 +9,7 @@ import yaml
 
 from csp.data.loader import load_15m_csv
 from csp.utils.dates import resolve_time_range_like
-from csp.optimize.feature_opt import optimize_symbol
+from csp.optimize.feature_opt import optimize_symbol, apply_best_params_to_cfg
 
 
 def _read_date_args_from_env() -> dict:
@@ -27,14 +27,18 @@ def _read_date_args_from_env() -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cfg", required=True, help="path to strategy.yaml")
-    ap.add_argument("--symbols", nargs="*", default=None, help="指定要跑的幣別")
+    ap.add_argument("--symbols", default=None, help="指定要跑的幣別 (逗號分隔)")
     ap.add_argument("--days", type=int, default=None, help="回測天數（未指定 start/end 時生效）")
     ap.add_argument("--trials", type=int, default=20, help="Optuna trials 數")
     ap.add_argument("--outdir", default="reports/feature_opt", help="輸出目錄")
+    ap.add_argument("--apply-to-cfg", action="store_true", help="將最佳參數寫回 cfg")
     args = ap.parse_args()
 
     cfg = yaml.safe_load(open(args.cfg, "r", encoding="utf-8"))
-    symbols = args.symbols or cfg.get("symbols", [])
+    if args.symbols:
+        symbols = [s.strip() for s in args.symbols.split(',') if s.strip()]
+    else:
+        symbols = cfg.get("symbols", [])
     if not symbols:
         print("cfg.symbols 為空，請在 strategy.yaml 設定幣別")
         sys.exit(1)
@@ -54,6 +58,9 @@ def main() -> None:
         print(f"[OPT] {sym} {start_ts}~{end_ts} trials={args.trials}")
         study = optimize_symbol(args.cfg, sym, start_ts, end_ts, args.trials, base_out)
         print(f"[BEST {sym}] value={study.best_value:.6f} params={study.best_params}")
+        apply_best_params_to_cfg(args.cfg, sym, study.best_params,
+                                 apply=args.apply_to_cfg,
+                                 log_file=base_out / "apply_log.txt")
 
 
 if __name__ == "__main__":

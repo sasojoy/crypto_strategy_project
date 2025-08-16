@@ -15,18 +15,27 @@ io:
     interval: 15m
     limit: 96
     api_base: https://api.binance.com
-feature:
-  ema_windows:
-  - 9
-  - 21
-  - 50
-  rsi_window: 14
-  bb_window: 20
-  bb_std: 2.0
-  atr_window: 14
-  h4_rule:
-    enabled: true
-    resample: 4H
+features:
+  default:
+    ema_windows:
+    - 9
+    - 21
+    - 50
+    h4_rule:
+      enabled: true
+      resample: 4H
+    rsi: {enabled: true, window: 14}
+    bollinger: {enabled: true, window: 20, std: 2.0}
+    atr: {enabled: true, window: 14}
+  per_symbol:
+    BTCUSDT:
+      rsi: {enabled: true, window: 20}
+      bollinger: {enabled: true, window: 24, std: 3.42}
+      atr: {enabled: true, window: 17}
+    ETHUSDT:
+      rsi: {enabled: true, window: 14}
+      bollinger: {enabled: true, window: 20, std: 2.0}
+      atr: {enabled: true, window: 14}
 train:
   target_horizon_bars: 16
   label_threshold: 0.0

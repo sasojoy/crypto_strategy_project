@@ -179,12 +179,13 @@ python scripts\realtime_loop.py --cfg csp\configs\strategy.yaml --delay-sec 15
 - **用途**：利用 Optuna 搜索特徵參數，逐幣回測評估。
 - **常用參數**：
   - `--cfg <path>`：指定設定檔。
-  - `--symbols <sym ...>`：指定幣別（預設讀 cfg.symbols）。
+  - `--symbols sym1,sym2`：以逗號分隔的幣別清單（預設讀 cfg.symbols）。
   - `--days <N>`：回測天數（或配合環境變數 START_DATE/END_DATE）。
   - `--trials <N>`：Optuna 試驗次數。
+  - `--apply-to-cfg`：將最佳參數寫回 `strategy.yaml`。
 - **範例**：
 ```cmd
-python scripts\feature_optimize.py --cfg csp\configs\strategy.yaml --symbols BTCUSDT --days 30 --trials 10
+python scripts\feature_optimize.py --cfg csp\configs\strategy.yaml --symbols BTCUSDT,ETHUSDT --days 30 --trials 10 --apply-to-cfg
 ```
 
 ---
