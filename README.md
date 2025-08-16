@@ -15,6 +15,7 @@
   - [訓練（scripts\train_multi.py）](#訓練scriptstrain_multipy)
   - [回測（scripts\backtest_multi.py）](#回測scriptsbacktest_multipy)
   - [即時（scripts\realtime_multi.py / scripts\realtime_loop.py）](#即時scriptsrealtime_multipy--scriptsrealtime_looppy)
+  - [特徵優化（scripts\feature_optimize.py）](#特徵優化scriptsfeature_optimizepy)
 - [日期區間功能說明](#日期區間功能說明)
 - [輸出與檔案位置](#輸出與檔案位置)
 - [常見問題 FAQ](#常見問題-faq)
@@ -170,6 +171,20 @@ python scripts\realtime_multi.py --cfg csp\configs\strategy.yaml
 set START_DATE=2025-08-01
 set END_DATE=2025-08-10
 python scripts\realtime_loop.py --cfg csp\configs\strategy.yaml --delay-sec 15
+```
+
+---
+
+### 特徵優化（`scripts\feature_optimize.py`）
+- **用途**：利用 Optuna 搜索特徵參數，逐幣回測評估。
+- **常用參數**：
+  - `--cfg <path>`：指定設定檔。
+  - `--symbols <sym ...>`：指定幣別（預設讀 cfg.symbols）。
+  - `--days <N>`：回測天數（或配合環境變數 START_DATE/END_DATE）。
+  - `--trials <N>`：Optuna 試驗次數。
+- **範例**：
+```cmd
+python scripts\feature_optimize.py --cfg csp\configs\strategy.yaml --symbols BTCUSDT --days 30 --trials 10
 ```
 
 ---

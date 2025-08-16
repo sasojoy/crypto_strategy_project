@@ -12,7 +12,8 @@ dependencies = [
   "pyyaml",
   "requests",
   "joblib",
-  "python-dateutil"
+  "python-dateutil",
+  "optuna"
 ]
 
 [build-system]
