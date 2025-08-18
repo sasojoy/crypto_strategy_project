@@ -2,37 +2,55 @@ name: Deploy to GCP VM
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # （可選）如需先在 CI 跑測試，保留；不需要可移除。
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10.12'
 
-      - name: Install dependencies
+      - name: Install test deps (optional)
         run: |
           if [ -f requirements.txt ]; then
             python -m pip install --upgrade pip
             pip install -r requirements.txt
           fi
 
-      - name: Load SSH key
-        uses: webfactory/ssh-agent@v0.7.0
+      - name: Start ssh-agent and load key
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.SSH_KEY }}
+          ssh-private-key: |
+            ${{ secrets.SSH_KEY }}
 
-      - name: Sync files to VM
+      - name: Add host to known_hosts
         run: |
-          rsync -az --delete --exclude='.git' --exclude='.github' --exclude='.venv' ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/crypto_strategy_project/
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Run deploy script
+      - name: Sync files to VM via rsync
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash /opt/crypto_strategy_project/deploy.sh'
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.venv' \
+            -e "ssh -o StrictHostKeyChecking=yes" \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/crypto_strategy_project/
+
+      - name: Run remote deploy script
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "bash /opt/crypto_strategy_project/deploy.sh"
+
+      # （可選）如果你使用 systemd timer，部署後立刻跑一輪 smoke test
+      # - name: Trigger one-shot run (timer-based)
+      #   run: |
+      #     ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo systemctl start trader-once.service"
