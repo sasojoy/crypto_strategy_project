@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 import yaml
 from dateutil import tz
 
-from csp.pipeline.realtime_v2 import run_once
+from csp.data.fetcher import update_csv_with_latest
+from csp.pipeline.realtime_v2 import run_once as run_model_once
 from csp.utils.notifier import notify
 
 TW = tz.gettz("Asia/Taipei")
@@ -23,10 +24,11 @@ def next_quarter_with_delay(now: datetime, delay_sec: int = 15) -> datetime:
     return slot + timedelta(seconds=delay_sec)
 
 
-def run_once_all(cfg_path: str) -> dict:
+def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
     cfg = yaml.safe_load(open(cfg_path, "r", encoding="utf-8"))
     symbols = cfg.get("symbols", [])
     csv_map = cfg.get("io", {}).get("csv_paths", {})
+    live_cfg = (cfg.get("io", {}) or {}).get("live_fetch", {}) or {}
     results = {}
 
     for sym in symbols:
@@ -35,13 +37,24 @@ def run_once_all(cfg_path: str) -> dict:
             print(f"[SKIP] {sym}: No CSV path in config")
             continue
         print(f"[REALTIME] {sym} <- {csv_path}")
+        stale = False
+        if live_cfg.get("enabled"):
+            try:
+                df = update_csv_with_latest(sym, csv_path, interval=live_cfg.get("interval", "15m"))
+                last_ts = df["timestamp"].iloc[-1]
+                print(f"  last closed UTC={last_ts.isoformat()} | TW={(last_ts.tz_convert(TW)).isoformat()}")
+                stale = bool(df.attrs.get("stale"))
+            except Exception as e:
+                print(f"[WARN] live fetch failed for {sym}: {e}")
+                stale = True
         try:
-            res = run_once(csv_path, cfg_path, symbol=sym)
+            res = run_model_once(csv_path, cfg_path)
         except Exception as e:
             res = {"symbol": sym, "side": None, "error": str(e)}
+        if stale:
+            res["warning"] = "STALE DATA"
         results[sym] = res
 
-    # Summary notify
     lines = []
     for sym, r in results.items():
         if "error" in r:
@@ -50,7 +63,8 @@ def run_once_all(cfg_path: str) -> dict:
             side = r.get("side") or "-"
             price = r.get("price", float("nan"))
             pu = r.get("proba_up", float("nan"))
-            lines.append(f"{sym}: {side} | P={price:.2f} | proba_up={pu:.3f}")
+            note = " [STALE DATA]" if r.get("warning") else ""
+            lines.append(f"{sym}: {side} | P={price:.2f} | proba_up={pu:.3f}{note}")
     notify("⏱️ 多幣別即時訊號\n" + "\n".join(lines), cfg.get("notify", {}).get("telegram"))
 
     print(json.dumps(results, ensure_ascii=False, indent=2))
@@ -71,7 +85,7 @@ def main():
             print(f"[LOOP] 現在 {now.strftime('%F %T%z')}，等到 {target.strftime('%F %T%z')} 再跑（{int(wait)} 秒）")
             time.sleep(wait)
         try:
-            run_once_all(args.cfg)
+            run_once(args.cfg)
         except Exception as e:
             print(f"[ERROR] loop run failed: {e}")
 
