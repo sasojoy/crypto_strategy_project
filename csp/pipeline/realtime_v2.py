@@ -21,7 +21,6 @@ import numpy as np
 from dateutil import tz
 
 from csp.data.loader import load_15m_csv
-from csp.data.binance import fetch_latest_klines, merge_history_and_live
 from csp.features.h16 import build_features_15m_4h
 from csp.utils.config import get_symbol_features
 from csp.utils.logger import get_logger
@@ -125,28 +124,17 @@ def _decide_side(proba_up: float, long_thr: float, short_thr: float) -> Optional
     return None
 
 
-def run_once(csv_path: str, cfg_path: str, *, symbol: Optional[str] = None) -> Dict[str, Any]:
+def run_once(csv_path: str, cfg_path: str) -> Dict[str, Any]:
     """Load latest data, run model inference and return trading signal."""
     cfg = _load_cfg(cfg_path)
-    sym = symbol or _infer_symbol_from_path(csv_path)
+    sym = _infer_symbol_from_path(csv_path)
 
     log = get_logger("realtime", cfg.get("io", {}).get("logs_dir", "logs"))
 
     df15 = load_15m_csv(csv_path)
     df15 = initialize_history(df15)
 
-    live_cfg = (cfg.get("io", {}) or {}).get("live_fetch", {}) or {}
-    if live_cfg.get("enabled"):
-        try:
-            live_df = fetch_latest_klines(
-                sym,
-                interval=live_cfg.get("interval", "15m"),
-                limit=int(live_cfg.get("limit", 96)),
-                api_base=live_cfg.get("api_base", "https://api.binance.com"),
-            )
-            df15 = merge_history_and_live(df15, live_df)
-        except Exception as e:
-            log.error(f"live fetch failed for {sym}: {e}")
+    # live fetch handled externally; df15 already up-to-date
 
     feat_params = get_symbol_features(cfg, sym)
     feats = build_features_15m_4h(

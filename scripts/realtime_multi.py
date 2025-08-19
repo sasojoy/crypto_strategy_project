@@ -5,6 +5,7 @@ import json
 from dateutil import tz
 import yaml
 
+from csp.data.fetcher import update_csv_with_latest
 from csp.pipeline.realtime_v2 import run_once
 TZ_TW = tz.gettz("Asia/Taipei")
 from csp.utils.notifier import notify
@@ -18,6 +19,7 @@ def main():
     cfg = yaml.safe_load(open(args.cfg, "r", encoding="utf-8"))
     symbols = cfg.get("symbols", [])
     csv_map = (cfg.get("io", {}) or {}).get("csv_paths", {})
+    live_cfg = (cfg.get("io", {}) or {}).get("live_fetch", {}) or {}
 
     results = {}
 
@@ -27,11 +29,23 @@ def main():
             print(f"[SKIP] {sym}: No CSV path in config")
             continue
         print(f"[REALTIME] {sym} <- {csv_path}")
+        stale = False
+        if live_cfg.get("enabled"):
+            try:
+                df = update_csv_with_latest(sym, csv_path, interval=live_cfg.get("interval", "15m"))
+                last_ts = df["timestamp"].iloc[-1]
+                print(f"  last closed UTC={last_ts.isoformat()} | TW={(last_ts.tz_convert(TZ_TW)).isoformat()}")
+                stale = bool(df.attrs.get("stale"))
+            except Exception as e:
+                print(f"[WARN] live fetch failed for {sym}: {e}")
+                stale = True
         try:
             # run_once 會自動挑選 models/<SYMBOL>/ 或全域 models/
-            res = run_once(csv_path, cfg_path=args.cfg, symbol=sym)
+            res = run_once(csv_path, cfg_path=args.cfg)
         except Exception as e:
             res = {"symbol": sym, "side": None, "error": str(e)}
+        if stale:
+            res["warning"] = "STALE DATA"
         results[sym] = res
 
     # Build summary lines safely
@@ -47,7 +61,8 @@ def main():
         tp = r.get("tp")
         sl = r.get("sl")
 
-        base = f"{sym}: {side_display} | P={price:.2f} | proba_up={pu:.3f}"
+        note = " [STALE DATA]" if r.get("warning") else ""
+        base = f"{sym}: {side_display} | P={price:.2f} | proba_up={pu:.3f}{note}"
         if r.get("side"):
             base += f" | TP={tp:.2f} | SL={sl:.2f}"
         lines.append(base)
