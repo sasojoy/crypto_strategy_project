@@ -23,7 +23,7 @@ fi
 [ -f requirements.txt ] && $PIP install -r requirements.txt || true
 
 # 重啟/觸發
-sudo -n /usr/bin/systemctl restart trader
-# 或 timer 方案：sudo -n /usr/bin/systemctl start trader-once.service
+#sudo -n /usr/bin/systemctl restart trader
+sudo -n /usr/bin/systemctl start trader-once.service
 
 echo "[deploy] done at $(date '+%Y-%m-%d %H:%M:%S')"
