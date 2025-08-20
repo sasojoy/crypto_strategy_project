@@ -1,0 +1,37 @@
+name: Devlog Sync
+
+on:
+  push:
+    paths:
+      - DEVELOPMENT_LOG.md
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  projects: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Sync dev log
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/devlog_sync.py
+      - name: Commit changes
+        run: |
+          if [ -n "$(git status --porcelain DEVELOPMENT_LOG.md)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add DEVELOPMENT_LOG.md
+            git commit -m "chore: sync development log"
+            git push origin HEAD:main
+          fi
