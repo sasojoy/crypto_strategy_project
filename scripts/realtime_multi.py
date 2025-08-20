@@ -14,6 +14,7 @@ from csp.utils.notifier import notify
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cfg", default="csp/configs/strategy.yaml")
+    ap.add_argument("--debug", action="store_true")
     args = ap.parse_args()
 
     cfg = yaml.safe_load(open(args.cfg, "r", encoding="utf-8"))
@@ -41,7 +42,7 @@ def main():
                 stale = True
         try:
             # run_once 會自動挑選 models/<SYMBOL>/ 或全域 models/
-            res = run_once(csv_path, cfg_path=args.cfg)
+            res = run_once(csv_path, cfg_path=args.cfg, debug=args.debug)
         except Exception as e:
             res = {"symbol": sym, "side": None, "error": str(e)}
         if stale:
@@ -65,6 +66,8 @@ def main():
         base = f"{sym}: {side_display} | P={price:.2f} | proba_up={pu:.3f}{note}"
         if r.get("side"):
             base += f" | TP={tp:.2f} | SL={sl:.2f}"
+        if r.get("diag_low_var"):
+            base += " [DIAG:LOW VAR]"
         lines.append(base)
 
     msg = "\n".join(lines)

@@ -132,14 +132,95 @@ def train(input_data: Union[pd.DataFrame, str, Path], cfg: dict, *, date_args: d
     else:
         df2, utc_start, utc_end = df, None, None
 
-    # 4) ==== 你的原本特徵/標籤/訓練流程 ====
-    # features = build_features(df2)
-    # labels = build_labels(df2)
-    # df_train = features if utc_start is None else features.loc[features.index >= utc_start]
-    # model = fit_model(df_train, labels.loc[df_train.index])
-    # save(model, cfg)...
-    #
-    # 這裡暫留為範本，避免覆蓋你的既有邏輯。
+    # 4) ==== 特徵 / 標籤 / 模型訓練 ====
+    import json
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.metrics import accuracy_score
+    import joblib
+    import xgboost as xgb
+    from csp.features.h16 import build_features_15m_4h, make_labels
+    from csp.utils.config import get_symbol_features
+
+    # 若提供路徑字串，嘗試推斷 symbol 名稱
+    symbol = kwargs.get("symbol")
+    if symbol is None and isinstance(input_data, (str, Path)):
+        name = Path(input_data).name.upper()
+        if "BTC" in name:
+            symbol = "BTCUSDT"
+        elif "ETH" in name:
+            symbol = "ETHUSDT"
+        elif "BCH" in name:
+            symbol = "BCHUSDT"
+
+    # 取得特徵參數並建立特徵
+    feat_params = get_symbol_features(cfg, symbol) if symbol else get_symbol_features(cfg, "BTCUSDT")
+    feats = build_features_15m_4h(
+        df2,
+        ema_windows=tuple(feat_params["ema_windows"]),
+        rsi_window=feat_params["rsi_window"],
+        bb_window=feat_params["bb_window"],
+        bb_std=feat_params["bb_std"],
+        atr_window=feat_params["atr_window"],
+        h4_resample=feat_params["h4_resample"],
+    )
+
+    # 建立標籤並對齊
+    horizon = int(cfg.get("train", {}).get("target_horizon_bars", 16))
+    y = make_labels(feats, horizon=horizon)
+    feats = feats.iloc[:-horizon].reset_index(drop=True)
+    y = y.iloc[:-horizon].reset_index(drop=True)
+
+    # 擷取特徵欄位順序
+    feature_cols = [c for c in feats.columns if c not in ["timestamp", "open", "high", "low", "close", "volume"]]
+    X = feats[feature_cols].values
+
+    scaler = StandardScaler()
+    Xs = scaler.fit_transform(X)
+
+    test_size = float(cfg.get("train", {}).get("test_size", 0.2))
+    random_state = int(cfg.get("train", {}).get("random_state", 42))
+    X_train, X_valid, y_train, y_valid = train_test_split(
+        Xs, y, test_size=test_size, random_state=random_state, stratify=y if y.nunique() > 1 else None
+    )
+
+    xgb_params = cfg.get("train", {}).get("xgb", {})
+    model = xgb.XGBClassifier(**xgb_params, use_label_encoder=False)
+    model.fit(X_train, y_train)
+
+    acc = float(accuracy_score(y_valid, model.predict(X_valid))) if len(y_valid) else 0.0
+
+    # === 保存模型與附檔 ===
+    out_dir = Path(kwargs.get("models_dir_override") or cfg["io"]["models_dir"])
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    model_path = out_dir / "xgb_h16_sklearn.joblib"
+    joblib.dump(model, model_path)
+    scaler_path = out_dir / "scaler_h16.joblib"
+    joblib.dump(scaler, scaler_path)
+
+    feature_path = out_dir / "feature_names.json"
+    with open(feature_path, "w", encoding="utf-8") as f:
+        json.dump(feature_cols, f)
+
+    positive_ratio = float(y.mean()) if len(y) else 0.0
+    meta = {
+        "feature_cols": feature_cols,
+        "positive_ratio": positive_ratio,
+        "model_type": "xgbclassifier",
+        "valid_accuracy": acc,
+    }
+    meta_path = out_dir / "meta_h16.json"
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    # ETH 正例比例警告
+    warning = None
+    if symbol == "ETHUSDT":
+        print(f"[TRAIN] ETH positive ratio={positive_ratio:.4f}")
+        if positive_ratio < 0.03:
+            warning = "建議調整標記門檻或設定 scale_pos_weight=(neg/pos)"
+            print(f"[WARN] {warning}")
 
     # 5) 回傳最小訓練摘要（供呼叫端日誌使用）
     return {
@@ -147,4 +228,7 @@ def train(input_data: Union[pd.DataFrame, str, Path], cfg: dict, *, date_args: d
                            str(utc_end) if utc_end is not None else None),
         "rows_in": int(len(df)),
         "rows_used": int(len(df2)),
+        "valid_accuracy": acc,
+        "positive_ratio": positive_ratio,
+        "warning": warning,
     }

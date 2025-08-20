@@ -24,19 +24,44 @@ class EntryZoneCfg:
 def _load_cfg(cfg_path: str) -> Dict[str, Any]:
     return yaml.safe_load(open(cfg_path, "r", encoding="utf-8"))
 
-def _load_model_bundle(cfg: Dict[str, Any], symbol: Optional[str]):
-    mdir = Path(cfg["io"]["models_dir"])
-    if symbol:
-        per = mdir / symbol
-        if (per / "xgb_h16.json").exists():
-            bst = xgb.Booster(); bst.load_model(str(per / "xgb_h16.json"))
-            scaler = joblib.load(per / "scaler_h16.joblib")
-            meta = json.load(open(per / "meta_h16.json", "r", encoding="utf-8"))
-            return bst, scaler, meta
-    bst = xgb.Booster(); bst.load_model(str(mdir / "xgb_h16.json"))
-    scaler = joblib.load(mdir / "scaler_h16.joblib")
-    meta = json.load(open(mdir / "meta_h16.json", "r", encoding="utf-8"))
-    return bst, scaler, meta
+def _load_model_bundle(cfg: Dict[str, Any], symbol: str):
+    mdir = Path(cfg["io"]["models_dir"]) / symbol
+    if not mdir.exists():
+        raise FileNotFoundError(f"Model directory not found for {symbol}: {mdir}")
+
+    model_path_joblib = mdir / "xgb_h16_sklearn.joblib"
+    model_path_json = mdir / "xgb_h16.json"
+    scaler_path = mdir / "scaler_h16.joblib"
+    feature_path = mdir / "feature_names.json"
+    meta_path = mdir / "meta_h16.json"
+
+    if model_path_joblib.exists():
+        model = joblib.load(model_path_joblib)
+        model_type = "sklearn"
+        model_path = model_path_joblib
+    elif model_path_json.exists():
+        bst = xgb.Booster(); bst.load_model(str(model_path_json))
+        model = bst
+        model_type = "booster"
+        model_path = model_path_json
+    else:
+        raise FileNotFoundError(f"No model file found under {mdir}")
+
+    scaler = joblib.load(scaler_path)
+    if feature_path.exists():
+        feature_names = json.load(open(feature_path, "r", encoding="utf-8"))
+    else:
+        meta = json.load(open(meta_path, "r", encoding="utf-8"))
+        feature_names = meta.get("feature_cols", [])
+    meta = json.load(open(meta_path, "r", encoding="utf-8")) if meta_path.exists() else {}
+
+    return {
+        "model": model,
+        "scaler": scaler,
+        "feature_names": feature_names,
+        "model_type": model_type,
+        "meta": meta,
+    }
 
 def _infer_symbol_from_path(csv_path: str) -> Optional[str]:
     name = Path(csv_path).name.upper()
@@ -148,12 +173,17 @@ def run_backtest_for_symbol(csv_path: str, cfg_path: str, symbol: Optional[str] 
         atr_window=feat_params["atr_window"],
         h4_resample=feat_params["h4_resample"],
     )
-    bst, scaler, meta = _load_model_bundle(cfg, sym)
-    feature_cols = meta["feature_cols"]
+    bundle = _load_model_bundle(cfg, sym)
+    model = bundle["model"]
+    scaler = bundle["scaler"]
+    feature_cols = bundle["feature_names"]
 
     Xs = scaler.transform(feats[feature_cols].values)
-    dmat = xgb.DMatrix(Xs, feature_names=feature_cols)
-    proba_up_seq = np.clip(bst.predict(dmat), 0.0, 1.0)
+    if bundle["model_type"] == "sklearn":
+        proba_up_seq = np.clip(model.predict_proba(Xs)[:, 1], 0.0, 1.0)
+    else:
+        dmat = xgb.DMatrix(Xs, feature_names=feature_cols)
+        proba_up_seq = np.clip(model.predict(dmat, output_margin=False), 0.0, 1.0)
     feats = feats.copy()
     feats["proba_up"] = proba_up_seq
 
