@@ -1,0 +1,30 @@
+name: Feature request
+description: 建議或新功能請求
+title: "[Feature] "
+labels: ["feature"]
+projects: ["Product Board"]
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景/動機
+    validations:
+      required: true
+  - type: textarea
+    id: requirement
+    attributes:
+      label: 需求敘述
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 驗收標準
+  - type: textarea
+    id: risk
+    attributes:
+      label: 風險
+  - type: textarea
+    id: others
+    attributes:
+      label: 其他
