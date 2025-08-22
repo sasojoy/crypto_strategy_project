@@ -1,8 +1,10 @@
 # Crypto Strategy Project — 使用說明（Windows / CMD 版）
 > 版本日期：2025-08-15
 
-本專案提供「**訓練** → **回測** → **即時訊號**」的一條龍流程，使用 15 分鐘 K 線資料建立模型，並在即時模式推送多幣別整合訊息。  
-**重點更新**：支援「**日期區間**」功能（以本地 UTC+8 自然日解析），可精準指定訓練/初始化所用的歷史範圍。
+本專案提供「**訓練** → **回測** → **即時訊號**」的一條龍流程，使用 15 分鐘 K 線資料建立模型，並在即時模式推送多幣別整合訊息。
+**重點更新**：
+- 支援「**日期區間**」功能（以本地 UTC+8 自然日解析），可精準指定訓練/初始化所用的歷史範圍。
+- 回測可輸出完整績效摘要與交易明細，支援 CSV / JSON 報表。
 
 ---
 
@@ -92,10 +94,12 @@ python scripts\train_multi.py --cfg csp\configs\strategy.yaml
 
 ### 回測（多幣）
 ```cmd
-python scripts\backtest_multi.py --cfg csp\configs\strategy.yaml --days 30 --fetch inc --save-summary
+python scripts\backtest_multi.py --cfg csp\configs\strategy.yaml --days 30 --fetch inc --save-summary --out-dir reports --format both
 ```
 - `--days 30`：取最近 30 天資料。
 - `--fetch inc`：只補缺口；用 `--fetch full` 可完整覆蓋重抓。
+- `--out-dir reports`：報表輸出目錄（預設 `reports`）。
+- `--format both`：報表格式，可選 `csv`、`json` 或 `both`。
 
 ### 即時訊號
 ```cmd
@@ -141,19 +145,21 @@ python scripts\train_multi.py --cfg csp\configs\strategy.yaml
   - `--export-equity-bars <path.csv>`：輸出等時間柱狀的資金曲線。
   - `--plot-equity <path.png>`：輸出資金曲線圖（需要 `matplotlib`）。
   - `--save-summary`：輸出回測摘要（含 win_rate、profit_factor、signal_count、avg_holding_minutes…）。
+  - `--out-dir <dir>`：指定報表輸出目錄（預設 `reports`）。
+  - `--format csv|json|both`：報表輸出格式（預設 `both`）。
 - **日期區間**：支援 `--start` / `--end`（如果你的 `ver14` 已套用該功能）或用環境變數（推薦）。
 
 **範例（回測 90 天 + 出資金曲線）**
 ```cmd
 python scripts\backtest_multi.py --cfg csp\configs\strategy.yaml --days 90 --fetch full ^
-  --export-equity-bars outputs\equity_90d.csv --plot-equity outputs\equity_90d.png --save-summary
+  --export-equity-bars outputs\equity_90d.csv --plot-equity outputs\equity_90d.png --save-summary --out-dir reports --format both
 ```
 
 **範例（指定 2025/07 全月，以環境變數方式）**
 ```cmd
 set START_DATE=2025-07-01
 set END_DATE=2025-07-31
-python scripts\backtest_multi.py --cfg csp\configs\strategy.yaml --save-summary
+python scripts\backtest_multi.py --cfg csp\configs\strategy.yaml --save-summary --out-dir reports --format both
 ```
 
 ---
@@ -231,7 +237,11 @@ python scripts\feature_optimize.py --cfg csp\configs\strategy.yaml --symbols BTC
 
 ## 輸出與檔案位置
 - **模型**：`io.models_dir`（按幣種分目錄，如 `models\BTCUSDT`）
-- **回測摘要**：啟用 `--save-summary` 後輸出到預設的輸出目錄（依專案實作而定）。
+- **回測摘要**：啟用 `--save-summary` 後輸出到 `--out-dir`（預設 `reports`），結構如下：
+  - `reports/{run_id}/summary_{symbol}.json`
+  - `reports/{run_id}/summary_{symbol}.csv`
+  - `reports/{run_id}/trades_{symbol}.csv`
+  - `reports/{run_id}/summary_all.json`
 - **資金曲線**：
   - `--export-equity-bars <csv>`：輸出欄位通常為 `timestamp,equity`
   - `--plot-equity <png>`：輸出資金曲線圖

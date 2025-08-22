@@ -14,6 +14,7 @@ import yaml
 
 # 依賴 backtest_v2 的核心邏輯
 from csp.backtesting.backtest_v2 import run_backtest_for_symbol
+from csp.metrics.report import summarize
 
 BINANCE_BASE = "https://api.binance.com"
 
@@ -117,7 +118,9 @@ def main():
     ap.add_argument("--cfg", required=True, help="path to strategy.yaml")
     ap.add_argument("--days", type=int, default=30, help="回測天數（會切資料區間）")
     ap.add_argument("--fetch", choices=["auto","none"], default="auto", help="是否自動補資料（Binance）")
-    ap.add_argument("--save-summary", action="store_true", help="同時將 summary 存檔到 backtests/")
+    ap.add_argument("--save-summary", action="store_true", help="啟用報表輸出")
+    ap.add_argument("--out-dir", default="reports", help="輸出目錄（預設 reports）")
+    ap.add_argument("--format", choices=["csv", "json", "both"], default="both", help="輸出格式（csv, json, both）")
     ap.add_argument("--export-equity-bars", action="store_true", help="輸出每根K線的資金曲線CSV（equity_curve_bars_*.csv）")
     ap.add_argument("--plot-equity", action="store_true", help="輸出每根K線資金曲線的 PNG 圖")
     ap.add_argument("--symbols", nargs="*", default=None, help="指定要跑的幣別（預設讀 cfg.symbols）")
@@ -129,7 +132,10 @@ def main():
         print("cfg.symbols 為空，請在 strategy.yaml 設定幣別")
         sys.exit(1)
 
-    out_dir = Path("backtests"); out_dir.mkdir(parents=True, exist_ok=True)
+    base_out_dir = Path(args.out_dir)
+    run_id = now_utc().strftime("%Y%m%d_%H%M%S")
+    out_dir = base_out_dir / run_id if args.save_summary else base_out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
     end_utc_dt = now_utc()
 
     # 1) 自動補資料（如開啟）
@@ -153,18 +159,15 @@ def main():
         print(f"[RUN] {sym} days={args.days} csv={csv_path}")
         res = run_backtest_for_symbol(csv_path, args.cfg, symbol=sym, start_ts=start_ts, end_ts=end_ts)
 
-        # 3.1 輸出 trades.csv
-        trades_csv = out_dir / f"{sym}_trades.csv"
-        res["trades"].to_csv(trades_csv, index=False, encoding="utf-8-sig")
+        trades_df = res.get("trades", pd.DataFrame())
+        eq_df = res.get("equity_curve", pd.DataFrame())
 
-        # 3.2（可選）輸出每根K線的資金曲線
-        # 若需要同時輸出 PNG 圖
-        if args.plot_equity and isinstance(res.get("equity_curve"), type(res["trades"])):
+        # 3.1（可選）輸出每根K線的資金曲線
+        if args.plot_equity and isinstance(eq_df, pd.DataFrame) and not eq_df.empty:
             try:
                 import matplotlib.pyplot as plt
-                eq_df = res["equity_curve"]
                 fig = plt.figure()
-                plt.plot(eq_df["timestamp"], eq_df["equity"])
+                plt.plot(eq_df["timestamp"], eq_df.get("equity", eq_df.get("equity_after")))
                 plt.title(f"Equity Curve (Bars) - {sym}")
                 plt.xlabel("Time")
                 plt.ylabel("Equity")
@@ -174,20 +177,28 @@ def main():
             except Exception as e:
                 print(f"[WARN] plot {sym} 失敗：{e}")
 
-        if args.export_equity_bars and isinstance(res.get("equity_curve"), type(res["trades"])):
+        if args.export_equity_bars and isinstance(eq_df, pd.DataFrame) and not eq_df.empty:
             eq_path = out_dir / f"equity_curve_bars_{sym}.csv"
-            res["equity_curve"].to_csv(eq_path, index=False, encoding="utf-8-sig")
+            eq_df.to_csv(eq_path, index=False, encoding="utf-8-sig")
 
-        # 3.3 印出 summary 並可選擇存檔
-        metrics = res.get("metrics", {})
+        # 3.2 計算 summary
+        metrics = summarize(eq_df, trades_df, bar_seconds=900)
         summary_all[sym] = metrics
         print(f"[SUMMARY {sym}] " + json.dumps(metrics, ensure_ascii=False))
 
+        # 3.3 輸出 trades 及 summary
         if args.save_summary:
-            (out_dir / f"{sym}_summary.json").write_text(
-                json.dumps(metrics, ensure_ascii=False, indent=2),
-                encoding="utf-8"
-            )
+            trades_path = out_dir / f"trades_{sym}.csv"
+            trades_df.to_csv(trades_path, index=False, encoding="utf-8-sig")
+            if args.format in ("json", "both"):
+                (out_dir / f"summary_{sym}.json").write_text(
+                    json.dumps(metrics, ensure_ascii=False, indent=2),
+                    encoding="utf-8"
+                )
+            if args.format in ("csv", "both"):
+                pd.DataFrame([metrics]).to_csv(
+                    out_dir / f"summary_{sym}.csv", index=False, encoding="utf-8-sig"
+                )
 
     # 4) 合併輸出
     if args.save_summary:
