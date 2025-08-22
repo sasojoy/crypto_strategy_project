@@ -16,6 +16,7 @@
   - [回測（scripts\backtest_multi.py）](#回測scriptsbacktest_multipy)
   - [即時（scripts\realtime_multi.py / scripts\realtime_loop.py）](#即時scriptsrealtime_multipy--scriptsrealtime_looppy)
   - [特徵優化（scripts\feature_optimize.py）](#特徵優化scriptsfeature_optimizepy)
+  - [即時出場監控（scripts\exit_watchdog.py）](#即時出場監控scriptsexit_watchdogpy)
 - [日期區間功能說明](#日期區間功能說明)
 - [輸出與檔案位置](#輸出與檔案位置)
 - [常見問題 FAQ](#常見問題-faq)
@@ -60,6 +61,12 @@ io:
   models_dir: models
   logs_dir: logs
   position_file: resources/current_position.yaml
+
+risk:
+  take_profit_ratio: 0.02
+  stop_loss_ratio: 0.01
+  max_holding_minutes: 240
+  flip_threshold: 0.6
 
 realtime:
   notify:
@@ -171,6 +178,19 @@ python scripts\realtime_multi.py --cfg csp\configs\strategy.yaml
 set START_DATE=2025-08-01
 set END_DATE=2025-08-10
 python scripts\realtime_loop.py --cfg csp\configs\strategy.yaml --delay-sec 15
+```
+
+---
+
+### 即時出場監控（`scripts\exit_watchdog.py`）
+- **用途**：循環檢查持倉，達到 TP/SL/時間/翻向 即平倉。
+- **常用參數**：
+  - `--cfg <path>`：指定設定檔。
+  - `--interval-sec <int>`：輪詢間隔秒數。
+  - `--dry-run`：僅模擬，不寫檔或通知。
+- **範例**：
+```cmd
+python scripts\exit_watchdog.py --cfg csp\configs\strategy.yaml --interval-sec 1 --dry-run
 ```
 
 ---

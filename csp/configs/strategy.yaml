@@ -66,6 +66,11 @@ execution:
     lookahead_bars: 16
     long_x: 0.5
     short_x: 0.5
+risk:
+  take_profit_ratio: 0.02
+  stop_loss_ratio: 0.01
+  max_holding_minutes: 240
+  flip_threshold: 0.6
 notify:
   telegram:
     enabled: true

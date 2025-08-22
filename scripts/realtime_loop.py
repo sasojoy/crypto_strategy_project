@@ -11,6 +11,7 @@ from dateutil import tz
 from csp.data.fetcher import update_csv_with_latest
 from csp.pipeline.realtime_v2 import run_once as run_model_once
 from csp.utils.notifier import notify
+from csp.runtime.exit_watchdog import check_exit_once
 
 TW = tz.gettz("Asia/Taipei")
 
@@ -68,6 +69,14 @@ def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
     notify("⏱️ 多幣別即時訊號\n" + "\n".join(lines), cfg.get("notify", {}).get("telegram"))
 
     print(json.dumps(results, ensure_ascii=False, indent=2))
+    now_ts = datetime.now(tz=TW)
+    for r in results.values():
+        price = r.get("price")
+        if price is not None:
+            try:
+                check_exit_once(cfg, float(price), now_ts)
+            except Exception as e:
+                print(f"[WARN] exit watchdog failed: {e}")
     return results
 
 

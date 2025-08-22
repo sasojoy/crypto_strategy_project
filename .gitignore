@@ -1,4 +1,5 @@
-"resources/*.json" 
+resources/*.json
+resources/*.yaml
 
 __pycache__/
 *.pyc
