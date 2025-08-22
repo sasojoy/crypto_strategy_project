@@ -15,6 +15,17 @@ io:
     interval: 15m
     limit: 96
     api_base: https://api.binance.com
+model:
+  type: "xgboost"
+  horizons: [2, 4, 8, 16, 48, 192]
+  thresholds: [0.2, 0.5, 1.0, 2.0]
+  calibrate: "isotonic"
+  cv:
+    type: "expanding"
+    n_splits: 5
+    purge_bars: 2
+    embargo_bars: 2
+  out_dir: "models/{SYMBOL}/cls_multi"
 features:
   default:
     ema_windows:

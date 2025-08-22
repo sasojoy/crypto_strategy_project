@@ -248,6 +248,18 @@ python scripts\feature_optimize.py --cfg csp\configs\strategy.yaml --symbols BTC
 - **日誌**：`io.logs_dir`（例如 `logs\`）
 - **持倉狀態**：`io.position_file`（例如 `resources\current_position.yaml`）
 
+## 模型輸出結構與載入方式
+- 多 horizon × 多門檻訓練會在輸出目錄產生 `model_{h}_{t}.pkl` 與可選的 `cal_{h}_{t}.pkl`（校準器），以及 `meta.json`。
+- `meta.json` 包含訓練時使用的 `horizons`、`thresholds`、`feature_columns` 等資訊。
+- 載入範例：
+
+```python
+from csp.models.classifier_multi import MultiThresholdClassifier
+m = MultiThresholdClassifier.load("models/BTCUSDT/cls_multi")
+probs = m.predict_proba(df_features.tail(1))
+```
+
+
 ---
 
 ## 常見問題 FAQ
