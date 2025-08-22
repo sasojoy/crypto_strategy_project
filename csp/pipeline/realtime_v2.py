@@ -91,19 +91,46 @@ def _infer_symbol_from_path(csv_path: str) -> Optional[str]:
     return None
 
 
-def _load_model_bundle(cfg: Dict[str, Any], symbol: Optional[str]):
-    mdir = Path(cfg["io"]["models_dir"])
-    if symbol:
-        per = mdir / symbol
-        if (per / "xgb_h16.json").exists():
-            bst = xgb.Booster(); bst.load_model(str(per / "xgb_h16.json"))
-            scaler = joblib.load(per / "scaler_h16.joblib")
-            meta = json.load(open(per / "meta_h16.json", "r", encoding="utf-8"))
-            return bst, scaler, meta
-    bst = xgb.Booster(); bst.load_model(str(mdir / "xgb_h16.json"))
-    scaler = joblib.load(mdir / "scaler_h16.joblib")
-    meta = json.load(open(mdir / "meta_h16.json", "r", encoding="utf-8"))
-    return bst, scaler, meta
+def _load_model_bundle(cfg: Dict[str, Any], symbol: str):
+    mdir = Path(cfg["io"]["models_dir"]) / symbol
+    if not mdir.exists():
+        raise FileNotFoundError(f"Model directory not found for {symbol}: {mdir}")
+
+    model_path_joblib = mdir / "xgb_h16_sklearn.joblib"
+    model_path_json = mdir / "xgb_h16.json"
+    scaler_path = mdir / "scaler_h16.joblib"
+    feature_path = mdir / "feature_names.json"
+    meta_path = mdir / "meta_h16.json"
+
+    if model_path_joblib.exists():
+        model = joblib.load(model_path_joblib)
+        model_type = "sklearn"
+        model_path = model_path_joblib
+    elif model_path_json.exists():
+        bst = xgb.Booster(); bst.load_model(str(model_path_json))
+        model = bst
+        model_type = "booster"
+        model_path = model_path_json
+    else:
+        raise FileNotFoundError(f"No model file found under {mdir}")
+
+    scaler = joblib.load(scaler_path)
+    if feature_path.exists():
+        feature_names = json.load(open(feature_path, "r", encoding="utf-8"))
+    else:
+        meta = json.load(open(meta_path, "r", encoding="utf-8"))
+        feature_names = meta.get("feature_cols", [])
+    meta = json.load(open(meta_path, "r", encoding="utf-8")) if meta_path.exists() else {}
+
+    return {
+        "model": model,
+        "scaler": scaler,
+        "feature_names": feature_names,
+        "model_path": str(model_path),
+        "scaler_path": str(scaler_path),
+        "model_type": model_type,
+        "meta": meta,
+    }
 
 
 def _compute_tp_sl(price: float, atr: float, side: str, atr_cfg: Dict[str, Any]):
@@ -124,7 +151,7 @@ def _decide_side(proba_up: float, long_thr: float, short_thr: float) -> Optional
     return None
 
 
-def run_once(csv_path: str, cfg_path: str) -> Dict[str, Any]:
+def run_once(csv_path: str, cfg_path: str, *, debug: bool | None = None) -> Dict[str, Any]:
     """Load latest data, run model inference and return trading signal."""
     cfg = _load_cfg(cfg_path)
     sym = _infer_symbol_from_path(csv_path)
@@ -147,11 +174,18 @@ def run_once(csv_path: str, cfg_path: str) -> Dict[str, Any]:
         h4_resample=feat_params["h4_resample"],
     )
 
-    bst, scaler, meta = _load_model_bundle(cfg, sym)
-    feature_cols = meta["feature_cols"]
-    Xs = scaler.transform(feats[feature_cols].values)
-    dmat = xgb.DMatrix(Xs, feature_names=feature_cols)
-    proba_seq = np.clip(bst.predict(dmat), 0.0, 1.0)
+    bundle = _load_model_bundle(cfg, sym)
+    model = bundle["model"]
+    scaler = bundle["scaler"]
+    feature_cols = bundle["feature_names"]
+    X = feats[feature_cols].values
+    Xs = scaler.transform(X)
+
+    if bundle["model_type"] == "sklearn":
+        proba_seq = np.clip(model.predict_proba(Xs)[:, 1], 0.0, 1.0)
+    else:
+        dmat = xgb.DMatrix(Xs, feature_names=feature_cols)
+        proba_seq = np.clip(model.predict(dmat, output_margin=False), 0.0, 1.0)
 
     last = feats.iloc[-1]
     proba_up = float(proba_seq[-1])
@@ -166,6 +200,26 @@ def run_once(csv_path: str, cfg_path: str) -> Dict[str, Any]:
 
     log.info(f"最新訊號 [{sym}] @ {ts}")
     log.info(f"price={price:.2f}, proba_up={proba_up:.3f}, atr_h4={atr_h4:.2f}")
+
+    # Debug info
+    dbg = debug if debug is not None else (os.getenv("DEBUG") == "1")
+    diag_low_var = bool(len(proba_seq) >= 20 and (proba_seq[-20:] < 0.02).all())
+    if dbg:
+        print(f"[DEBUG] symbol={sym}")
+        print(f"[DEBUG] model_path={bundle['model_path']}")
+        print(f"[DEBUG] scaler_path={bundle['scaler_path']}")
+        print(f"[DEBUG] X.shape={Xs.shape}")
+        last_row = Xs[-1]
+        bad = not np.isfinite(last_row).all()
+        print(f"[DEBUG] last row has NaN/inf? {bad}")
+        if len(last_row):
+            print(f"[DEBUG] last row stats: min={float(np.min(last_row)):.6f}, max={float(np.max(last_row)):.6f}, mean={float(np.mean(last_row)):.6f}")
+        tail = proba_seq[-200:]
+        if len(tail):
+            p50 = float(np.percentile(tail, 50))
+            p90 = float(np.percentile(tail, 90))
+            pmax = float(np.max(tail))
+            print(f"[DEBUG] proba_up last200 p50={p50:.6f}, p90={p90:.6f}, max={pmax:.6f}")
 
     tp = sl = None
     if side:
@@ -182,4 +236,5 @@ def run_once(csv_path: str, cfg_path: str) -> Dict[str, Any]:
         "side": side,
         "tp": tp,
         "sl": sl,
+        "diag_low_var": diag_low_var,
     }

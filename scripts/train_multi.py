@@ -21,4 +21,9 @@ if __name__ == "__main__":
         out_dir = base_models / sym
         out_dir.mkdir(parents=True, exist_ok=True)
         print(f"[TRAIN] {sym} <- {csv_path}  -> {out_dir}")
-        train(csv_path, args.cfg, models_dir_override=str(out_dir))
+        res = train(csv_path, args.cfg, models_dir_override=str(out_dir), symbol=sym)
+        pr = res.get("positive_ratio")
+        if pr is not None:
+            print(f"[INFO] {sym} positive ratio={pr:.4f}")
+        if res.get("warning"):
+            print(f"[WARN] {sym}: {res['warning']}")
