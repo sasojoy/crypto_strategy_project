@@ -55,10 +55,15 @@ def aggregate_signal(
             "prob_down_max": 0.0,
             "chosen_h": None,
             "chosen_t": None,
+            "topk": [],
         }
 
     prob_up_max = max(prob_map.values())
     prob_down_max = max(1.0 - p for p in prob_map.values())
+    topk_pairs = sorted(
+        ((h, t, p) for (h, t), p in prob_map.items()), key=lambda x: x[2], reverse=True
+    )[:3]
+    topk = [{"h": h, "t": t, "p_up": float(p)} for h, t, p in topk_pairs]
 
     if method == "majority":
         long_cnt = sum(p >= 0.5 for p in prob_map.values())
@@ -72,6 +77,7 @@ def aggregate_signal(
                 "prob_down_max": prob_down_max,
                 "chosen_h": chosen_h,
                 "chosen_t": chosen_t,
+                "topk": topk,
             }
         if short_cnt > long_cnt and prob_down_max >= enter_threshold:
             chosen_h, chosen_t = max(prob_map.items(), key=lambda kv: 1.0 - kv[1])[0]
@@ -82,6 +88,7 @@ def aggregate_signal(
                 "prob_down_max": prob_down_max,
                 "chosen_h": chosen_h,
                 "chosen_t": chosen_t,
+                "topk": topk,
             }
         return {
             "side": "NONE",
@@ -90,6 +97,7 @@ def aggregate_signal(
             "prob_down_max": prob_down_max,
             "chosen_h": None,
             "chosen_t": None,
+            "topk": topk,
         }
 
     # default: max_weighted
@@ -127,6 +135,7 @@ def aggregate_signal(
         "prob_down_max": float(prob_down_max),
         "chosen_h": chosen_h,
         "chosen_t": chosen_t,
+        "topk": topk,
     }
 
 

@@ -12,9 +12,14 @@ from dateutil import tz
 from csp.data.fetcher import update_csv_with_latest
 from csp.strategy.aggregator import get_latest_signal
 from csp.strategy.position_sizing import (
-    blended_sizing, SizingInput, ExchangeRule
+    blended_sizing, SizingInput, ExchangeRule, kelly_fraction
 )
-from csp.utils.notifier import notify
+from csp.utils.notifier import (
+    notify,
+    notify_signal,
+    notify_trade_open,
+    notify_guard,
+)
 from csp.runtime.exit_watchdog import check_exit_once
 
 TW = tz.gettz("Asia/Taipei")
@@ -31,6 +36,7 @@ def next_quarter_with_delay(now: datetime, delay_sec: int = 15) -> datetime:
 
 def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
     cfg = yaml.safe_load(open(cfg_path, "r", encoding="utf-8"))
+    telegram_conf = cfg.get("notify", {}).get("telegram")
     symbols = cfg.get("symbols", [])
     csv_map = cfg.get("io", {}).get("csv_paths", {})
     live_cfg = (cfg.get("io", {}) or {}).get("live_fetch", {}) or {}
@@ -66,6 +72,7 @@ def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
                 last_price = float(df["close"].iloc[-1])
             except Exception:
                 pass
+        sig = None
         try:
             sig = get_latest_signal(sym, cfg)
             if sig is None:
@@ -76,6 +83,8 @@ def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
             res = {"symbol": sym, "side": "NONE", "error": str(e)}
         if last_price is not None:
             res["price"] = last_price
+        if sig and last_price is not None:
+            notify_signal(sym, sig, last_price, telegram_conf)
         # --- position sizing ---
         if res.get("side") in ("LONG", "SHORT"):
             ps_cfg = cfg.get("position_sizing", {})
@@ -113,8 +122,44 @@ def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
             )
             res["qty"] = qty
             res["sizing_mode"] = ps_cfg.get("mode", "hybrid")
+            kelly_f = 0.0
+            if win_rate is not None and sl_ratio > 0:
+                kelly_f = kelly_fraction(win_rate, tp_ratio / sl_ratio)
+            sizing_info = {
+                "mode": ps_cfg.get("mode", "hybrid"),
+                "equity_usdt": equity,
+                "atr_abs": atr_abs,
+                "risk_per_trade": float(ps_cfg.get("risk_per_trade", 0.01)),
+                "tp_ratio": tp_ratio,
+                "sl_ratio": sl_ratio,
+                "kelly_f": kelly_f,
+            }
+            if qty > 0:
+                notify_trade_open(
+                    sym,
+                    res["side"],
+                    float(res.get("price", 0.0)),
+                    qty,
+                    sizing_info,
+                    signal=res,
+                    cfg=cfg,
+                    tz="Asia/Taipei",
+                )
+            else:
+                notify_guard(
+                    "min_notional_reject",
+                    {
+                        "symbol": sym,
+                        "side": res["side"],
+                        "price": float(res.get("price", 0.0)),
+                        "notional": float(res.get("price", 0.0)) * qty,
+                        "min": rule.min_notional,
+                    },
+                    telegram_conf,
+                )
         if stale:
             res["warning"] = "STALE DATA"
+            notify_guard("data_lag", {"symbol": sym}, telegram_conf)
         results[sym] = res
 
     lines = []

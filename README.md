@@ -1,11 +1,12 @@
 # Crypto Strategy Project — 使用說明（Windows / CMD 版）
-> 版本日期：2025-08-15
+> 版本日期：2025-08-24
 
 本專案提供「**訓練** → **回測** → **即時訊號**」的一條龍流程，使用 15 分鐘 K 線資料建立模型，並在即時模式推送多幣別整合訊息。
 **重點更新**：
 - 支援「**日期區間**」功能（以本地 UTC+8 自然日解析），可精準指定訓練/初始化所用的歷史範圍。
 - 回測可輸出完整績效摘要與交易明細，支援 CSV / JSON 報表。
 - 新增 **訊號匯總器**（aggregator），整合多 horizon 機率並輸出統一的多/空/無決策。
+- 擴充 **即時通知**（Telegram）模組，涵蓋最新訊號、進出場與風控事件。
 
 ---
 
@@ -189,6 +190,7 @@ python scripts\backtest_multi.py --cfg csp\configs\strategy.yaml --save-summary 
   - `--cfg <path>`：指定設定檔。
   - `--delay-sec <int>`（限 `realtime_loop.py`）：輪詢間隔秒數（預設 15 秒）。
 - 內建訊號匯總器：將多 horizon 機率整合為單一 LONG/SHORT/NONE 訊號，可透過 `strategy.enter_threshold`、`strategy.aggregator_method`、`strategy.weight_fn` 調整。
+- 支援 Telegram 即時通知：會針對「最新訊號」、「進場/出場」與「風控事件」發送標準欄位訊息。
 - **日期區間（初始化 warmup）**：
   - 在初始化歷史（做特徵/狀態建立）時，可用 **環境變數** 限縮歷史區間，不影響之後的即時抓取。
 
@@ -214,6 +216,7 @@ python scripts\realtime_loop.py --cfg csp\configs\strategy.yaml --delay-sec 15
   - `--cfg <path>`：指定設定檔。
   - `--interval-sec <int>`：輪詢間隔秒數。
   - `--dry-run`：僅模擬，不寫檔或通知。
+- 觸發平倉時會推送 Telegram 通知，內容含理由、PnL% 與持倉時間。
 - **範例**：
 ```cmd
 python scripts\exit_watchdog.py --cfg csp\configs\strategy.yaml --interval-sec 1 --dry-run
