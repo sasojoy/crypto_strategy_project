@@ -22,6 +22,7 @@ from dateutil import tz
 
 from csp.data.loader import load_15m_csv
 from csp.features.h16 import build_features_15m_4h
+from csp.core.feature import add_features
 from csp.utils.config import get_symbol_features
 from csp.utils.logger import get_logger
 
@@ -172,6 +173,14 @@ def run_once(csv_path: str, cfg_path: str, *, debug: bool | None = None) -> Dict
         bb_std=feat_params["bb_std"],
         atr_window=feat_params["atr_window"],
         h4_resample=feat_params["h4_resample"],
+    )
+    feats = add_features(
+        feats,
+        prev_high_period=feat_params["prev_high_period"],
+        prev_low_period=feat_params["prev_low_period"],
+        bb_window=feat_params["bb_window"],
+        atr_window=feat_params["atr_window"],
+        atr_percentile_window=feat_params["atr_percentile_window"],
     )
 
     bundle = _load_model_bundle(cfg, sym)

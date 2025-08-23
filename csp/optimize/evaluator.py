@@ -31,6 +31,9 @@ def walk_forward_evaluate(cfg_path: str, symbol: str,
     sym_cfg["bollinger"]["window"] = int(feature_params["bb_window"])
     sym_cfg["bollinger"]["std"] = float(feature_params["bb_std"])
     sym_cfg["atr"]["window"] = int(feature_params["atr_window"])
+    sym_cfg["prev_high_period"] = int(feature_params.get("prev_high_period", 20))
+    sym_cfg["prev_low_period"] = int(feature_params.get("prev_low_period", 20))
+    sym_cfg["atr_percentile_window"] = int(feature_params.get("atr_percentile_window", 100))
     # base parameters
     default["ema_windows"] = feature_params.get("ema_windows", default.get("ema_windows", (9, 21, 50)))
     h4_rule = default.setdefault("h4_rule", {})

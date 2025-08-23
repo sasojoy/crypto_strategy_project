@@ -31,6 +31,11 @@ model:
     embargo_bars: 2
   out_dir: "models/{SYMBOL}/cls_multi"
 features:
+  prev_high_period: 20
+  prev_low_period: 20
+  bb_window: 24
+  atr_window: 14
+  atr_percentile_window: 100
   default:
     ema_windows:
     - 9

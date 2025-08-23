@@ -3,6 +3,7 @@ from typing import Dict, Any
 import pandas as pd
 
 from csp.features.h16 import build_features_15m_4h
+from csp.core.feature import add_features as _add_extra_features
 
 
 def default_params() -> Dict[str, Any]:
@@ -12,6 +13,9 @@ def default_params() -> Dict[str, Any]:
         "bb_window": 20,
         "bb_std": 2.0,
         "atr_window": 14,
+        "prev_high_period": 20,
+        "prev_low_period": 20,
+        "atr_percentile_window": 100,
         "h4_resample": "4H",
     }
 
@@ -33,5 +37,13 @@ def add_features(df: pd.DataFrame, params: Dict[str, Any] | None = None) -> pd.D
         bb_std=float(p["bb_std"]),
         atr_window=int(p["atr_window"]),
         h4_resample=p.get("h4_resample", "4H"),
+    )
+    feats = _add_extra_features(
+        feats,
+        prev_high_period=int(p["prev_high_period"]),
+        prev_low_period=int(p["prev_low_period"]),
+        bb_window=int(p["bb_window"]),
+        atr_window=int(p["atr_window"]),
+        atr_percentile_window=int(p["atr_percentile_window"]),
     )
     return feats

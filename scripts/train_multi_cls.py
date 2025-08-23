@@ -5,6 +5,7 @@ import json
 import yaml
 import pandas as pd
 from csp.features.h16 import build_features_15m_4h
+from csp.core.feature import add_features
 from csp.data.labeling import make_labels
 from csp.models.classifier_multi import MultiThresholdClassifier
 from csp.utils.config import get_symbol_features
@@ -52,6 +53,14 @@ if __name__ == "__main__":
             bb_std=feat_params["bb_std"],
             atr_window=feat_params["atr_window"],
             h4_resample=feat_params["h4_resample"],
+        )
+        feats = add_features(
+            feats,
+            prev_high_period=feat_params["prev_high_period"],
+            prev_low_period=feat_params["prev_low_period"],
+            bb_window=feat_params["bb_window"],
+            atr_window=feat_params["atr_window"],
+            atr_percentile_window=feat_params["atr_percentile_window"],
         )
         df_labels = make_labels(feats, horizons, thresholds)
         feats = feats.loc[df_labels.index]

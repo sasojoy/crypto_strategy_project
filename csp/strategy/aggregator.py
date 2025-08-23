@@ -9,6 +9,7 @@ import pandas as pd
 
 from csp.models.classifier_multi import MultiThresholdClassifier
 from csp.features.h16 import build_features_15m_4h
+from csp.core.feature import add_features
 from csp.utils.config import get_symbol_features
 
 
@@ -148,6 +149,14 @@ def get_latest_signal(symbol: str, cfg: Dict[str, Any]) -> Optional[Dict[str, An
             bb_std=feat_params["bb_std"],
             atr_window=feat_params["atr_window"],
             h4_resample=feat_params.get("h4_resample", "4H"),
+        )
+        feats = add_features(
+            feats,
+            prev_high_period=feat_params["prev_high_period"],
+            prev_low_period=feat_params["prev_low_period"],
+            bb_window=feat_params["bb_window"],
+            atr_window=feat_params["atr_window"],
+            atr_percentile_window=feat_params["atr_percentile_window"],
         )
         latest = feats.tail(1)
         if latest.empty:
