@@ -9,7 +9,7 @@ on:
 permissions:
   contents: write
   issues: write
-  projects: write
+  repository-projects: write
 
 jobs:
   sync:
