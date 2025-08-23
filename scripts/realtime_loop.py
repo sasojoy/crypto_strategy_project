@@ -5,6 +5,7 @@ import json
 import time
 from datetime import datetime, timedelta
 
+import math
 import pandas as pd
 import yaml
 from dateutil import tz
@@ -23,6 +24,36 @@ from csp.utils.notifier import (
 from csp.runtime.exit_watchdog import check_exit_once
 
 TW = tz.gettz("Asia/Taipei")
+
+FRESH_MIN = 5.0  # 資料新鮮度門檻（分鐘）
+
+
+def process_symbol(symbol: str, cfg: dict):
+    # 1) 檢查資料新鮮度
+    csv_path = cfg["io"]["csv_paths"][symbol]
+    df = pd.read_csv(csv_path)
+    ts = pd.to_datetime(df["timestamp"].iloc[-1], utc=True)
+    age_min = (pd.Timestamp.utcnow() - ts).total_seconds() / 60.0
+    if age_min > FRESH_MIN:
+        notify_guard(
+            "data_lag",
+            {"symbol": symbol, "age_min": round(age_min, 2), "last_ts": str(ts)},
+        )
+        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "data_lag"}
+
+    # 2) 取得最新訊號（內部會嚴格比對 meta.feature_columns 與特徵 NaN）
+    sig = get_latest_signal(symbol, cfg, fresh_min=FRESH_MIN)
+    if not sig:
+        notify_guard("signal_unavailable", {"symbol": symbol})
+        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "signal_unavailable"}
+
+    # 3) 格式化得分，避免 NaN
+    score = 0.0
+    s = sig.get("score")
+    if s is not None and not (isinstance(s, float) and math.isnan(s)):
+        score = float(s)
+    sig["score"] = score
+    return sig
 
 
 def next_quarter_with_delay(now: datetime, delay_sec: int = 15) -> datetime:
@@ -72,15 +103,11 @@ def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
                 last_price = float(df["close"].iloc[-1])
             except Exception:
                 pass
-        sig = None
         try:
-            sig = get_latest_signal(sym, cfg)
-            if sig is None:
-                res = {"symbol": sym, "side": "NONE"}
-            else:
-                res = sig
+            res = process_symbol(sym, cfg)
         except Exception as e:
             res = {"symbol": sym, "side": "NONE", "error": str(e)}
+        sig = res if res.get("side") in ("LONG", "SHORT") else None
         if last_price is not None:
             res["price"] = last_price
         if sig and last_price is not None:

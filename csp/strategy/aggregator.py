@@ -1,194 +1,203 @@
 from __future__ import annotations
 
+"""Utilities for aggregating multi-horizon model probabilities and fetching
+the latest trading signal.
+
+This module adds several safety guards to ensure the produced signal is
+well-formed:
+
+* ``aggregate_signal`` sanitises the probability map to remove ``NaN`` or
+  out-of-range values and always returns a non-``NaN`` score.
+* ``get_latest_signal`` loads the latest CSV data, checks data freshness and
+  verifies that model ``feature_columns`` align with the real-time features.
+  Problems yield ``None`` so the caller can guard against stale or malformed
+  inputs.
+"""
+
+import json
 import math
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Dict, Tuple, Any, Optional
+import os
+from typing import Dict, Optional
 
 import pandas as pd
 
-from csp.models.classifier_multi import MultiThresholdClassifier
-from csp.features.h16 import build_features_15m_4h
-from csp.core.feature import add_features
-from csp.utils.config import get_symbol_features
+
+def _weight(h: int) -> float:
+    """Return weight for horizon ``h``.
+
+    The default implementation uses ``sqrt`` so that longer horizons are given
+    slightly more importance without overwhelming shorter horizons.
+    """
+
+    return math.sqrt(max(1, int(h)))
 
 
-def _weight(h: int, fn: str = "sqrt") -> float:
-    """Return weight for horizon ``h`` according to ``fn``."""
-    h = max(h, 1)
-    if fn == "log":
-        return math.log(h)
-    if fn == "linear":
-        return float(h)
-    return math.sqrt(h)
+def _clean_prob_map(prob_map: dict) -> dict:
+    """Remove ``NaN`` or out-of-range probabilities from ``prob_map``."""
+
+    clean: Dict = {}
+    for k, v in (prob_map or {}).items():
+        try:
+            f = float(v)
+        except Exception:
+            continue
+        if math.isnan(f) or f < 0.0 or f > 1.0:
+            continue
+        clean[k] = f
+    return clean
 
 
-def aggregate_signal(
-    prob_map: Dict[Tuple[int, float], float],
-    enter_threshold: float = 0.75,
-    method: str = "max_weighted",
-    weight_fn: str = "sqrt",
-) -> Dict[str, Any]:
-    """Aggregate (h, t)->probability map into a single trading signal.
+def aggregate_signal(prob_map: dict, enter_threshold: float = 0.75, method: str = "max_weighted") -> dict:
+    """Aggregate ``prob_map`` into a single trading decision.
 
     Parameters
     ----------
     prob_map : dict
-        Mapping from ``(horizon, threshold)`` to ``p_up``.
+        Mapping ``(horizon, threshold) -> probability_of_up``.
     enter_threshold : float, optional
-        Minimum score/probability required to enter a trade.
+        Minimum probability required to enter a trade.
     method : str, optional
-        ``"max_weighted"`` or ``"majority"``.
-    weight_fn : str, optional
-        Weighting function for ``max_weighted`` method (``sqrt``/``log``/``linear``).
+        Aggregation method. ``"majority"`` or ``"max_weighted"`` (default).
 
     Returns
     -------
     dict
-        Aggregated signal information.
+        Contains at least ``side`` (``LONG``/``SHORT``/``NONE``), ``score``
+        (never ``NaN``), ``prob_up_max``, ``prob_down_max``, ``chosen_h``,
+        ``chosen_t`` and ``reason``.
     """
-    if not prob_map:
+
+    clean = _clean_prob_map(prob_map)
+    if not clean:
         return {
             "side": "NONE",
             "score": 0.0,
             "prob_up_max": 0.0,
-            "prob_down_max": 0.0,
+            "prob_down_max": 1.0,
             "chosen_h": None,
             "chosen_t": None,
-            "topk": [],
+            "reason": "empty_or_nan_prob_map",
         }
 
-    prob_up_max = max(prob_map.values())
-    prob_down_max = max(1.0 - p for p in prob_map.values())
-    topk_pairs = sorted(
-        ((h, t, p) for (h, t), p in prob_map.items()), key=lambda x: x[2], reverse=True
-    )[:3]
-    topk = [{"h": h, "t": t, "p_up": float(p)} for h, t, p in topk_pairs]
-
     if method == "majority":
-        long_cnt = sum(p >= 0.5 for p in prob_map.values())
-        short_cnt = len(prob_map) - long_cnt
-        if long_cnt > short_cnt and prob_up_max >= enter_threshold:
-            chosen_h, chosen_t = max(prob_map.items(), key=lambda kv: kv[1])[0]
-            return {
-                "side": "LONG",
-                "score": prob_up_max,
-                "prob_up_max": prob_up_max,
-                "prob_down_max": prob_down_max,
-                "chosen_h": chosen_h,
-                "chosen_t": chosen_t,
-                "topk": topk,
-            }
-        if short_cnt > long_cnt and prob_down_max >= enter_threshold:
-            chosen_h, chosen_t = max(prob_map.items(), key=lambda kv: 1.0 - kv[1])[0]
-            return {
-                "side": "SHORT",
-                "score": prob_down_max,
-                "prob_up_max": prob_up_max,
-                "prob_down_max": prob_down_max,
-                "chosen_h": chosen_h,
-                "chosen_t": chosen_t,
-                "topk": topk,
-            }
+        ups = sum(1 for _, p in clean.items() if p >= enter_threshold)
+        downs = sum(1 for _, p in clean.items() if (1.0 - p) >= enter_threshold)
+        if ups > downs and ups > 0:
+            side = "LONG"
+            score = 1.0
+        elif downs > ups and downs > 0:
+            side = "SHORT"
+            score = 1.0
+        else:
+            side = "NONE"
+            score = 0.0
+        prob_up_max = max(clean.values())
         return {
-            "side": "NONE",
-            "score": 0.0,
-            "prob_up_max": prob_up_max,
-            "prob_down_max": prob_down_max,
+            "side": side,
+            "score": float(score),
+            "prob_up_max": float(prob_up_max),
+            "prob_down_max": float(1.0 - prob_up_max),
             "chosen_h": None,
             "chosen_t": None,
-            "topk": topk,
+            "reason": "majority",
         }
 
     # default: max_weighted
-    best_long: Tuple[float, float, int, float] | None = None  # score, p_up, h, t
-    best_short: Tuple[float, float, int, float] | None = None
-    for (h, t), p in prob_map.items():
-        w = _weight(h, weight_fn)
-        l_score = p * w
-        s_score = (1.0 - p) * w
-        if best_long is None or l_score > best_long[0]:
-            best_long = (l_score, p, h, t)
-        if best_short is None or s_score > best_short[0]:
-            best_short = (s_score, 1.0 - p, h, t)
-
-    side = "NONE"
-    score = 0.0
-    chosen_h = chosen_t = None
-    if best_long and best_long[0] >= enter_threshold and (
-        not best_short or best_long[0] >= best_short[0]
-    ):
-        side = "LONG"
-        score = best_long[0]
-        chosen_h, chosen_t = best_long[2], best_long[3]
-    elif best_short and best_short[0] >= enter_threshold and (
-        not best_long or best_short[0] > best_long[0]
-    ):
-        side = "SHORT"
-        score = best_short[0]
-        chosen_h, chosen_t = best_short[2], best_short[3]
-
+    scored = [((h, t), p * _weight(h)) for (h, t), p in clean.items()]
+    if not scored:
+        return {
+            "side": "NONE",
+            "score": 0.0,
+            "prob_up_max": 0.0,
+            "prob_down_max": 1.0,
+            "chosen_h": None,
+            "chosen_t": None,
+            "reason": "scored_empty",
+        }
+    (chosen_ht, score) = max(scored, key=lambda x: x[1])
+    (ch, ct) = chosen_ht
+    prob_up_max = max(clean.values())
+    side = "LONG" if prob_up_max >= enter_threshold else "NONE"
+    safe_score = 0.0 if (score is None or math.isnan(score)) else float(score)
     return {
         "side": side,
-        "score": float(score),
+        "score": safe_score,
         "prob_up_max": float(prob_up_max),
-        "prob_down_max": float(prob_down_max),
-        "chosen_h": chosen_h,
-        "chosen_t": chosen_t,
-        "topk": topk,
+        "prob_down_max": float(1.0 - prob_up_max),
+        "chosen_h": int(ch),
+        "chosen_t": float(ct),
+        "reason": "ok" if side != "NONE" else "below_threshold",
     }
 
 
-def get_latest_signal(symbol: str, cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Load latest features and model for ``symbol`` and return aggregated signal."""
+def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0) -> Optional[dict]:
+    """Load the latest data and model for ``symbol`` and return aggregated signal.
+
+    The function performs several checks:
+
+    * CSV path existence and required timestamp column.
+    * Data freshness not older than ``fresh_min`` minutes.
+    * Model ``feature_columns`` must all exist in the engineered features.
+    * No ``NaN`` values in the input features for prediction.
+
+    Returns ``None`` if any check fails.
+    """
+
+    from csp.core.feature import add_features  # local import to keep dependency light
+
     try:
-        csv_path = cfg.get("io", {}).get("csv_paths", {}).get(symbol)
-        if not csv_path:
-            return None
-        df = pd.read_csv(csv_path)
-        if df.empty:
-            return None
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-        feat_params = get_symbol_features(cfg, symbol)
-        feats = build_features_15m_4h(
-            df,
-            ema_windows=tuple(feat_params["ema_windows"]),
-            rsi_window=feat_params["rsi_window"],
-            bb_window=feat_params["bb_window"],
-            bb_std=feat_params["bb_std"],
-            atr_window=feat_params["atr_window"],
-            h4_resample=feat_params.get("h4_resample", "4H"),
-        )
-        feats = add_features(
-            feats,
-            prev_high_period=feat_params["prev_high_period"],
-            prev_low_period=feat_params["prev_low_period"],
-            bb_window=feat_params["bb_window"],
-            atr_window=feat_params["atr_window"],
-            atr_percentile_window=feat_params["atr_percentile_window"],
-        )
-        latest = feats.tail(1)
-        if latest.empty:
-            return None
-        models_dir = cfg.get("io", {}).get("models_dir", "models")
-        mdir = Path(models_dir) / symbol / "cls_multi"
-        if not mdir.exists():
-            return None
-        clf = MultiThresholdClassifier.load(str(mdir))
-        prob_map = clf.predict_proba(latest)
-        strat = cfg.get("strategy", {})
-        enter_thr = float(strat.get("enter_threshold", 0.75))
-        method = strat.get("aggregator_method", "max_weighted")
-        weight_fn = strat.get("weight_fn", "sqrt")
-        agg = aggregate_signal(prob_map, enter_thr, method, weight_fn)
-        ts = latest["timestamp"].iloc[-1]
-        ts = ts.tz_convert(timezone.utc) if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
-        agg.update({"symbol": symbol, "ts": ts.isoformat().replace("+00:00", "Z")})
-        try:
-            # expose latest H4 ATR for sizing
-            agg["atr_abs"] = float(latest.get("atr_h4", latest.get("atr", 0.0)))
-        except Exception:
-            pass
-        return agg
+        from csp.models.classifier_multi import MultiThresholdClassifier
     except Exception:
         return None
+
+    csv_path = cfg["io"]["csv_paths"].get(symbol)
+    if not csv_path or not os.path.exists(csv_path):
+        return None
+
+    df = pd.read_csv(csv_path)
+    if "timestamp" not in df.columns:
+        return None
+    ts = pd.to_datetime(df["timestamp"].iloc[-1], utc=True)
+    age_min = (pd.Timestamp.utcnow() - ts).total_seconds() / 60.0
+    if age_min > fresh_min:
+        # data too old
+        return None
+
+    dff = add_features(df.copy())
+    model_dir = os.path.join(cfg["io"].get("models_dir", "models"), symbol, "cls_multi")
+    meta_path = os.path.join(model_dir, "meta.json")
+    if not os.path.exists(meta_path):
+        return None
+    meta = json.load(open(meta_path, "r", encoding="utf-8"))
+    feat_cols = meta.get("feature_columns") or []
+    if not feat_cols:
+        return None
+    for c in feat_cols:
+        if c not in dff.columns:
+            return None
+
+    X = dff[feat_cols].tail(1)
+    if X.isna().any().any():
+        return None
+
+    m = MultiThresholdClassifier.load(model_dir)
+    prob_map = m.predict_proba(X)
+    th = cfg.get("strategy", {}).get("enter_threshold", 0.75)
+    method = cfg.get("strategy", {}).get("aggregator_method", "max_weighted")
+    sig = aggregate_signal(prob_map, enter_threshold=th, method=method)
+
+    sig["symbol"] = symbol
+    sig["ts"] = pd.Timestamp.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    # expose latest ATR for sizing if available
+    try:
+        if "atr" in dff.columns:
+            sig["atr_abs"] = float(dff["atr"].iloc[-1])
+        elif "atr_h4" in dff.columns:
+            sig["atr_abs"] = float(dff["atr_h4"].iloc[-1])
+    except Exception:
+        pass
+    return sig
+
+
+__all__ = ["aggregate_signal", "get_latest_signal"]
+
