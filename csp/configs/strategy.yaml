@@ -15,6 +15,10 @@ io:
     interval: 15m
     limit: 96
     api_base: https://api.binance.com
+strategy:
+  enter_threshold: 0.75
+  aggregator_method: "max_weighted"
+  weight_fn: "sqrt"
 model:
   type: "xgboost"
   horizons: [2, 4, 8, 16, 48, 192]

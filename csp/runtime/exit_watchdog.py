@@ -8,12 +8,7 @@ import yaml
 from dateutil import parser as dateparser
 
 from csp.utils.notifier import notify
-
-try:
-    from .signal_watchdog import get_latest_signal  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    def get_latest_signal():  # type: ignore
-        return None
+from csp.strategy.aggregator import get_latest_signal
 
 
 def _load_position(path: str) -> Dict[str, Any] | None:
@@ -98,12 +93,12 @@ def check_exit_once(cfg: Dict[str, Any], latest_price: float, now_ts: datetime, 
         held_min = (now_ts - entry_ts).total_seconds() / 60.0
         if held_min >= max_hold_min:
             reason = "time"
-    if reason is None and callable(get_latest_signal):
-        sig = get_latest_signal()
+    if reason is None:
+        sig = get_latest_signal(pos.get("symbol"), cfg)
         if sig:
-            sig_side = sig.get("side")
-            sig_conf = float(sig.get("confidence") or sig.get("proba", 0.0))
-            if sig_side and sig_side != side and sig_conf >= flip_thr:
+            sig_side = str(sig.get("side", "NONE")).lower()
+            sig_conf = float(sig.get("score", 0.0))
+            if sig_side in ("long", "short") and sig_side != str(side).lower() and sig_conf >= flip_thr:
                 reason = "flip"
 
     if reason is None:
