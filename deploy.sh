@@ -22,6 +22,14 @@ if [ -f pyproject.toml ] || [ -f setup.cfg ] || [ -f setup.py ]; then
 fi
 [ -f requirements.txt ] && $PIP install -r requirements.txt || true
 
+# 訓練最新模型（過去360天）
+echo "[deploy] training multi-symbol models (360 days)"
+DAYS=360 $PY scripts/train_multi.py --cfg csp/configs/strategy.yaml
+
+# 60天資料回測優化
+echo "[deploy] backtest optimization (60 days)"
+$PY scripts/feature_optimize.py --cfg csp/configs/strategy.yaml --days 60
+
 # 重啟/觸發
 #sudo -n /usr/bin/systemctl restart trader
 sudo -n /usr/bin/systemctl start trader-once.service
