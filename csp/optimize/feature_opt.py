@@ -25,6 +25,9 @@ def _suggest_params(trial: optuna.Trial) -> Dict:
         "bb_window": trial.suggest_int("bb_window", 10, 40),
         "bb_std": trial.suggest_float("bb_std", 1.0, 3.5),
         "atr_window": trial.suggest_int("atr_window", 7, 40),
+        "prev_high_period": trial.suggest_int("prev_high_period", 5, 60),
+        "prev_low_period": trial.suggest_int("prev_low_period", 5, 60),
+        "atr_percentile_window": trial.suggest_int("atr_percentile_window", 50, 200),
     }
 
 
@@ -105,6 +108,9 @@ def apply_best_params_to_cfg(cfg_path: str, symbol: str, best_params: Dict[str, 
         "std": float(best_params["bb_std"]),
     })
     sym_cfg["atr"].update({"enabled": True, "window": int(best_params["atr_window"])})
+    sym_cfg["prev_high_period"] = int(best_params.get("prev_high_period", 20))
+    sym_cfg["prev_low_period"] = int(best_params.get("prev_low_period", 20))
+    sym_cfg["atr_percentile_window"] = int(best_params.get("atr_percentile_window", 100))
 
     old_text = cfg_path.read_text(encoding="utf-8")
     new_text = yaml.dump(cfg, allow_unicode=True, sort_keys=False)

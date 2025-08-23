@@ -45,10 +45,27 @@ def get_symbol_features(cfg: Dict[str, Any], symbol: str) -> Dict[str, Any]:
     boll = merge("bollinger")
     atr = merge("atr")
 
+    bb_window_base = int(boll.get("window", 20))
+    atr_window_base = int(atr.get("window", 14))
+    bb_window = int(feats.get("bb_window", bb_window_base))
+    atr_window = int(feats.get("atr_window", atr_window_base))
+    bb_window = int(per_sym.get("bb_window", bb_window))
+    atr_window = int(per_sym.get("atr_window", atr_window))
+
+    prev_high_period = int(feats.get("prev_high_period", 20))
+    prev_low_period = int(feats.get("prev_low_period", 20))
+    atr_pct_window = int(feats.get("atr_percentile_window", 100))
+    prev_high_period = int(per_sym.get("prev_high_period", prev_high_period))
+    prev_low_period = int(per_sym.get("prev_low_period", prev_low_period))
+    atr_pct_window = int(per_sym.get("atr_percentile_window", atr_pct_window))
+
     out.update({
         "rsi_window": int(rsi.get("window", 14)),
-        "bb_window": int(boll.get("window", 20)),
+        "bb_window": bb_window,
         "bb_std": float(boll.get("std", 2.0)),
-        "atr_window": int(atr.get("window", 14)),
+        "atr_window": atr_window,
+        "prev_high_period": prev_high_period,
+        "prev_low_period": prev_low_period,
+        "atr_percentile_window": atr_pct_window,
     })
     return out
