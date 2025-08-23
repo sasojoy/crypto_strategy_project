@@ -7,7 +7,7 @@ from typing import Any, Dict
 import yaml
 from dateutil import parser as dateparser
 
-from csp.utils.notifier import notify
+from csp.utils.notifier import notify_trade_close
 from csp.strategy.aggregator import get_latest_signal
 
 
@@ -105,9 +105,20 @@ def check_exit_once(cfg: Dict[str, Any], latest_price: float, now_ts: datetime, 
         return {"action": "hold", "reason": None, "pnl": pnl, "position": pos}
 
     # close
-    msg = f"Exit {pos['symbol']} {side} @ {latest_price:.2f} PnL={pnl:.2f} ({pnl_ratio:.4f}) reason={reason}"
+    hold_minutes = (now_ts - entry_ts).total_seconds() / 60.0
     if not dry_run:
-        notify(msg, cfg.get("notify", {}).get("telegram"))
+        notify_trade_close(
+            symbol=pos.get("symbol"),
+            side=str(side).upper(),
+            entry_price=entry_price,
+            exit_price=latest_price,
+            opened_at=entry_ts.isoformat(),
+            closed_at=now_ts.isoformat(),
+            reason=reason,
+            pnl_ratio=pnl_ratio,
+            holding_minutes=hold_minutes,
+            telegram_conf=cfg.get("notify", {}).get("telegram"),
+        )
         trade = {
             "entry_time": entry_ts.isoformat(),
             "exit_time": now_ts.isoformat(),
