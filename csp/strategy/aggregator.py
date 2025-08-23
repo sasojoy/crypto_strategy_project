@@ -145,6 +145,7 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0) -> Optiona
 
     from csp.core.feature import add_features  # local import to keep dependency light
 
+    assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     try:
         from csp.models.classifier_multi import MultiThresholdClassifier
     except Exception:

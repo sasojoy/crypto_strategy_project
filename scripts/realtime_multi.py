@@ -3,12 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 from dateutil import tz
-import yaml
 
 from csp.data.fetcher import update_csv_with_latest
 from csp.pipeline.realtime_v2 import run_once
 TZ_TW = tz.gettz("Asia/Taipei")
 from csp.utils.notifier import notify
+from csp.utils.io import load_cfg
 
 
 def main():
@@ -17,7 +17,7 @@ def main():
     ap.add_argument("--debug", action="store_true")
     args = ap.parse_args()
 
-    cfg = yaml.safe_load(open(args.cfg, "r", encoding="utf-8"))
+    cfg = load_cfg(args.cfg)
     symbols = cfg.get("symbols", [])
     csv_map = (cfg.get("io", {}) or {}).get("csv_paths", {})
     live_cfg = (cfg.get("io", {}) or {}).get("live_fetch", {}) or {}
@@ -42,7 +42,7 @@ def main():
                 stale = True
         try:
             # run_once 會自動挑選 models/<SYMBOL>/ 或全域 models/
-            res = run_once(csv_path, cfg_path=args.cfg, debug=args.debug)
+            res = run_once(csv_path, cfg, debug=args.debug)
         except Exception as e:
             res = {"symbol": sym, "side": None, "error": str(e)}
         if stale:

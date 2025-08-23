@@ -2,7 +2,7 @@
 import argparse, json
 from pathlib import Path
 from csp.backtesting.backtest_v2 import run_backtest_for_symbol
-import yaml
+from csp.utils.io import load_cfg
 
 def main():
     ap = argparse.ArgumentParser()
@@ -12,7 +12,7 @@ def main():
     args = ap.parse_args()
 
     cfg_path = args.cfg
-    cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))
+    cfg = load_cfg(cfg_path)
     symbols = cfg.get("symbols", [])
     targets = symbols if args.symbol.upper() == "ALL" else [args.symbol]
 
@@ -22,7 +22,7 @@ def main():
     for sym in targets:
         csv_path = cfg["io"]["csv_paths"][sym]
         print(f"[RUN] {sym} days={args.days} csv={csv_path}")
-        r = run_backtest_for_symbol(csv_path, cfg_path, symbol=sym)
+        r = run_backtest_for_symbol(csv_path, cfg, symbol=sym)
         results[sym] = r["metrics"]
         # 存交易明細
         (out_dir / f"{sym}_trades.csv").write_text(

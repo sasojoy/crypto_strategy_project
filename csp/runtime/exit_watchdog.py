@@ -9,6 +9,7 @@ from dateutil import parser as dateparser
 
 from csp.utils.notifier import notify_trade_close
 from csp.strategy.aggregator import get_latest_signal
+from csp.utils.io import load_cfg
 
 
 def _load_position(path: str) -> Dict[str, Any] | None:
@@ -46,12 +47,14 @@ def _append_trade(log_path: Path, trade: Dict[str, Any]):
         f.write(line + "\n")
 
 
-def check_exit_once(cfg: Dict[str, Any], latest_price: float, now_ts: datetime, dry_run: bool = False) -> Dict[str, Any]:
+def check_exit_once(cfg: Dict[str, Any] | str, latest_price: float, now_ts: datetime, dry_run: bool = False) -> Dict[str, Any]:
     """
     依序檢查 TP、SL、時間止損、模型翻向。
     若觸發則平倉、記錄交易、清除 position、通知。
     回傳 dict 包含 action (hold|close)、reason、pnl、position。
     """
+    cfg = load_cfg(cfg)
+    assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     io_cfg = cfg.get("io", {})
     pos_file = io_cfg.get("position_file")
     if not pos_file:

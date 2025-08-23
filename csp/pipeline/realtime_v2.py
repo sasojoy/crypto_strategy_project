@@ -16,7 +16,6 @@ from typing import Any, Dict, Optional
 import joblib
 import pandas as pd
 import xgboost as xgb
-import yaml
 import numpy as np
 from dateutil import tz
 
@@ -25,6 +24,7 @@ from csp.features.h16 import build_features_15m_4h
 from csp.core.feature import add_features
 from csp.utils.config import get_symbol_features
 from csp.utils.logger import get_logger
+from csp.utils.io import load_cfg
 
 try:
     from csp.utils.dates import resolve_time_range_like, slice_by_utc
@@ -77,10 +77,6 @@ def initialize_history(df: pd.DataFrame, *, init_date_args: dict | None = None):
 
 
 # === Realtime inference utilities ===
-def _load_cfg(cfg_path: str) -> Dict[str, Any]:
-    return yaml.safe_load(open(cfg_path, "r", encoding="utf-8"))
-
-
 def _infer_symbol_from_path(csv_path: str) -> Optional[str]:
     name = Path(csv_path).name.upper()
     if "BTC" in name:
@@ -152,9 +148,10 @@ def _decide_side(proba_up: float, long_thr: float, short_thr: float) -> Optional
     return None
 
 
-def run_once(csv_path: str, cfg_path: str, *, debug: bool | None = None) -> Dict[str, Any]:
+def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, debug: bool | None = None) -> Dict[str, Any]:
     """Load latest data, run model inference and return trading signal."""
-    cfg = _load_cfg(cfg_path)
+    cfg = load_cfg(cfg)
+    assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     sym = _infer_symbol_from_path(csv_path)
 
     log = get_logger("realtime", cfg.get("io", {}).get("logs_dir", "logs"))

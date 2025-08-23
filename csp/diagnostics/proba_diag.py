@@ -14,6 +14,7 @@ from csp.utils.config import get_symbol_features
 
 
 def load_io_from_cfg(cfg: Dict[str, Any], symbol: str) -> Dict[str, Any]:
+    assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     csv_path = cfg.get("io", {}).get("csv_paths", {}).get(symbol)
     models_root = Path(cfg.get("io", {}).get("models_dir", "models")) / symbol
     feat_params = get_symbol_features(cfg, symbol)

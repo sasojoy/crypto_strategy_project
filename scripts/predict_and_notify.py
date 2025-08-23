@@ -1,10 +1,10 @@
 from __future__ import annotations
 import argparse
 import json
-import yaml
 
 from csp.pipeline.realtime_v2 import run_once
 from csp.utils.notifier import notify
+from csp.utils.io import load_cfg
 
 
 def main():
@@ -14,8 +14,8 @@ def main():
     ap.add_argument("--debug", action="store_true")
     args = ap.parse_args()
 
-    res = run_once(args.csv, args.cfg, debug=args.debug)
-    cfg = yaml.safe_load(open(args.cfg, "r", encoding="utf-8"))
+    cfg = load_cfg(args.cfg)
+    res = run_once(args.csv, cfg, debug=args.debug)
 
     if "error" in res:
         line = f"{res.get('symbol', '?')}: ERROR {res['error']}"

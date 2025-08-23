@@ -2,11 +2,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import pandas as pd
-import yaml
 
 from csp.diagnostics import proba_diag
 from csp.data.loader import load_15m_csv
 from csp.pipeline.realtime_v2 import initialize_history
+from csp.utils.io import load_cfg
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,7 +24,7 @@ def parse_args() -> argparse.Namespace:
 
 def main():
     args = parse_args()
-    cfg = yaml.safe_load(open(args.cfg, "r", encoding="utf-8"))
+    cfg = load_cfg(args.cfg)
 
     if args.all:
         symbols = cfg.get("symbols", [])

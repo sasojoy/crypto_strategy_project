@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 import pytz
+from csp.utils.io import load_cfg
 
 
 def _fmt_ts(ts_utc):
@@ -30,9 +31,7 @@ def main():
     )
     args = ap.parse_args()
 
-    import yaml
-
-    cfg = yaml.safe_load(open(args.cfg, "r", encoding="utf-8"))
+    cfg = load_cfg(args.cfg)
     from csp.core.feature import add_features  # type: ignore
     from csp.strategy.aggregator import aggregate_signal
     try:

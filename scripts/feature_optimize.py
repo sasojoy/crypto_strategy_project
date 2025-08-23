@@ -5,11 +5,11 @@ import sys
 from pathlib import Path
 
 import pandas as pd
-import yaml
 
 from csp.data.loader import load_15m_csv
 from csp.utils.dates import resolve_time_range_like
 from csp.optimize.feature_opt import optimize_symbol, apply_best_params_to_cfg
+from csp.utils.io import load_cfg
 
 
 def _read_date_args_from_env() -> dict:
@@ -34,7 +34,7 @@ def main() -> None:
     ap.add_argument("--apply-to-cfg", action="store_true", help="將最佳參數寫回 cfg")
     args = ap.parse_args()
 
-    cfg = yaml.safe_load(open(args.cfg, "r", encoding="utf-8"))
+    cfg = load_cfg(args.cfg)
     if args.symbols:
         symbols = [s.strip() for s in args.symbols.split(',') if s.strip()]
     else:

@@ -22,6 +22,7 @@ def get_symbol_features(cfg: Dict[str, Any], symbol: str) -> Dict[str, Any]:
     is flattened to match the historical ``feature`` parameters used by the
     feature builders.
     """
+    assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     feats = cfg.get("features", {})
     default = feats.get("default", {})
     per_sym = feats.get("per_symbol", {}).get(symbol, {})
