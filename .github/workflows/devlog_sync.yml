@@ -1,3 +1,4 @@
+# Sync development log with GitHub issues and project
 name: Devlog Sync
 
 on:
