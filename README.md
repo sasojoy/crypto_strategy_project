@@ -111,6 +111,7 @@ realtime:
 python scripts\train_multi.py --cfg csp\configs\strategy.yaml
 ```
 - 預設會從設定檔載入每個幣種的 CSV，並將模型輸出到 `io.models_dir`（每幣一個子資料夾）。
+- 所有腳本會透過 `csp.utils.io.load_cfg` 讀取設定，無論傳入的是檔案路徑或已解析的 `dict`。
 
 ### 回測（多幣）
 ```cmd

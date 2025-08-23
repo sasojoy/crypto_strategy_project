@@ -10,16 +10,13 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 import requests
-import yaml
 
 # 依賴 backtest_v2 的核心邏輯
 from csp.backtesting.backtest_v2 import run_backtest_for_symbol
 from csp.metrics.report import summarize
+from csp.utils.io import load_cfg
 
 BINANCE_BASE = "https://api.binance.com"
-
-def load_cfg(path: str) -> dict:
-    return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
 def to_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:

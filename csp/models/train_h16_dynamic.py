@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Union, Tuple, Optional, Dict
 
 import pandas as pd
+from csp.utils.io import load_cfg
 
 try:
     from csp.utils.dates import resolve_time_range_like, slice_by_utc
@@ -115,6 +116,8 @@ def train(input_data: Union[pd.DataFrame, str, Path], cfg: dict, *, date_args: d
     - 也可傳 **kwargs: start=..., end=..., days=...
     備註：這裡只負責「資料讀取 + 日期區間 + warmup」，後續特徵/訓練保持你原本的流程。
     """
+    cfg = load_cfg(cfg)
+    assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     # 1) 讀資料
     if isinstance(input_data, (str, Path)):
         df = _read_csv_smart(input_data)
@@ -131,6 +134,7 @@ def train(input_data: Union[pd.DataFrame, str, Path], cfg: dict, *, date_args: d
         df2, utc_start, utc_end = _apply_date_range(df, dargs)
     else:
         df2, utc_start, utc_end = df, None, None
+    df2 = df2.reset_index().rename_axis(None)
 
     # 4) ==== 特徵 / 標籤 / 模型訓練 ====
     import json

@@ -5,9 +5,9 @@ from pathlib import Path
 import json
 import numpy as np
 import pandas as pd
-import yaml
 import xgboost as xgb
 import joblib
+from csp.utils.io import load_cfg
 
 from csp.data.loader import load_15m_csv
 from csp.features.h16 import build_features_15m_4h
@@ -24,9 +24,6 @@ class EntryZoneCfg:
     lookahead_bars: int = 16
     long_x: float = 0.5
     short_x: float = 0.5
-
-def _load_cfg(cfg_path: str) -> Dict[str, Any]:
-    return yaml.safe_load(open(cfg_path, "r", encoding="utf-8"))
 
 def _load_model_bundle(cfg: Dict[str, Any], symbol: str):
     mdir = Path(cfg["io"]["models_dir"]) / symbol
@@ -108,9 +105,10 @@ def _apply_exit(bar: pd.Series, side: str, tp: float, sl: float) -> Optional[str
         if low  <= tp: return "tp"
     return None
 
-def run_backtest_for_symbol(csv_path: str, cfg_path: str, symbol: Optional[str] = None,
+def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Optional[str] = None,
                             start_ts: Optional[pd.Timestamp] = None, end_ts: Optional[pd.Timestamp] = None) -> Dict[str, Any]:
-    cfg = _load_cfg(cfg_path)
+    cfg = load_cfg(cfg)
+    assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     sym = symbol or _infer_symbol_from_path(csv_path)
     feat_params = get_symbol_features(cfg, sym)
     long_thr  = float(cfg["execution"]["long_prob_threshold"])

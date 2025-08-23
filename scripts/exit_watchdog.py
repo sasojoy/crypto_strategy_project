@@ -5,10 +5,11 @@ import time
 from datetime import datetime
 
 import requests
-import yaml
 from dateutil import tz
+import yaml
 
 from csp.runtime.exit_watchdog import check_exit_once
+from csp.utils.io import load_cfg
 
 TW = tz.gettz("Asia/Taipei")
 
@@ -28,7 +29,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    cfg = yaml.safe_load(open(args.cfg, "r", encoding="utf-8"))
+    cfg = load_cfg(args.cfg)
     pos_file = cfg.get("io", {}).get("position_file")
     if not pos_file:
         print("No position_file in config")

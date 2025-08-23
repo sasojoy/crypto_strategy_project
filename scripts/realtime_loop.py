@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 
 import math
 import pandas as pd
-import yaml
 from dateutil import tz
 
 from csp.data.fetcher import update_csv_with_latest
@@ -22,6 +21,7 @@ from csp.utils.notifier import (
     notify_guard,
 )
 from csp.runtime.exit_watchdog import check_exit_once
+from csp.utils.io import load_cfg
 
 TW = tz.gettz("Asia/Taipei")
 
@@ -65,8 +65,9 @@ def next_quarter_with_delay(now: datetime, delay_sec: int = 15) -> datetime:
     return slot + timedelta(seconds=delay_sec)
 
 
-def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
-    cfg = yaml.safe_load(open(cfg_path, "r", encoding="utf-8"))
+def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
+    cfg = load_cfg(cfg)
+    assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     telegram_conf = cfg.get("notify", {}).get("telegram")
     symbols = cfg.get("symbols", [])
     csv_map = cfg.get("io", {}).get("csv_paths", {})
@@ -218,6 +219,7 @@ def main():
     ap.add_argument("--delay-sec", type=int, default=15)
     args = ap.parse_args()
 
+    cfg = load_cfg(args.cfg)
     while True:
         now = datetime.now(tz=TW)
         target = next_quarter_with_delay(now, args.delay_sec)
@@ -226,7 +228,7 @@ def main():
             print(f"[LOOP] 現在 {now.strftime('%F %T%z')}，等到 {target.strftime('%F %T%z')} 再跑（{int(wait)} 秒）")
             time.sleep(wait)
         try:
-            run_once(args.cfg)
+            run_once(cfg)
         except Exception as e:
             print(f"[ERROR] loop run failed: {e}")
 

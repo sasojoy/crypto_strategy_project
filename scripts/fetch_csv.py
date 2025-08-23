@@ -2,9 +2,9 @@
 import argparse, json
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-import yaml
 
 from csp.data.binance import fetch_to_csv
+from csp.utils.io import load_cfg
 
 def main():
     ap = argparse.ArgumentParser()
@@ -15,7 +15,7 @@ def main():
     ap.add_argument("--end", help="UTC end time ISO8601, default now")
     args = ap.parse_args()
 
-    cfg = yaml.safe_load(open(args.cfg, "r", encoding="utf-8"))
+    cfg = load_cfg(args.cfg)
     symbols = args.symbols or cfg.get("symbols") or [cfg["symbol"]]
     csv_paths = cfg.get("io", {}).get("csv_paths", {})
     interval = cfg.get("bar_interval", "15m")

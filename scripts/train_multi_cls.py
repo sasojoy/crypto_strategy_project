@@ -2,13 +2,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import json
-import yaml
 import pandas as pd
 from csp.features.h16 import build_features_15m_4h
 from csp.core.feature import add_features
 from csp.data.labeling import make_labels
 from csp.models.classifier_multi import MultiThresholdClassifier
 from csp.utils.config import get_symbol_features
+from csp.utils.io import load_cfg
 
 
 def load_csv(csv_path: str, days: int | None = None) -> pd.DataFrame:
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     ap.add_argument("--days", type=int, default=None)
     args = ap.parse_args()
 
-    cfg = yaml.safe_load(open(args.cfg, "r", encoding="utf-8"))
+    cfg = load_cfg(args.cfg)
     csv_map = cfg["io"]["csv_paths"]
     model_cfg = cfg.get("model", {})
     horizons = model_cfg.get("horizons", [16])

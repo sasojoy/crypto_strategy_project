@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 from csp.models.train_h16_dynamic import train
+from csp.utils.io import load_cfg
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
@@ -10,5 +11,6 @@ if __name__ == "__main__":
     args = ap.parse_args()
     if args.outdir:
         Path(args.outdir).mkdir(parents=True, exist_ok=True)
-    res = train(args.csv, args.cfg, models_dir_override=args.outdir)
+    cfg = load_cfg(args.cfg)
+    res = train(args.csv, cfg, models_dir_override=args.outdir)
     print(res)
