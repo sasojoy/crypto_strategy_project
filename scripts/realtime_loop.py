@@ -11,6 +11,9 @@ from dateutil import tz
 
 from csp.data.fetcher import update_csv_with_latest
 from csp.strategy.aggregator import get_latest_signal
+from csp.strategy.position_sizing import (
+    blended_sizing, SizingInput, ExchangeRule
+)
 from csp.utils.notifier import notify
 from csp.runtime.exit_watchdog import check_exit_once
 
@@ -73,6 +76,43 @@ def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
             res = {"symbol": sym, "side": "NONE", "error": str(e)}
         if last_price is not None:
             res["price"] = last_price
+        # --- position sizing ---
+        if res.get("side") in ("LONG", "SHORT"):
+            ps_cfg = cfg.get("position_sizing", {})
+            risk_cfg = cfg.get("risk", {})
+            rule_cfg = ps_cfg.get("exchange_rule", {})
+            rule = ExchangeRule(
+                min_qty=float(rule_cfg.get("min_qty", 0)),
+                qty_step=float(rule_cfg.get("qty_step", 0)),
+                min_notional=float(rule_cfg.get("min_notional", 0)),
+                max_leverage=int(rule_cfg.get("max_leverage", 1)),
+            )
+            equity = float(ps_cfg.get("equity_usdt", cfg.get("backtest", {}).get("initial_capital", 10000.0)))
+            atr_abs = float(res.get("atr_abs", 0.0))
+            tp_ratio = float(risk_cfg.get("take_profit_ratio", 0.0))
+            sl_ratio = float(risk_cfg.get("stop_loss_ratio", 0.0))
+            win_rate = ps_cfg.get("default_win_rate", None)
+            inp = SizingInput(
+                equity_usdt=equity,
+                entry_price=float(res.get("price", 0.0)),
+                atr_abs=atr_abs,
+                side=res["side"],
+                tp_ratio=tp_ratio,
+                sl_ratio=sl_ratio,
+                win_rate=win_rate,
+                rule=rule,
+            )
+            qty = blended_sizing(
+                inp,
+                mode=ps_cfg.get("mode", "hybrid"),
+                risk_per_trade=float(ps_cfg.get("risk_per_trade", 0.01)),
+                atr_k=float(ps_cfg.get("atr_k", 1.5)),
+                kelly_coef=float(ps_cfg.get("kelly_coef", 0.5)),
+                kelly_floor=float(ps_cfg.get("kelly_floor", -0.5)),
+                kelly_cap=float(ps_cfg.get("kelly_cap", 1.0)),
+            )
+            res["qty"] = qty
+            res["sizing_mode"] = ps_cfg.get("mode", "hybrid")
         if stale:
             res["warning"] = "STALE DATA"
         results[sym] = res

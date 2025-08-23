@@ -13,6 +13,9 @@ from csp.data.loader import load_15m_csv
 from csp.features.h16 import build_features_15m_4h
 from csp.core.feature import add_features
 from csp.utils.config import get_symbol_features
+from csp.strategy.position_sizing import (
+    blended_sizing, SizingInput, ExchangeRule
+)
 
 @dataclass
 class EntryZoneCfg:
@@ -236,7 +239,9 @@ def run_backtest_for_symbol(csv_path: str, cfg_path: str, symbol: Optional[str] 
             entry_price = float(hit_row["close"])
             atr_h4_hit = float(hit_row["atr_h4"])
             tp, sl = _compute_tp_sl(entry_price, atr_h4_hit, pos_side, atr_cfg)
-            entry_time = hit_row["timestamp"]; state = "holding"; bars_held = 0
+            entry_time = hit_row["timestamp"]
+            entry_atr = atr_h4_hit
+            state = "holding"; bars_held = 0
             i = hit_index + 1; continue
 
         else:
@@ -254,7 +259,8 @@ def run_backtest_for_symbol(csv_path: str, cfg_path: str, symbol: Optional[str] 
                     "entry_time": str(entry_time), "exit_time": str(ts),
                     "side": pos_side, "entry_price": float(entry_price), "exit_price": float(exit_price),
                     "tp": float(tp), "sl": float(sl), "bars_held": int(bars_held),
-                    "pnl": float(pnl), "return": float(pnl / entry_price), "exit_reason": reason
+                    "pnl": float(pnl), "return": float(pnl / entry_price), "exit_reason": reason,
+                    "atr": float(entry_atr)
                 })
                 last_exit_index = i
                 state = "flat"; pos_side = None
@@ -289,67 +295,78 @@ def run_backtest_for_symbol(csv_path: str, cfg_path: str, symbol: Optional[str] 
     except Exception:
         pass
     initial_capital = float(backtest_cfg.get("initial_capital", 10000.0))
-    risk_per_trade = float(backtest_cfg.get("risk_per_trade", 0.007))   # 0.7%/trade
     fee_rate = float(backtest_cfg.get("fee_rate", 0.0004))               # 單邊手續費
     slippage = float(backtest_cfg.get("slippage", 0.0002))               # 估算滑點
 
-    def _qty_from_risk(entry_price, sl_price, equity):
-        risk_dist = abs(entry_price - sl_price)
-        if risk_dist <= 0: return 0.0
-        risk_amt = equity * risk_per_trade
-        qty = risk_amt / risk_dist
-        return max(qty, 0.0)
+    ps_cfg = cfg.get("position_sizing", {})
+    risk_cfg = cfg.get("risk", {})
+    risk_per_trade = float(ps_cfg.get("risk_per_trade", 0.01))
+    atr_k = float(ps_cfg.get("atr_k", 1.5))
+    kelly_coef = float(ps_cfg.get("kelly_coef", 0.5))
+    kelly_floor = float(ps_cfg.get("kelly_floor", -0.5))
+    kelly_cap = float(ps_cfg.get("kelly_cap", 1.0))
+    win_rate_default = ps_cfg.get("default_win_rate", None)
+    rule_cfg = ps_cfg.get("exchange_rule", {})
+    exch_rule = ExchangeRule(
+        min_qty=float(rule_cfg.get("min_qty", 0)),
+        qty_step=float(rule_cfg.get("qty_step", 0)),
+        min_notional=float(rule_cfg.get("min_notional", 0)),
+        max_leverage=int(rule_cfg.get("max_leverage", 1)),
+    )
+    tp_ratio = float(risk_cfg.get("take_profit_ratio", 0.0))
+    sl_ratio = float(risk_cfg.get("stop_loss_ratio", 0.0))
 
     equity = initial_capital
     eq_curve = []
+    qty_list = []
+    risk_pct_list = []
+    pnl_list = []
     for _, tr in trades_df.iterrows():
-        e, x, side = float(tr["entry_price"]), float(tr["exit_price"]), str(tr["side"])
-        sl = float(tr["sl"])
-        qty = _qty_from_risk(e, sl, equity)
-        # 成本 + 費用（雙邊）
+        e = float(tr["entry_price"]); x = float(tr["exit_price"])
+        side = str(tr["side"]).upper()
+        atr_abs = float(tr.get("atr", 0.0))
+        inp = SizingInput(
+            equity_usdt=float(equity),
+            entry_price=e,
+            atr_abs=atr_abs,
+            side="LONG" if side == "LONG" else "SHORT",
+            tp_ratio=tp_ratio,
+            sl_ratio=sl_ratio,
+            win_rate=win_rate_default,
+            rule=exch_rule,
+        )
+        qty = blended_sizing(
+            inp,
+            mode=ps_cfg.get("mode", "hybrid"),
+            risk_per_trade=risk_per_trade,
+            atr_k=atr_k,
+            kelly_coef=kelly_coef,
+            kelly_floor=kelly_floor,
+            kelly_cap=kelly_cap,
+        )
+        qty_list.append(qty)
+        risk_usd = abs(qty) * atr_abs * atr_k * e
+        risk_pct = risk_usd / equity if equity > 0 else 0.0
+        risk_pct_list.append(risk_pct)
         buy_fee = e * abs(qty) * fee_rate
         sell_fee = x * abs(qty) * fee_rate
         buy_slip = e * abs(qty) * slippage
         sell_slip = x * abs(qty) * slippage
-        pnl = (x - e) * (qty if side == "long" else -qty) - buy_fee - sell_fee - buy_slip - sell_slip
+        pnl = (x - e) * (qty if side == "LONG" else -qty) - buy_fee - sell_fee - buy_slip - sell_slip
+        pnl_list.append(pnl)
         equity += pnl
         eq_curve.append(equity)
-        # === 資金曲線輸出準備 ===
-        if 'timestamp' in trades_df.columns:
-            eq_df = trades_df.copy()
-            eq_df['equity'] = eq_curve[:len(eq_df)]
-            try:
-                out_symbol = symbol if symbol else 'ALL'
-                eq_df.to_csv(f'backtests/equity_curve_{out_symbol}.csv', index=False, encoding='utf-8-sig')
-            except Exception as e:
-                print('[EquityCurve] 寫入失敗:', e)
+    trades_df["qty"] = qty_list
+    trades_df["pnl"] = pnl_list
+    trades_df["risk_pct"] = risk_pct_list
 
     final_equity = equity
     total_return_pct = (final_equity / initial_capital - 1.0) * 100.0
 
-    # 以權益曲線計算 MDD
     eq_series = pd.Series(eq_curve, dtype=float)
     peak = eq_series.cummax()
     mdd = float(((peak - eq_series) / peak.replace(0, np.nan)).max()) * 100.0 if not eq_series.empty else 0.0
 
-    # 重算 PF（使用權益計算後的實際交易 PnL）
-    # 重新計算每筆 PnL（含費用）
-    def _pnl_with_cost(tr, eq_before):
-        e, x, side = float(tr["entry_price"]), float(tr["exit_price"]), str(tr["side"])
-        sl = float(tr["sl"])
-        qty = _qty_from_risk(e, sl, eq_before)
-        buy_fee = e * abs(qty) * fee_rate
-        sell_fee = x * abs(qty) * fee_rate
-        buy_slip = e * abs(qty) * slippage
-        sell_slip = x * abs(qty) * slippage
-        return (x - e) * (qty if side == "long" else -qty) - buy_fee - sell_fee - buy_slip - sell_slip
-
-    eq_tmp = initial_capital
-    pnl_list = []
-    for _, tr in trades_df.iterrows():
-        pnl_i = _pnl_with_cost(tr, eq_tmp)
-        pnl_list.append(pnl_i)
-        eq_tmp += pnl_i
     wins = [p for p in pnl_list if p > 0]
     losses = [p for p in pnl_list if p <= 0]
 
@@ -379,6 +396,10 @@ def run_backtest_for_symbol(csv_path: str, cfg_path: str, symbol: Optional[str] 
     profit_factor = float(sum(wins) / abs(sum(losses))) if losses and sum(losses) != 0 else (float("inf") if sum(wins) > 0 else 0.0)
 
     avg_holding_minutes = float(trades_df["bars_held"].mean() * 15) if len(trades_df) else 0.0
+    avg_qty = float(np.mean(np.abs(qty_list))) if qty_list else 0.0
+    median_qty = float(np.median(np.abs(qty_list))) if qty_list else 0.0
+    max_qty = float(np.max(np.abs(qty_list))) if qty_list else 0.0
+    avg_risk_pct = float(np.mean(risk_pct_list)) if risk_pct_list else 0.0
 
     metrics = {
         "交易筆數": int(len(trades_df)),
@@ -389,6 +410,10 @@ def run_backtest_for_symbol(csv_path: str, cfg_path: str, symbol: Optional[str] 
         "獲利因子": float(profit_factor),
         "最大回撤%": float(mdd),
         "平均持倉分鐘": float(avg_holding_minutes),
+        "avg_qty": float(avg_qty),
+        "median_qty": float(median_qty),
+        "max_qty": float(max_qty),
+        "avg_risk_per_trade": float(avg_risk_pct),
     }
     return {"trades": trades_df, "metrics": metrics, "equity_curve": equity_curve}
 

@@ -71,10 +71,23 @@ strategy:
   weight_fn: "sqrt"                    # or "log", "linear"
 
 risk:
-  take_profit_ratio: 0.02
-  stop_loss_ratio: 0.01
+  take_profit_ratio: 0.05
+  stop_loss_ratio: 0.02
   max_holding_minutes: 240
   flip_threshold: 0.6
+position_sizing:
+  mode: "hybrid"            # "atr" | "kelly" | "hybrid"
+  risk_per_trade: 0.01      # 每筆風險占淨值比例
+  atr_k: 1.5                # 估算風險距離所用 ATR 倍數
+  kelly_coef: 0.5           # Kelly 權重（0~1）
+  kelly_floor: -0.5         # 最低倍率（-0.5 -> 最多縮至 0.5x）
+  kelly_cap: 1.0            # 最高加成（+100%）
+  default_win_rate: 0.6
+  exchange_rule:
+    min_qty: 0.0001
+    qty_step: 0.0001
+    min_notional: 10
+    max_leverage: 10
 
 realtime:
   notify:
