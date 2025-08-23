@@ -87,10 +87,23 @@ execution:
     long_x: 0.5
     short_x: 0.5
 risk:
-  take_profit_ratio: 0.02
-  stop_loss_ratio: 0.01
+  take_profit_ratio: 0.05
+  stop_loss_ratio: 0.02
   max_holding_minutes: 240
   flip_threshold: 0.6
+position_sizing:
+  mode: "hybrid"
+  risk_per_trade: 0.01
+  atr_k: 1.5
+  kelly_coef: 0.5
+  kelly_floor: -0.5
+  kelly_cap: 1.0
+  default_win_rate: 0.6
+  exchange_rule:
+    min_qty: 0.0001
+    qty_step: 0.0001
+    min_notional: 10
+    max_leverage: 10
 notify:
   telegram:
     enabled: true

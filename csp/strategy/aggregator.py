@@ -175,6 +175,11 @@ def get_latest_signal(symbol: str, cfg: Dict[str, Any]) -> Optional[Dict[str, An
         ts = latest["timestamp"].iloc[-1]
         ts = ts.tz_convert(timezone.utc) if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
         agg.update({"symbol": symbol, "ts": ts.isoformat().replace("+00:00", "Z")})
+        try:
+            # expose latest H4 ATR for sizing
+            agg["atr_abs"] = float(latest.get("atr_h4", latest.get("atr", 0.0)))
+        except Exception:
+            pass
         return agg
     except Exception:
         return None
