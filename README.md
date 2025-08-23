@@ -5,6 +5,7 @@
 **重點更新**：
 - 支援「**日期區間**」功能（以本地 UTC+8 自然日解析），可精準指定訓練/初始化所用的歷史範圍。
 - 回測可輸出完整績效摘要與交易明細，支援 CSV / JSON 報表。
+- 新增 **訊號匯總器**（aggregator），整合多 horizon 機率並輸出統一的多/空/無決策。
 
 ---
 
@@ -63,6 +64,11 @@ io:
   models_dir: models
   logs_dir: logs
   position_file: resources/current_position.yaml
+
+strategy:
+  enter_threshold: 0.75
+  aggregator_method: "max_weighted"    # or "majority"
+  weight_fn: "sqrt"                    # or "log", "linear"
 
 risk:
   take_profit_ratio: 0.02
@@ -169,6 +175,7 @@ python scripts\backtest_multi.py --cfg csp\configs\strategy.yaml --save-summary 
 - **常用參數**：
   - `--cfg <path>`：指定設定檔。
   - `--delay-sec <int>`（限 `realtime_loop.py`）：輪詢間隔秒數（預設 15 秒）。
+- 內建訊號匯總器：將多 horizon 機率整合為單一 LONG/SHORT/NONE 訊號，可透過 `strategy.enter_threshold`、`strategy.aggregator_method`、`strategy.weight_fn` 調整。
 - **日期區間（初始化 warmup）**：
   - 在初始化歷史（做特徵/狀態建立）時，可用 **環境變數** 限縮歷史區間，不影響之後的即時抓取。
 

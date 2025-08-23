@@ -5,11 +5,12 @@ import json
 import time
 from datetime import datetime, timedelta
 
+import pandas as pd
 import yaml
 from dateutil import tz
 
 from csp.data.fetcher import update_csv_with_latest
-from csp.pipeline.realtime_v2 import run_once as run_model_once
+from csp.strategy.aggregator import get_latest_signal
 from csp.utils.notifier import notify
 from csp.runtime.exit_watchdog import check_exit_once
 
@@ -39,6 +40,7 @@ def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
             continue
         print(f"[REALTIME] {sym} <- {csv_path}")
         stale = False
+        df = None
         if live_cfg.get("enabled"):
             try:
                 df = update_csv_with_latest(sym, csv_path, interval=live_cfg.get("interval", "15m"))
@@ -48,10 +50,29 @@ def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
             except Exception as e:
                 print(f"[WARN] live fetch failed for {sym}: {e}")
                 stale = True
+        if df is None:
+            try:
+                df = pd.read_csv(csv_path)
+                df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+            except Exception as e:
+                print(f"[WARN] load csv failed for {sym}: {e}")
+                df = None
+        last_price = None
+        if df is not None:
+            try:
+                last_price = float(df["close"].iloc[-1])
+            except Exception:
+                pass
         try:
-            res = run_model_once(csv_path, cfg_path)
+            sig = get_latest_signal(sym, cfg)
+            if sig is None:
+                res = {"symbol": sym, "side": "NONE"}
+            else:
+                res = sig
         except Exception as e:
-            res = {"symbol": sym, "side": None, "error": str(e)}
+            res = {"symbol": sym, "side": "NONE", "error": str(e)}
+        if last_price is not None:
+            res["price"] = last_price
         if stale:
             res["warning"] = "STALE DATA"
         results[sym] = res
@@ -62,10 +83,9 @@ def run_once(cfg_path: str, delay_sec: int | None = None) -> dict:
             lines.append(f"{sym}: ERROR {r['error']}")
         else:
             side = r.get("side") or "-"
-            price = r.get("price", float("nan"))
-            pu = r.get("proba_up", float("nan"))
+            score = r.get("score", float("nan"))
             note = " [STALE DATA]" if r.get("warning") else ""
-            lines.append(f"{sym}: {side} | P={price:.2f} | proba_up={pu:.3f}{note}")
+            lines.append(f"{sym}: {side} | score={score:.3f}{note}")
     notify("⏱️ 多幣別即時訊號\n" + "\n".join(lines), cfg.get("notify", {}).get("telegram"))
 
     print(json.dumps(results, ensure_ascii=False, indent=2))
