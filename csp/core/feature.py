@@ -107,5 +107,6 @@ def add_features(
     atr = tr.rolling(atr_window).mean()
     out["atr_percentile"] = _rolling_percentile(atr, atr_percentile_window)
 
-    out = out.dropna().reset_index(drop=True)
+    # Ensure consistent NaN representation so real-time checks can detect them
+    out = out.replace([pd.NA, pd.NaT], float("nan"))
     return out
