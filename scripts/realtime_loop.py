@@ -197,8 +197,9 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         else:
             side = r.get("side") or "-"
             score = r.get("score", float("nan"))
+            reason = r.get("reason", "-")
             note = " [STALE DATA]" if r.get("warning") else ""
-            lines.append(f"{sym}: {side} | score={score:.3f}{note}")
+            lines.append(f"{sym}: {side} | score={score:.3f} | reason={reason}{note}")
     notify("⏱️ 多幣別即時訊號\n" + "\n".join(lines), cfg.get("notify", {}).get("telegram"))
 
     print(json.dumps(results, ensure_ascii=False, indent=2))
