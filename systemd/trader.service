@@ -1,0 +1,13 @@
+[Unit]
+Description=Crypto Strategy Realtime Loop
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/crypto_strategy_project
+ExecStartPre=/bin/sleep 15
+ExecStart=/opt/crypto_strategy_project/run_realtime.sh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -33,7 +33,16 @@ DAYS=360 $PY scripts/train_multi.py --cfg csp/configs/strategy.yaml
 echo "[deploy] backtest optimization (60 days)"
 $PY scripts/feature_optimize.py --cfg csp/configs/strategy.yaml --days 60
 
-# 重啟/觸發
+# 安裝 systemd service/timer
+if [ -d systemd ]; then
+  sudo cp systemd/trader.service /etc/systemd/system/trader.service
+  sudo cp systemd/trader.timer /etc/systemd/system/trader.timer
+  sudo systemctl daemon-reload
+  sudo systemctl enable trader.timer
+  sudo systemctl start trader.timer
+fi
+
+# 重啟/觸發一次性服務
 #sudo -n /usr/bin/systemctl restart trader
 sudo -n /usr/bin/systemctl start trader-once.service
 
