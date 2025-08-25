@@ -43,6 +43,15 @@ def _read_date_args_from_env():
             days = int(days)
         except:
             days = None
+    # 若 END_DATE 過舊（早於現在 1 日以上），忽略並警告
+    if end:
+        try:
+            end_dt = pd.to_datetime(end, utc=True)
+            if (pd.Timestamp.utcnow() - end_dt).total_seconds() > 86400:
+                print(f"[WARN] END_DATE {end} too old; ignoring")
+                end = None
+        except Exception:
+            pass
     return {"start": start, "end": end, "days": days}
 
 def _apply_init_warmup(df: pd.DataFrame, date_args: dict | None):
@@ -88,11 +97,18 @@ def _infer_symbol_from_path(csv_path: str) -> Optional[str]:
     return None
 
 
-def _load_model_bundle(cfg: Dict[str, Any], symbol: str):
+def _load_model_bundle(cfg: Dict[str, Any], symbol: str, debug: bool = False):
+    """Load model components for a symbol. Print diagnostics and allow empty result."""
     mdir = Path(cfg["io"]["models_dir"]) / symbol
+    files_loaded = []
+    print(f"[MODEL] {symbol} dir={mdir}")
     if not mdir.exists():
-        raise FileNotFoundError(f"Model directory not found for {symbol}: {mdir}")
+        print(f"[WARN] model directory not found for {symbol}: {mdir}")
+        return None
 
+    model = None
+    model_type = None
+    model_path = None
     model_path_joblib = mdir / "xgb_h16_sklearn.joblib"
     model_path_json = mdir / "xgb_h16.json"
     scaler_path = mdir / "scaler_h16.joblib"
@@ -103,27 +119,39 @@ def _load_model_bundle(cfg: Dict[str, Any], symbol: str):
         model = joblib.load(model_path_joblib)
         model_type = "sklearn"
         model_path = model_path_joblib
+        files_loaded.append(model_path_joblib.name)
     elif model_path_json.exists():
         bst = xgb.Booster(); bst.load_model(str(model_path_json))
         model = bst
         model_type = "booster"
         model_path = model_path_json
-    else:
-        raise FileNotFoundError(f"No model file found under {mdir}")
+        files_loaded.append(model_path_json.name)
 
-    scaler = joblib.load(scaler_path)
+    if scaler_path.exists():
+        scaler = joblib.load(scaler_path)
+        files_loaded.append(scaler_path.name)
+    else:
+        scaler = None
+
     if feature_path.exists():
         feature_names = json.load(open(feature_path, "r", encoding="utf-8"))
+        files_loaded.append(feature_path.name)
     else:
-        meta = json.load(open(meta_path, "r", encoding="utf-8"))
+        meta = json.load(open(meta_path, "r", encoding="utf-8")) if meta_path.exists() else {}
         feature_names = meta.get("feature_cols", [])
+        if meta_path.exists():
+            files_loaded.append(meta_path.name)
     meta = json.load(open(meta_path, "r", encoding="utf-8")) if meta_path.exists() else {}
+
+    print(f"[MODEL] loaded files: {files_loaded} (count={len(files_loaded)})")
+    if model is None or scaler is None or not feature_names:
+        return None
 
     return {
         "model": model,
         "scaler": scaler,
         "feature_names": feature_names,
-        "model_path": str(model_path),
+        "model_path": str(model_path) if model_path else None,
         "scaler_path": str(scaler_path),
         "model_type": model_type,
         "meta": meta,
@@ -159,6 +187,26 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, debug: bool | None = N
     df15 = load_15m_csv(csv_path)
     df15 = initialize_history(df15)
 
+    # 時序檢查
+    latest_ts = pd.to_datetime(df15["timestamp"].iloc[-1], utc=True)
+    now_utc = pd.Timestamp.utcnow()
+    lag_minutes = (now_utc - latest_ts).total_seconds() / 60.0
+    print(
+        f"[TS] latest_kline_ts UTC={latest_ts.isoformat()} | TW={latest_ts.tz_convert(TW).isoformat()}"
+    )
+    print(
+        f"[TS] now UTC={now_utc.isoformat()} | TW={now_utc.tz_convert(TW).isoformat()} | lag_minutes={lag_minutes:.2f}"
+    )
+    if lag_minutes > 15:
+        return {
+            "symbol": sym,
+            "price": float(df15["close"].iloc[-1]),
+            "proba_up": 0.0,
+            "score": 0.0,
+            "side": "NONE",
+            "reason": "stale_data",
+        }
+
     # live fetch handled externally; df15 already up-to-date
 
     feat_params = get_symbol_features(cfg, sym)
@@ -179,8 +227,38 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, debug: bool | None = N
         atr_window=feat_params["atr_window"],
         atr_percentile_window=feat_params["atr_percentile_window"],
     )
+    feature_cols = feat_params.get("feature_columns")
+    if feature_cols is None:
+        feature_cols = feats.columns.tolist()
+    row = feats[feature_cols].tail(1)
+    if row.isna().any(axis=1).iloc[0]:
+        nan_cols = row.columns[row.isna().any()].tolist()
+        print(f"[WARN] feature NaN columns: {nan_cols}")
+        feats[feature_cols] = feats[feature_cols].ffill()
+        row = feats[feature_cols].tail(1)
+        if row.isna().any(axis=1).iloc[0]:
+            last = feats.iloc[-1]
+            return {
+                "symbol": sym,
+                "price": float(last.get("close", 0.0)),
+                "proba_up": 0.0,
+                "score": 0.0,
+                "side": "NONE",
+                "reason": "feature_nan",
+            }
 
-    bundle = _load_model_bundle(cfg, sym)
+    bundle = _load_model_bundle(cfg, sym, debug=bool(debug))
+    if not bundle:
+        last = feats.iloc[-1]
+        return {
+            "symbol": sym,
+            "price": float(last.get("close", 0.0)),
+            "proba_up": 0.0,
+            "score": 0.0,
+            "side": "NONE",
+            "reason": "no_models_loaded",
+        }
+
     model = bundle["model"]
     scaler = bundle["scaler"]
     feature_cols = bundle["feature_names"]
@@ -194,9 +272,9 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, debug: bool | None = N
         proba_seq = np.clip(model.predict(dmat, output_margin=False), 0.0, 1.0)
 
     last = feats.iloc[-1]
-    proba_up = float(proba_seq[-1])
+    proba_up = float(proba_seq[-1]) if len(proba_seq) else 0.0
     price = float(last["close"])
-    atr_h4 = float(last["atr_h4"])
+    atr_h4 = float(last.get("atr_h4", 0.0))
     ts = last["timestamp"].tz_convert(TW)
 
     long_thr = float(cfg["execution"]["long_prob_threshold"])
@@ -238,8 +316,9 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, debug: bool | None = N
         "symbol": sym,
         "price": price,
         "proba_up": proba_up,
+        "score": proba_up,
         "atr_h4": atr_h4,
-        "side": side,
+        "side": side if side else "NONE",
         "tp": tp,
         "sl": sl,
         "diag_low_var": diag_low_var,

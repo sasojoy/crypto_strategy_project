@@ -195,6 +195,12 @@ python scripts\backtest_multi.py --cfg csp\configs\strategy.yaml --save-summary 
 - **日期區間（初始化 warmup）**：
   - 在初始化歷史（做特徵/狀態建立）時，可用 **環境變數** 限縮歷史區間，不影響之後的即時抓取。
 
+#### 故障排除
+- `NONE | score=0.00 (reason=no_models_loaded)`：找不到模型檔或檔案不完整。
+- `NONE | score=0.00 (reason=feature_nan)`：最新一根特徵含 NaN，修補失敗。
+- `NONE | score=0.00 (reason=stale_data)`：最新 K 線落後目前時間超過 15 分鐘。
+- `NONE | score=0.00 (reason=empty_or_invalid_inputs)`：匯總器收到空或全無效的輸入。
+
 **範例（warmup 僅用 8/1~8/10 的歷史）**
 ```cmd
 set START_DATE=2025-08-01

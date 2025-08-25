@@ -58,16 +58,18 @@ def main():
 
         side_display = r["side"].upper() if r.get("side") else "WAIT"
         price = r.get("price")
-        pu = r.get("proba_up")
+        score = r.get("score", r.get("proba_up", 0.0))
         tp = r.get("tp")
         sl = r.get("sl")
 
         note = " [STALE DATA]" if r.get("warning") else ""
-        base = f"{sym}: {side_display} | P={price:.2f} | proba_up={pu:.3f}{note}"
-        if r.get("side"):
+        base = f"{sym}: {side_display} | P={price:.2f} | score={score:.3f}{note}"
+        if r.get("side") and r["side"] not in ("NONE", None):
             base += f" | TP={tp:.2f} | SL={sl:.2f}"
         if r.get("diag_low_var"):
             base += " [DIAG:LOW VAR]"
+        if r.get("reason"):
+            base += f" (reason={r['reason']})"
         lines.append(base)
 
     msg = "\n".join(lines)

@@ -6,6 +6,9 @@ cd "$APP_DIR"
 # 確保所有權
 chown -R deploy:deploy "$APP_DIR"
 
+# 清除可能殘留的日期限制環境變數
+unset START_DATE END_DATE
+
 # venv
 if [ ! -x .venv/bin/python ]; then
   python3 -m venv .venv
