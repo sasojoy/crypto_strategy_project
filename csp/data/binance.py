@@ -68,5 +68,5 @@ def merge_history_and_live(hist_df: pd.DataFrame, live_df: pd.DataFrame) -> pd.D
     if live_df is None or live_df.empty:
         return hist_df
     df = pd.concat([hist_df, live_df], ignore_index=True)
-    df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
+    df = df.drop_duplicates(subset=["timestamp"], keep="last").sort_values("timestamp").reset_index(drop=True)
     return df

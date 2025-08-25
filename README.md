@@ -198,6 +198,19 @@ python scripts\backtest_multi.py --cfg csp\configs\strategy.yaml --save-summary 
 #### 故障排除
 - `NONE | score=0.00 (reason=no_models_loaded)`：找不到模型檔或檔案不完整。
 - `NONE | score=0.00 (reason=feature_nan)`：最新一根特徵含 NaN，修補失敗。
+
+### systemd 範例
+本專案提供 `systemd/trader.service` 與 `systemd/trader.timer` 兩個範例檔案。
+- `trader.service` 在啟動前會 `ExecStartPre=/bin/sleep 15`，避免過早讀取未收盤的資料，實際執行腳本 `run_realtime.sh`。
+- `trader.timer` 以 `OnCalendar=*:0/15` 每 15 分鐘觸發，並設定 `Persistent=true` 與 `AccuracySec=1s`。
+
+安裝方式：
+```bash
+sudo cp systemd/trader.service /etc/systemd/system/
+sudo cp systemd/trader.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now trader.timer
+```
 - `NONE | score=0.00 (reason=stale_data)`：最新 K 線落後目前時間超過 15 分鐘。
 - `NONE | score=0.00 (reason=empty_or_invalid_inputs)`：匯總器收到空或全無效的輸入。
 

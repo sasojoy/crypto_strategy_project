@@ -92,6 +92,7 @@ def update_csv_with_latest(
     symbol: str,
     csv_path: str,
     interval: str = "15m",
+    now_utc: Optional[pd.Timestamp] = None,
 ) -> pd.DataFrame:
     """Update local CSV with latest closed klines from Binance.
 
@@ -112,7 +113,10 @@ def update_csv_with_latest(
     df = df.sort_values("timestamp").reset_index(drop=True)
 
     interval_td = pd.to_timedelta(interval)
-    last_closed = pd.Timestamp.utcnow().floor(interval_td)
+    if now_utc is None:
+        now_utc = pd.Timestamp.utcnow()
+    now_utc = now_utc.tz_convert("UTC") if now_utc.tzinfo else now_utc.tz_localize("UTC")
+    last_closed = now_utc.floor(interval_td)
 
     last_ts = df["timestamp"].iloc[-1] if not df.empty else None
     if last_ts is None:
@@ -134,9 +138,13 @@ def update_csv_with_latest(
         return df
 
     df = pd.concat([df, new_df], ignore_index=True)
-    df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
+    df = (
+        df.drop_duplicates(subset=["timestamp"], keep="last")
+          .sort_values("timestamp")
+          .reset_index(drop=True)
+    )
 
-    cutoff = pd.Timestamp.utcnow().floor(interval_td)
+    cutoff = last_closed
     df = df[df["timestamp"] < cutoff].reset_index(drop=True)
 
     appended = len(df) - before_len

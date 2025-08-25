@@ -3,6 +3,8 @@ import math, os, json
 import pandas as pd
 from dateutil import tz
 
+from csp.data.fetcher import update_csv_with_latest
+
 
 TZ_TW = tz.gettz("Asia/Taipei")
 
@@ -71,14 +73,31 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
     if not csv_path or not os.path.exists(csv_path):
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_data"}
 
+    now_utc = pd.Timestamp.utcnow()
+    now_utc = now_utc.tz_localize("UTC") if now_utc.tzinfo is None else now_utc.tz_convert("UTC")
+    floor_now = now_utc.floor("15min")
+
+    interval_td = pd.Timedelta("15min")
+    retries = 0
     df = pd.read_csv(csv_path)
     if "timestamp" not in df.columns:
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_timestamp"}
-    ts = pd.to_datetime(df["timestamp"].iloc[-1], utc=True)
-    now_utc = pd.Timestamp.utcnow()
-    lag_minutes = (now_utc - ts).total_seconds() / 60.0
-    print(f"[TS] {symbol} latest_kline_ts UTC={ts.isoformat()} | TW={ts.tz_convert(TZ_TW).isoformat()}")
-    print(f"[TS] {symbol} now UTC={now_utc.isoformat()} | TW={now_utc.tz_convert(TZ_TW).isoformat()} | lag_minutes={lag_minutes:.2f}")
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    ts = df["timestamp"].iloc[-1] if not df.empty else None
+    while ts is not None and (ts + interval_td) < floor_now and retries < 2:
+        df = update_csv_with_latest(symbol, csv_path, interval="15m", now_utc=now_utc)
+        retries += 1
+        ts = df["timestamp"].iloc[-1] if not df.empty else None
+
+    latest_close = ts + interval_td if ts is not None else pd.NaT
+    match = bool(latest_close == floor_now)
+    print(f"[TIME] now_utc={now_utc.isoformat()} floor_now={floor_now.isoformat()} latest_close={latest_close.isoformat() if pd.notna(latest_close) else 'none'} match={match}")
+    print(f"[FETCH] retried={retries}")
+
+    if pd.isna(latest_close) or latest_close < floor_now:
+        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "stale_data_after_refresh"}
+
+    lag_minutes = (now_utc - latest_close).total_seconds() / 60.0
     if lag_minutes > 15:
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "stale_data"}
     if lag_minutes > fresh_min:
@@ -92,26 +111,28 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
         print(f"[DEBUG] model_dir={model_dir} files={files} total={len(files)}")
     meta_path = os.path.join(model_dir, "meta.json")
     if not os.path.exists(meta_path):
+        print("[MODELS] loaded=0")
+        print("[FEATURE] last_row_nan_cols=[]")
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
     meta = json.load(open(meta_path, "r", encoding="utf-8"))
     feat_cols = meta.get("feature_columns") or []
     if not feat_cols:
+        print("[MODELS] loaded=0")
+        print("[FEATURE] last_row_nan_cols=[]")
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
     for c in feat_cols:
         if c not in dff.columns:
+            print("[FEATURE] last_row_nan_cols=[]")
             return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "feature_missing"}
 
     X = dff[feat_cols].tail(1)
-    if X.isna().any(axis=1).iloc[0]:
-        nan_cols = X.columns[X.isna().any()].tolist()
-        if debug:
-            print(f"[WARN] feature NaN columns: {nan_cols}")
-        dff[feat_cols] = dff[feat_cols].ffill()
-        X = dff[feat_cols].tail(1)
-        if X.isna().any(axis=1).iloc[0]:
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "feature_nan"}
+    nan_cols = X.columns[X.isna().any()].tolist()
+    print(f"[FEATURE] last_row_nan_cols={nan_cols}")
+    if nan_cols:
+        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "feature_nan"}
 
     m = MultiThresholdClassifier.load(model_dir)
+    print(f"[MODELS] loaded={len(m.models)}")
     prob_map = m.predict_proba(X)
     th = cfg.get("strategy",{}).get("enter_threshold",0.75)
     method = cfg.get("strategy",{}).get("aggregator_method","max_weighted")
