@@ -6,6 +6,7 @@ from dateutil import tz
 
 from csp.data.fetcher import update_csv_with_latest
 from csp.pipeline.realtime_v2 import run_once
+from csp.strategy.aggregator import sanitize_score
 TZ_TW = tz.gettz("Asia/Taipei")
 from csp.utils.notifier import notify
 from csp.utils.io import load_cfg
@@ -45,6 +46,7 @@ def main():
             res = run_once(csv_path, cfg, debug=args.debug)
         except Exception as e:
             res = {"symbol": sym, "side": None, "error": str(e)}
+        res["score"] = sanitize_score(res.get("score", res.get("proba_up")))
         if stale:
             res["warning"] = "STALE DATA"
         results[sym] = res
@@ -58,7 +60,7 @@ def main():
 
         side_display = r["side"].upper() if r.get("side") else "WAIT"
         price = r.get("price")
-        score = r.get("score", r.get("proba_up", 0.0))
+        score = sanitize_score(r.get("score", r.get("proba_up", 0.0)))
         tp = r.get("tp")
         sl = r.get("sl")
 

@@ -4,28 +4,60 @@ from typing import List
 import pandas as pd
 import requests
 
-def _klines_to_df(data: list) -> pd.DataFrame:
+
+INTERVAL_MIN = 15
+
+
+def _klines_to_df(data: list, interval: str = "15m") -> pd.DataFrame:
     df = pd.DataFrame(
         data,
-        columns=["open_time","open","high","low","close","volume",
-                 "close_time","qav","trades","taker_base","taker_quote","ignore"]
+        columns=[
+            "open_time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "close_time",
+            "qav",
+            "trades",
+            "taker_base",
+            "taker_quote",
+            "ignore",
+        ],
     )
-    df = df[["open_time","open","high","low","close","volume"]].copy()
-    df["timestamp"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
-    for c in ["open","high","low","close","volume"]:
+    df = df[["open_time", "open", "high", "low", "close", "volume"]].copy()
+    # Align timestamp to exact bar close time (open_time + interval)
+    interval_td = pd.to_timedelta(interval)
+    df["timestamp"] = pd.to_datetime(df["open_time"], unit="ms", utc=True) + interval_td
+    for c in ["open", "high", "low", "close", "volume"]:
         df[c] = df[c].astype(float)
-    return df[["timestamp","open","high","low","close","volume"]].sort_values("timestamp").reset_index(drop=True)
+    return (
+        df[["timestamp", "open", "high", "low", "close", "volume"]]
+        .sort_values("timestamp")
+        .reset_index(drop=True)
+    )
 
-def fetch_latest_klines(symbol: str, interval: str = "15m", limit: int = 64,
-                        api_base: str = "https://api.binance.com", timeout: int = 10) -> pd.DataFrame:
+def fetch_latest_klines(
+    symbol: str,
+    interval: str = "15m",
+    limit: int = 64,
+    *,
+    end_time: int | None = None,
+    api_base: str = "https://api.binance.com",
+    timeout: int = 10,
+) -> pd.DataFrame:
+    """Fetch latest klines with optional ``end_time`` (ms)."""
     url = f"{api_base}/api/v3/klines"
     params = {"symbol": symbol, "interval": interval, "limit": int(limit)}
+    if end_time is not None:
+        params["endTime"] = int(end_time)
     r = requests.get(url, params=params, timeout=timeout)
     r.raise_for_status()
     data = r.json()
     if not data:
-        return pd.DataFrame(columns=["timestamp","open","high","low","close","volume"])
-    return _klines_to_df(data)
+        return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+    return _klines_to_df(data, interval=interval)
 
 def fetch_klines_range(symbol: str, interval: str, start_ts_ms: int, end_ts_ms: int,
                        api_base: str = "https://api.binance.com", timeout: int = 10, max_retries: int = 3) -> pd.DataFrame:
@@ -61,8 +93,8 @@ def fetch_klines_range(symbol: str, interval: str, start_ts_ms: int, end_ts_ms: 
         cur = next_open
         time.sleep(0.05)
     if not all_rows:
-        return pd.DataFrame(columns=["timestamp","open","high","low","close","volume"])
-    return _klines_to_df(all_rows)
+        return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+    return _klines_to_df(all_rows, interval=interval)
 
 def merge_history_and_live(hist_df: pd.DataFrame, live_df: pd.DataFrame) -> pd.DataFrame:
     if live_df is None or live_df.empty:

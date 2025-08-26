@@ -76,15 +76,15 @@ def fetch_klines(
         "ignore",
     ]
     df = pd.DataFrame(data, columns=cols)
-    df["timestamp"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
+    interval_td = pd.to_timedelta(interval)
+    df["timestamp"] = pd.to_datetime(df["open_time"], unit="ms", utc=True) + interval_td
     for c in ["open", "high", "low", "close", "volume"]:
         df[c] = df[c].astype(float)
     df = df[["timestamp", "open", "high", "low", "close", "volume"]]
 
     # Drop klines that are not yet closed
-    interval_td = pd.to_timedelta(interval)
     cutoff = pd.Timestamp.utcnow().floor(interval_td)
-    df = df[df["timestamp"] < cutoff]
+    df = df[df["timestamp"] <= cutoff]
     return df.reset_index(drop=True)
 
 
@@ -140,12 +140,12 @@ def update_csv_with_latest(
     df = pd.concat([df, new_df], ignore_index=True)
     df = (
         df.drop_duplicates(subset=["timestamp"], keep="last")
-          .sort_values("timestamp")
-          .reset_index(drop=True)
+        .sort_values("timestamp")
+        .reset_index(drop=True)
     )
 
     cutoff = last_closed
-    df = df[df["timestamp"] < cutoff].reset_index(drop=True)
+    df = df[df["timestamp"] <= cutoff].reset_index(drop=True)
 
     appended = len(df) - before_len
     last_ts2 = df["timestamp"].iloc[-1] if not df.empty else None
