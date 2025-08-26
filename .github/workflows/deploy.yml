@@ -8,49 +8,43 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      # （可選）如需先在 CI 跑測試，保留；不需要可移除。
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10.12'
+    - name: Start ssh-agent and load key
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: |
+          ${{ secrets.SSH_KEY }}
 
-      - name: Install test deps (optional)
-        run: |
-          if [ -f requirements.txt ]; then
-            python -m pip install --upgrade pip
-            pip install -r requirements.txt
-          fi
+    - name: Add host to known_hosts
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Start ssh-agent and load key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: |
-            ${{ secrets.SSH_KEY }}
+    # ✅ 先建立目錄並賦權給部署用帳號（避免 rsync 23）
+    - name: Prepare remote dir
+      run: |
+        ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
+          sudo mkdir -p /opt/crypto_strategy_project && \
+          sudo chown -R ${USER}:${USER} /opt/crypto_strategy_project \
+        "
 
-      - name: Add host to known_hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+    # ✅ rsync 不要 --delete，並排除線上產物
+    - name: Sync files to VM via rsync (safe)
+      run: |
+        rsync -az \
+          --exclude='.git' \
+          --exclude='.github' \
+          --exclude='.venv' \
+          --exclude='models/**' \
+          --exclude='logs/**' \
+          --exclude='resources/*.csv' \
+          -e "ssh -o StrictHostKeyChecking=yes" \
+          ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/crypto_strategy_project/
 
-      - name: Sync files to VM via rsync
-        run: |
-          rsync -az --delete \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.venv' \
-            -e "ssh -o StrictHostKeyChecking=yes" \
-            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/crypto_strategy_project/
-
-      - name: Run remote deploy script
-        run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "bash /opt/crypto_strategy_project/deploy.sh"
-
-      # （可選）如果你使用 systemd timer，部署後立刻跑一輪 smoke test
-      # - name: Trigger one-shot run (timer-based)
-      #   run: |
-      #     ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo systemctl start trader-once.service"
+    # ✅ 用 sudo 跑 deploy.sh，讓 chown 等指令不會因權限失敗
+    - name: Run remote deploy script
+      run: |
+        ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo bash /opt/crypto_strategy_project/deploy.sh"
