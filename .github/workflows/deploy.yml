@@ -63,6 +63,7 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
             sudo systemctl status trader-once.service -l --no-pager || true; \
-            sudo systemctl status trader.timer -l --no-pager || true; \
+            sudo systemctl status trader-once.timer   -l --no-pager || true; \
             sudo journalctl -u trader-once -n 80 --no-pager || true \
           "
+
