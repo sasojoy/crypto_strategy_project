@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from dateutil import tz
 
@@ -24,6 +24,80 @@ TW = tz.gettz("Asia/Taipei")
 
 FRESH_MIN = 5.0  # 資料新鮮度門檻（分鐘）
 
+# --- ADD: live fetch helper (no extra deps needed) ---
+import math
+import pandas as pd
+import urllib.request, urllib.parse, json as _json
+
+BINANCE_BASE = "https://api.binance.com"
+INTERVAL = "15m"
+
+def _binance_klines(symbol: str, interval: str, end_ms: int | None, limit: int = 720):
+    """
+    Public klines; endTime inclusive-ish per Binance semantics.
+    """
+    qs = {"symbol": symbol, "interval": interval, "limit": limit}
+    if end_ms:
+        qs["endTime"] = end_ms
+    url = f"{BINANCE_BASE}/api/v3/klines?{urllib.parse.urlencode(qs)}"
+    with urllib.request.urlopen(url, timeout=15) as r:
+        return _json.loads(r.read().decode("utf-8"))
+
+def ensure_latest_csv(symbol: str, csv_path: str, fresh_min: float = 5.0):
+    """
+    將 csv 補到「現在 floor(15m)」。
+    """
+    try:
+        df_old = pd.read_csv(csv_path)
+    except FileNotFoundError:
+        df_old = pd.DataFrame(columns=["timestamp","open","high","low","close","volume"])
+
+    now_utc = datetime.now(timezone.utc)
+    floor_now = pd.Timestamp(now_utc).floor("15min")
+
+    # 取最後一根
+    if len(df_old):
+        last_ts = pd.to_datetime(df_old["timestamp"], utc=True, errors="coerce").max()
+    else:
+        last_ts = pd.NaT
+
+    # 如果已經到位，就直接返回
+    if pd.notna(last_ts):
+        lag_min = (pd.Timestamp(now_utc, tz="UTC") - last_ts).total_seconds() / 60.0
+        if lag_min <= (15.0 + fresh_min):
+            return False  # no update
+
+    # 以 floor_now 當作 endTime（ms）
+    end_ms = int(floor_now.value // 10**6)
+    # 多抓一點避免斷帶（~30 天 ≈ 2880 根）
+    kl = _binance_klines(symbol, INTERVAL, end_ms=end_ms, limit=2880)
+    if not kl:
+        return False
+
+    # 轉成 DataFrame
+    tmp = pd.DataFrame(kl, columns=[
+        "open_time","open","high","low","close","volume","close_time",
+        "_q","_n","_taker","_taker_vol","_i"
+    ])
+    # Binance 的 open_time/close_time 是 ms；「理論收盤點」= open_time + 15m
+    tmp["open_time"] = pd.to_datetime(tmp["open_time"], unit="ms", utc=True)
+    tmp["timestamp"] = tmp["open_time"] + pd.Timedelta(minutes=15)
+    for col in ("open","high","low","close","volume"):
+        tmp[col] = tmp[col].astype(float)
+
+    cols = ["timestamp","open","high","low","close","volume"]
+    tmp = tmp[cols].copy().sort_values("timestamp")
+
+    # 合併
+    merged = pd.concat([df_old[cols]] if len(df_old) else [], axis=0, ignore_index=True)
+    if len(merged):
+        merged = pd.concat([merged, tmp], ignore_index=True)
+    else:
+        merged = tmp
+    merged = merged.drop_duplicates(subset=["timestamp"], keep="last").sort_values("timestamp")
+
+    merged.to_csv(csv_path, index=False)
+    return True
 
 def process_symbol(symbol: str, cfg: dict):
     sig = get_latest_signal(symbol, cfg, fresh_min=FRESH_MIN)
@@ -57,6 +131,13 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             print(f"[SKIP] {sym}: No CSV path in config")
             continue
         print(f"[REALTIME] {sym} <- {csv_path}")
+        # --- ADD: 先把 CSV 補到最新，再算訊號 ---
+        try:
+            updated = ensure_latest_csv(sym, csv_path, fresh_min=FRESH_MIN)
+            if updated:
+                print(f"[FETCH] {sym}: csv updated to latest 15m close.")
+        except Exception as fe:
+            print(f"[WARN] {sym}: live fetch failed: {fe}")
         try:
             res = process_symbol(sym, cfg)
         except Exception as e:
@@ -143,11 +224,18 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         if "error" in r:
             lines.append(f"{sym}: ERROR {r['error']}")
         else:
-            side = r.get("side") or "-"
-              score = sanitize_score(r.get("score"))
+            side = r.get("side") or "NONE"
+            scr = sanitize_score(r.get("score"))
             reason = r.get("reason", "-")
             note = " [STALE DATA]" if r.get("warning") else ""
-            lines.append(f"{sym}: {side} | score={score:.3f} | reason={reason}{note}")
+            # 嚴禁 NaN 外流
+            try:
+                scr = float(scr)
+                if math.isnan(scr):
+                    scr = 0.0
+            except Exception:
+                scr = 0.0
+            lines.append(f"{sym}: {side} | score={scr:.3f} | reason={reason}{note}")
     notify("⏱️ 多幣別即時訊號\n" + "\n".join(lines), cfg.get("notify", {}).get("telegram"))
 
     print(json.dumps(results, ensure_ascii=False, indent=2))
