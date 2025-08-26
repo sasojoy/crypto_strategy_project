@@ -5,12 +5,9 @@ import json
 import time
 from datetime import datetime, timedelta
 
-import math
-import pandas as pd
 from dateutil import tz
 
-from csp.data.fetcher import update_csv_with_latest
-from csp.strategy.aggregator import get_latest_signal
+from csp.strategy.aggregator import get_latest_signal, sanitize_score
 from csp.strategy.position_sizing import (
     blended_sizing, SizingInput, ExchangeRule, kelly_fraction
 )
@@ -29,18 +26,11 @@ FRESH_MIN = 5.0  # 資料新鮮度門檻（分鐘）
 
 
 def process_symbol(symbol: str, cfg: dict):
-    # 取得最新訊號（內部已處理資料新鮮度與缺漏補齊）
     sig = get_latest_signal(symbol, cfg, fresh_min=FRESH_MIN)
     if not sig:
         notify_guard("signal_unavailable", {"symbol": symbol})
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "signal_unavailable"}
-
-    # 格式化得分，避免 NaN
-    score = 0.0
-    s = sig.get("score")
-    if s is not None and not (isinstance(s, float) and math.isnan(s)):
-        score = float(s)
-    sig["score"] = score
+    sig["score"] = sanitize_score(sig.get("score"))
     return sig
 
 
@@ -59,7 +49,6 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     telegram_conf = cfg.get("notify", {}).get("telegram")
     symbols = cfg.get("symbols", [])
     csv_map = cfg.get("io", {}).get("csv_paths", {})
-    live_cfg = (cfg.get("io", {}) or {}).get("live_fetch", {}) or {}
     results = {}
 
     for sym in symbols:
@@ -68,39 +57,13 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             print(f"[SKIP] {sym}: No CSV path in config")
             continue
         print(f"[REALTIME] {sym} <- {csv_path}")
-        stale = False
-        df = None
-        if live_cfg.get("enabled"):
-            try:
-                df = update_csv_with_latest(sym, csv_path, interval=live_cfg.get("interval", "15m"))
-                last_ts = df["timestamp"].iloc[-1]
-                print(f"  last closed UTC={last_ts.isoformat()} | TW={(last_ts.tz_convert(TW)).isoformat()}")
-                stale = bool(df.attrs.get("stale"))
-            except Exception as e:
-                print(f"[WARN] live fetch failed for {sym}: {e}")
-                stale = True
-        if df is None:
-            try:
-                df = pd.read_csv(csv_path)
-                df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-            except Exception as e:
-                print(f"[WARN] load csv failed for {sym}: {e}")
-                df = None
-        last_price = None
-        if df is not None:
-            try:
-                last_price = float(df["close"].iloc[-1])
-            except Exception:
-                pass
         try:
             res = process_symbol(sym, cfg)
         except Exception as e:
             res = {"symbol": sym, "side": "NONE", "error": str(e)}
         sig = res if res.get("side") in ("LONG", "SHORT") else None
-        if last_price is not None:
-            res["price"] = last_price
-        if sig and last_price is not None:
-            notify_signal(sym, sig, last_price, telegram_conf)
+        if res.get("price") is not None and sig:
+            notify_signal(sym, sig, float(res.get("price")), telegram_conf)
         # --- position sizing ---
         if res.get("side") in ("LONG", "SHORT"):
             ps_cfg = cfg.get("position_sizing", {})
@@ -173,9 +136,6 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
                     },
                     telegram_conf,
                 )
-        if stale:
-            res["warning"] = "STALE DATA"
-            notify_guard("data_lag", {"symbol": sym}, telegram_conf)
         results[sym] = res
 
     lines = []
@@ -184,7 +144,7 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             lines.append(f"{sym}: ERROR {r['error']}")
         else:
             side = r.get("side") or "-"
-            score = r.get("score", float("nan"))
+              score = sanitize_score(r.get("score"))
             reason = r.get("reason", "-")
             note = " [STALE DATA]" if r.get("warning") else ""
             lines.append(f"{sym}: {side} | score={score:.3f} | reason={reason}{note}")
