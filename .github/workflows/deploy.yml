@@ -5,46 +5,64 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Start ssh-agent and load key
-      uses: webfactory/ssh-agent@v0.9.0
-      with:
-        ssh-private-key: |
-          ${{ secrets.SSH_KEY }}
+      - name: Start ssh-agent and load key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.SSH_KEY }}
 
-    - name: Add host to known_hosts
-      run: |
-        mkdir -p ~/.ssh
-        ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-    # ✅ 先建立目錄並賦權給部署用帳號（避免 rsync 23）
-    - name: Prepare remote dir
-      run: |
-        ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
-          sudo mkdir -p /opt/crypto_strategy_project && \
-          sudo chown -R ${USER}:${USER} /opt/crypto_strategy_project \
-        "
+      # 需先在 VM 設好：/etc/sudoers.d/deploy 允許必要指令 NOPASSWD
+      - name: Prepare remote dir
+        run: |
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
+            sudo mkdir -p /opt/crypto_strategy_project && \
+            sudo chown -R $USER:$USER /opt/crypto_strategy_project \
+          "
 
-    # ✅ rsync 不要 --delete，並排除線上產物
-    - name: Sync files to VM via rsync (safe)
-      run: |
-        rsync -az \
-          --exclude='.git' \
-          --exclude='.github' \
-          --exclude='.venv' \
-          --exclude='models/**' \
-          --exclude='logs/**' \
-          --exclude='resources/*.csv' \
-          -e "ssh -o StrictHostKeyChecking=yes" \
-          ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/crypto_strategy_project/
+      # 不要 --delete，並排除線上產物
+      - name: Sync files via rsync (safe)
+        run: |
+          rsync -az \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.venv' \
+            --exclude='models/**' \
+            --exclude='logs/**' \
+            --exclude='resources/*.csv' \
+            -e 'ssh -o StrictHostKeyChecking=yes' \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/crypto_strategy_project/
 
-    # ✅ 用 sudo 跑 deploy.sh，讓 chown 等指令不會因權限失敗
-    - name: Run remote deploy script
-      run: |
-        ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo bash /opt/crypto_strategy_project/deploy.sh"
+      # 用 sudo 執行 deploy.sh（免密碼）
+      - name: Run remote deploy script
+        run: |
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
+            sudo bash /opt/crypto_strategy_project/deploy.sh \
+          "
+
+      # 簡單驗證：看服務狀態與最近日誌
+      - name: Verify services
+        continue-on-error: true
+        run: |
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
+            sudo systemctl status trader-once.service -l --no-pager || true; \
+            sudo systemctl status trader.timer -l --no-pager || true; \
+            sudo journalctl -u trader-once -n 80 --no-pager || true \
+          "
