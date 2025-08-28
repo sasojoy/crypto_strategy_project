@@ -302,6 +302,23 @@ m = MultiThresholdClassifier.load("models/BTCUSDT/cls_multi")
 probs = m.predict_proba(df_features.tail(1))
 ```
 
+## 🔍 CI Debugging with Diagnostic Logs
+
+To investigate why signals may show `NONE | score=nan`, the CI workflow now includes a step that runs:
+
+```bash
+python scripts/predict_and_notify.py --cfg csp/configs/strategy.yaml
+```
+
+During CI runs, you can check the GitHub Actions logs for lines starting with `[DIAG]`, which provide:
+
+- Feature NaN counts and values of the last row
+- Model type and availability of `predict_proba`
+- Probability outputs from the model
+- Detailed reason if `score=nan` (e.g., missing features)
+
+These logs are for debugging only and do not affect trading logic.
+
 
 ---
 
