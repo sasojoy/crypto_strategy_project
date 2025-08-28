@@ -33,8 +33,8 @@ jobs:
       - name: Prepare remote dir
         run: |
           ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
-            sudo mkdir -p /opt/crypto_strategy_project && \
-            sudo chown -R $USER:$USER /opt/crypto_strategy_project \
+            sudo -n mkdir -p /opt/crypto_strategy_project && \
+            sudo -n chown -R $USER:$USER /opt/crypto_strategy_project \
           "
 
       # 不要 --delete，並排除線上產物
@@ -54,7 +54,7 @@ jobs:
       - name: Run remote deploy script
         run: |
           ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
-            sudo bash /opt/crypto_strategy_project/deploy.sh \
+            sudo -n bash /opt/crypto_strategy_project/deploy.sh \
           "
 
       # 簡單驗證：看服務狀態與最近日誌
@@ -62,8 +62,8 @@ jobs:
         continue-on-error: true
         run: |
           ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
-            sudo systemctl status trader-once.service -l --no-pager || true; \
-            sudo systemctl status trader-once.timer   -l --no-pager || true; \
-            sudo journalctl -u trader-once -n 80 --no-pager || true \
+            sudo -n systemctl status trader-once.service -l --no-pager || true; \
+            sudo -n systemctl status trader-once.timer   -l --no-pager || true; \
+            sudo -n journalctl -u trader-once -n 80 --no-pager || true \
           "
 
