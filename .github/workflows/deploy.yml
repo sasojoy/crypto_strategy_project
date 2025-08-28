@@ -34,7 +34,7 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
             sudo -n mkdir -p /opt/crypto_strategy_project && \
-            sudo -n chown -R $USER:$USER /opt/crypto_strategy_project \
+            sudo -n chown -R deploy:deploy /opt/crypto_strategy_project \
           "
 
       # 不要 --delete，並排除線上產物
