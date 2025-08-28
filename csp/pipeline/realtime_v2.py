@@ -262,7 +262,18 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, debug: bool | None = N
     model = bundle["model"]
     scaler = bundle["scaler"]
     feature_cols = bundle["feature_names"]
-    X = feats[feature_cols].values
+    X = feats[feature_cols]
+    print(
+        f"[DIAG] X last row finite? {np.isfinite(X.iloc[-1].fillna(0)).all()} "
+        f"nan_count={X.iloc[-1].isna().sum()}"
+    )
+    print(f"[DIAG] X last row values={X.iloc[-1].to_dict()}")
+    print(f"[DIAG] model={type(model)}, has_proba={hasattr(model, 'predict_proba')}")
+    try:
+        _diag_proba = model.predict_proba(X.iloc[[-1]])[0]
+        print(f"[DIAG] proba={_diag_proba}")
+    except Exception as e:
+        print(f"[DIAG] predict_proba failed: {e}")
     Xs = scaler.transform(X)
 
     if bundle["model_type"] == "sklearn":
@@ -322,4 +333,5 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, debug: bool | None = N
         "tp": tp,
         "sl": sl,
         "diag_low_var": diag_low_var,
+        "diag_X_last": X.iloc[-1].to_dict(),
     }
