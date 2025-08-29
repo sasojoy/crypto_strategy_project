@@ -1,17 +1,15 @@
 import os, json, math, argparse
 import pandas as pd
-from datetime import datetime, timezone
+from datetime import datetime
 import pytz
+
+from csp.utils.tz import ensure_utc_ts
 
 
 def _fmt_ts(ts_utc):
     tz = pytz.timezone("Asia/Taipei")
-    ts = pd.Timestamp(ts_utc)
-    if ts.tzinfo is None:
-        ts = ts.tz_localize(timezone.utc)
-    else:
-        ts = ts.tz_convert(timezone.utc)
-    return ts.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
+    ts = ensure_utc_ts(ts_utc)
+    return ts.tz_convert(tz).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def main():

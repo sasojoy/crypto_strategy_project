@@ -102,6 +102,11 @@ realtime:
 - 以 15 分鐘 K 線為主，欄位需含 `timestamp`（可被 `pandas.to_datetime(..., utc=True)` 解析）、`open/high/low/close/volume` 等。
 - 建議資料時間軸無重複且已排序。
 
+### Timezones
+- 整個流程（訓練 / 回測 / 即時）內部一律使用 **UTC**。
+- 讀取 CSV 時會以 `utc=True` 解析時間戳並透過 `ensure_utc_index` 設成 UTC index。
+- bar 對齊與 `now` 取得皆以 UTC 計算；如需顯示本地時間僅在最後轉換（例如 `Asia/Taipei`）。
+
 ---
 
 ## 快速開始

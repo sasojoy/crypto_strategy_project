@@ -19,6 +19,8 @@ import xgboost as xgb
 import numpy as np
 from dateutil import tz
 
+from csp.utils.tz import ensure_utc_index, ensure_utc_ts, now_utc as _now_utc
+
 from csp.data.loader import load_15m_csv
 from csp.features.h16 import build_features_15m_4h
 from csp.core.feature import add_features
@@ -176,7 +178,7 @@ def _decide_side(proba_up: float, long_thr: float, short_thr: float) -> Optional
     return None
 
 
-def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, debug: bool | None = None) -> Dict[str, Any]:
+def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | None = None, debug: bool | None = None) -> Dict[str, Any]:
     """Load latest data, run model inference and return trading signal."""
     cfg = load_cfg(cfg)
     assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
@@ -184,18 +186,23 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, debug: bool | None = N
 
     log = get_logger("realtime", cfg.get("io", {}).get("logs_dir", "logs"))
 
-    df15 = load_15m_csv(csv_path)
+    if df is None:
+        df15 = load_15m_csv(csv_path)
+    else:
+        df15 = ensure_utc_index(df)
+        print(f"[DIAG] df.index.tz={df15.index.tz}, head_ts={df15.index[:3].tolist()}")
+    assert str(df15.index.tz) == "UTC", "[DIAG] index not UTC"
     df15 = initialize_history(df15)
 
     # 時序檢查
-    latest_ts = pd.to_datetime(df15["timestamp"].iloc[-1], utc=True)
-    now_utc = pd.Timestamp.utcnow()
-    lag_minutes = (now_utc - latest_ts).total_seconds() / 60.0
+    latest_ts = ensure_utc_ts(df15.index[-1])
+    now_ts = _now_utc()
+    lag_minutes = (now_ts - latest_ts).total_seconds() / 60.0
     print(
         f"[TS] latest_kline_ts UTC={latest_ts.isoformat()} | TW={latest_ts.tz_convert(TW).isoformat()}"
     )
     print(
-        f"[TS] now UTC={now_utc.isoformat()} | TW={now_utc.tz_convert(TW).isoformat()} | lag_minutes={lag_minutes:.2f}"
+        f"[TS] now UTC={now_ts.isoformat()} | TW={now_ts.tz_convert(TW).isoformat()} | lag_minutes={lag_minutes:.2f}"
     )
     if lag_minutes > 15:
         return {

@@ -3,6 +3,8 @@ from __future__ import annotations
 import pandas as pd
 from pathlib import Path
 
+from csp.utils.tz import ensure_utc_index
+
 def _pick_timestamp_col(df: pd.DataFrame) -> str:
     # 常見欄位別名
     candidates = ["timestamp", "open_time", "time", "date", "datetime"]
@@ -54,8 +56,12 @@ def load_15m_csv(path: str | Path) -> pd.DataFrame:
     if missing:
         raise ValueError(f"CSV 缺少必要欄位：{missing}（至少需要 open/high/low/close）")
 
-    # 排序並重置索引
-    df = df.sort_values("timestamp").reset_index(drop=True)
-    # 只保留必要欄位（若 volume 沒有也無妨）
-    keep = ["timestamp", "open", "high", "low", "close"] + (["volume"] if "volume" in df.columns else [])
-    return df[keep]
+    # 排序並確保 UTC index
+    cols = ["timestamp", "open", "high", "low", "close"]
+    if "volume" in df.columns:
+        cols.append("volume")
+    df = df[cols]
+    df = ensure_utc_index(df, ts_col="timestamp")
+    print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
+    assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
+    return df
