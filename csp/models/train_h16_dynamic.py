@@ -12,6 +12,7 @@ from typing import Union, Tuple, Optional, Dict
 
 import pandas as pd
 from csp.utils.io import load_cfg
+from csp.utils.tz import ensure_utc_index
 
 try:
     from csp.utils.dates import resolve_time_range_like, slice_by_utc
@@ -31,7 +32,6 @@ def _read_csv_smart(path: Union[str, Path]) -> pd.DataFrame:
     假設檔案至少有 ['timestamp', 'open', 'high', 'low', 'close'] 或類似欄位。
     """
     df = pd.read_csv(path)
-    # 嘗試找 timestamp 欄位名稱
     ts_candidates = ["timestamp", "time", "open_time", "datetime"]
     ts_col = None
     for c in ts_candidates:
@@ -39,24 +39,17 @@ def _read_csv_smart(path: Union[str, Path]) -> pd.DataFrame:
             ts_col = c
             break
     if ts_col is None:
-        # 兜底：若 index 是時間字串也嘗試 parse
-        # 若找不到就讓後續報錯，幫助你定位實際欄位名
         if df.index.name:
             try:
                 df.index = pd.to_datetime(df.index, utc=True)
-                return df
+                return ensure_utc_index(df, ts_col=None)
             except Exception:
                 pass
         raise ValueError(f"找不到 timestamp 欄位（嘗試過 {ts_candidates}）。請確認 CSV 欄位。")
 
-    # 轉成 UTC 時間
-    df[ts_col] = pd.to_datetime(df[ts_col], utc=True, errors="coerce")
-    if df[ts_col].isna().all():
-        raise ValueError(f"timestamp 欄位 '{ts_col}' 解析失敗，請確認格式。")
-    # 設為 index（不破壞原欄位也可以，但後續流程假設能用 index 篩選）
-    df = df.set_index(ts_col)
-    # 排序 & 去重（以防資料混亂）
-    df = df[~df.index.duplicated(keep="last")].sort_index()
+    df = ensure_utc_index(df, ts_col=ts_col)
+    print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
+    assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     return df
 
 # === 日期參數 ===

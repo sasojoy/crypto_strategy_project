@@ -15,6 +15,7 @@ import requests
 from csp.backtesting.backtest_v2 import run_backtest_for_symbol
 from csp.metrics.report import summarize
 from csp.utils.io import load_cfg
+from csp.utils.tz import ensure_utc_ts
 
 BINANCE_BASE = "https://api.binance.com"
 
@@ -107,8 +108,7 @@ def append_missing_15m(csv_path: str, symbol: str, end_utc: datetime) -> None:
 def slice_by_days(csv_path: str, days: int, end_utc: datetime) -> Tuple[pd.Timestamp, pd.Timestamp]:
     end_ts = pd.Timestamp(end_utc)
     start_ts = end_ts - pd.Timedelta(days=days)
-    return (start_ts.tz_convert("UTC") if start_ts.tz is not None else start_ts.tz_localize("UTC"),
-            end_ts.tz_convert("UTC") if end_ts.tz is not None else end_ts.tz_localize("UTC"))
+    return (ensure_utc_ts(start_ts), ensure_utc_ts(end_ts))
 
 def main():
     ap = argparse.ArgumentParser()

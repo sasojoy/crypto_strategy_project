@@ -6,6 +6,7 @@ from dateutil import tz
 from pathlib import Path
 import numpy as np
 from csp.data.binance import fetch_klines_range
+from csp.utils.tz import ensure_utc_index, ensure_utc_ts, now_utc as _now_utc, floor_to
 
 
 TZ_TW = tz.gettz("Asia/Taipei")
@@ -100,24 +101,19 @@ def read_or_fetch_latest(
     limit: int = 210,
 ):
     interval_td = pd.to_timedelta(interval)
-    if now_utc is None:
-        now_utc = pd.Timestamp.utcnow().tz_localize("UTC")
-    else:
-        now_utc = now_utc.tz_convert("UTC") if now_utc.tzinfo else now_utc.tz_localize("UTC")
-    floor_now = now_utc.floor(interval_td)
+    now_ts = _now_utc() if now_utc is None else ensure_utc_ts(now_utc)
+    floor_now = floor_to(now_ts, interval)
 
     path = Path(csv_path)
     if path.exists():
         df = pd.read_csv(path)
-        if "timestamp" in df.columns:
-            df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
-        else:
-            df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
     else:
         df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+    df = ensure_utc_index(df, ts_col="timestamp")
+    print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
+    assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
-    df = df.sort_values("timestamp").reset_index(drop=True)
-    latest_close = df["timestamp"].iloc[-1] if not df.empty else pd.NaT
+    latest_close = df.index[-1] if not df.empty else pd.NaT
     latest_open = latest_close - interval_td if pd.notna(latest_close) else pd.NaT
     bar_close_exact = latest_close
     match = bool(bar_close_exact == floor_now)
@@ -134,21 +130,17 @@ def read_or_fetch_latest(
             int(start_time.timestamp() * 1000),
             int(end_time.timestamp() * 1000),
         )
-        df = pd.concat([df, new_df], ignore_index=True)
-        df = (
-            df.drop_duplicates(subset=["timestamp"], keep="last")
-            .sort_values("timestamp")
-            .reset_index(drop=True)
-        )
-        df.to_csv(path, index=False)
-        latest_close = df["timestamp"].iloc[-1] if not df.empty else pd.NaT
+        df = pd.concat([df, new_df])
+        df = df[~df.index.duplicated(keep="last")].sort_index()
+        df.reset_index().to_csv(path, index=False)
+        latest_close = df.index[-1] if not df.empty else pd.NaT
         latest_open = latest_close - interval_td if pd.notna(latest_close) else pd.NaT
         bar_close_exact = latest_close
         match = bool(bar_close_exact == floor_now)
         is_stale = pd.isna(bar_close_exact) or bar_close_exact < floor_now
 
     print(
-        f"[TIME] now_utc={now_utc.isoformat()} floor_now={floor_now.isoformat()} "
+        f"[TIME] now_utc={now_ts.isoformat()} floor_now={floor_now.isoformat()} "
         f"latest_open={latest_open.isoformat() if pd.notna(latest_open) else 'none'} "
         f"latest_close={latest_close.isoformat() if pd.notna(latest_close) else 'none'} "
         f"bar_close_exact={bar_close_exact.isoformat() if pd.notna(bar_close_exact) else 'none'} "
@@ -179,8 +171,8 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
             "reason": "stale_data_after_refresh",
         }
 
-    now_utc = pd.Timestamp.utcnow().tz_localize("UTC")
-    lag_minutes = (now_utc - bar_close_exact).total_seconds() / 60.0
+    now_ts = _now_utc()
+    lag_minutes = (now_ts - bar_close_exact).total_seconds() / 60.0
     if lag_minutes > 15:
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "stale_data"}
     if lag_minutes > fresh_min:
@@ -226,5 +218,5 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
     price = float(df["close"].iloc[-1]) if not df.empty else 0.0
     sig["price"] = price
     sig["symbol"] = symbol
-    sig["ts"] = pd.Timestamp.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    sig["ts"] = _now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
     return sig

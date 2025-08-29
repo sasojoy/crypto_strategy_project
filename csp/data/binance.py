@@ -4,6 +4,8 @@ from typing import List
 import pandas as pd
 import requests
 
+from csp.utils.tz import ensure_utc_index
+
 
 INTERVAL_MIN = 15
 
@@ -32,11 +34,11 @@ def _klines_to_df(data: list, interval: str = "15m") -> pd.DataFrame:
     df["timestamp"] = pd.to_datetime(df["open_time"], unit="ms", utc=True) + interval_td
     for c in ["open", "high", "low", "close", "volume"]:
         df[c] = df[c].astype(float)
-    return (
-        df[["timestamp", "open", "high", "low", "close", "volume"]]
-        .sort_values("timestamp")
-        .reset_index(drop=True)
-    )
+    df = df[["timestamp", "open", "high", "low", "close", "volume"]]
+    df = ensure_utc_index(df, ts_col="timestamp")
+    print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
+    assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
+    return df
 
 def fetch_latest_klines(
     symbol: str,
@@ -56,7 +58,7 @@ def fetch_latest_klines(
     r.raise_for_status()
     data = r.json()
     if not data:
-        return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"]).set_index(pd.DatetimeIndex([], tz="UTC"))
     return _klines_to_df(data, interval=interval)
 
 def fetch_klines_range(symbol: str, interval: str, start_ts_ms: int, end_ts_ms: int,
@@ -93,12 +95,12 @@ def fetch_klines_range(symbol: str, interval: str, start_ts_ms: int, end_ts_ms: 
         cur = next_open
         time.sleep(0.05)
     if not all_rows:
-        return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"]).set_index(pd.DatetimeIndex([], tz="UTC"))
     return _klines_to_df(all_rows, interval=interval)
 
 def merge_history_and_live(hist_df: pd.DataFrame, live_df: pd.DataFrame) -> pd.DataFrame:
     if live_df is None or live_df.empty:
         return hist_df
-    df = pd.concat([hist_df, live_df], ignore_index=True)
-    df = df.drop_duplicates(subset=["timestamp"], keep="last").sort_values("timestamp").reset_index(drop=True)
+    df = pd.concat([hist_df, live_df])
+    df = df[~df.index.duplicated(keep="last")].sort_index()
     return df

@@ -8,6 +8,8 @@ from typing import Optional
 import pandas as pd
 import requests
 
+from csp.utils.tz import ensure_utc_index, ensure_utc_ts, now_utc as _now_utc, floor_to
+
 
 def fetch_klines(
     symbol: str,
@@ -82,10 +84,13 @@ def fetch_klines(
         df[c] = df[c].astype(float)
     df = df[["timestamp", "open", "high", "low", "close", "volume"]]
 
-    # Drop klines that are not yet closed
-    cutoff = pd.Timestamp.utcnow().floor(interval_td)
-    df = df[df["timestamp"] <= cutoff]
-    return df.reset_index(drop=True)
+    df = ensure_utc_index(df, ts_col="timestamp")
+    print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
+    assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
+
+    cutoff = floor_to(_now_utc(), interval)
+    df = df.loc[df.index <= cutoff]
+    return df
 
 
 def update_csv_with_latest(
@@ -105,23 +110,20 @@ def update_csv_with_latest(
     path = Path(csv_path)
     if path.exists():
         df = pd.read_csv(path)
-        if "timestamp" in df.columns:
-            df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     else:
         df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
-
-    df = df.sort_values("timestamp").reset_index(drop=True)
+    df = ensure_utc_index(df, ts_col="timestamp")
+    print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
+    assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
     interval_td = pd.to_timedelta(interval)
-    if now_utc is None:
-        now_utc = pd.Timestamp.utcnow()
-    now_utc = now_utc.tz_convert("UTC") if now_utc.tzinfo else now_utc.tz_localize("UTC")
-    last_closed = now_utc.floor(interval_td)
+    now_ts = _now_utc() if now_utc is None else ensure_utc_ts(now_utc)
+    last_closed = floor_to(now_ts, interval)
 
-    last_ts = df["timestamp"].iloc[-1] if not df.empty else None
+    last_ts = df.index[-1] if not df.empty else None
     if last_ts is None:
         days = int(os.getenv("DAYS", 30))
-        start_dt = (last_closed - pd.Timedelta(days=days)).floor(interval_td)
+        start_dt = floor_to(last_closed - pd.Timedelta(days=days), interval)
     else:
         start_dt = last_ts + interval_td
     start_ts = int(start_dt.timestamp() * 1000)
@@ -137,24 +139,19 @@ def update_csv_with_latest(
         df.attrs["stale"] = True
         return df
 
-    df = pd.concat([df, new_df], ignore_index=True)
-    df = (
-        df.drop_duplicates(subset=["timestamp"], keep="last")
-        .sort_values("timestamp")
-        .reset_index(drop=True)
-    )
+    df = pd.concat([df, new_df])
+    df = df[~df.index.duplicated(keep="last")].sort_index()
 
     cutoff = last_closed
-    df = df[df["timestamp"] <= cutoff].reset_index(drop=True)
+    df = df.loc[df.index <= cutoff]
 
     appended = len(df) - before_len
-    last_ts2 = df["timestamp"].iloc[-1] if not df.empty else None
+    last_ts2 = df.index[-1] if not df.empty else None
     last_str = last_ts2.isoformat() if last_ts2 is not None else "none"
     print(f"[FETCH] {symbol} need={need} appended={appended} last_ts={last_str}")
 
     tmp = path.with_suffix(path.suffix + ".tmp")
-    df.to_csv(tmp, index=False)
+    df.reset_index().to_csv(tmp, index=False)
     os.replace(tmp, path)
-    # gentle rate limit
     time.sleep(0.25)
     return df

@@ -8,6 +8,7 @@ import pandas as pd
 from csp.pipeline.realtime_v2 import run_once
 from csp.utils.notifier import notify as base_notify
 from csp.utils.io import load_cfg
+from csp.utils.tz import ensure_utc_index
 
 
 def notify(message, telegram_cfg, *, score=None, x_last=None):
@@ -32,7 +33,13 @@ def main():
         csv_path = next(iter(csv_paths.values()), None)
         if not csv_path:
             raise ValueError("--csv not provided and cfg.io.csv_paths empty")
-    res = run_once(csv_path, cfg, debug=args.debug)
+
+    df = pd.read_csv(csv_path)
+    df = ensure_utc_index(df, ts_col="timestamp")
+    print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
+    assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
+
+    res = run_once(csv_path, cfg, df=df, debug=args.debug)
 
     if "error" in res:
         line = f"{res.get('symbol', '?')}: ERROR {res['error']}"

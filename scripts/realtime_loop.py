@@ -19,6 +19,7 @@ from csp.utils.notifier import (
 )
 from csp.runtime.exit_watchdog import check_exit_once
 from csp.utils.io import load_cfg
+from csp.utils.tz import ensure_utc_index, ensure_utc_ts, now_utc as _now_utc, floor_to
 
 TW = tz.gettz("Asia/Taipei")
 
@@ -51,21 +52,19 @@ def ensure_latest_csv(symbol: str, csv_path: str, fresh_min: float = 5.0):
         df_old = pd.read_csv(csv_path)
     except FileNotFoundError:
         df_old = pd.DataFrame(columns=["timestamp","open","high","low","close","volume"])
+    df_old = ensure_utc_index(df_old, ts_col="timestamp")
+    print(f"[DIAG] df.index.tz={df_old.index.tz}, head_ts={df_old.index[:3].tolist()}")
+    assert str(df_old.index.tz) == "UTC", "[DIAG] index not UTC"
 
-    now_utc = datetime.now(timezone.utc)
-    floor_now = pd.Timestamp(now_utc).floor("15min")
+    now_ts = _now_utc()
+    floor_now = floor_to(now_ts, "15min")
 
-    # 取最後一根
-    if len(df_old):
-        last_ts = pd.to_datetime(df_old["timestamp"], utc=True, errors="coerce").max()
-    else:
-        last_ts = pd.NaT
+    last_ts = df_old.index.max() if len(df_old) else pd.NaT
 
-    # 如果已經到位，就直接返回
     if pd.notna(last_ts):
-        lag_min = (pd.Timestamp(now_utc, tz="UTC") - last_ts).total_seconds() / 60.0
+        lag_min = (now_ts - last_ts).total_seconds() / 60.0
         if lag_min <= (15.0 + fresh_min):
-            return False  # no update
+            return False
 
     # 以 floor_now 當作 endTime（ms）
     end_ms = int(floor_now.value // 10**6)
@@ -85,18 +84,13 @@ def ensure_latest_csv(symbol: str, csv_path: str, fresh_min: float = 5.0):
     for col in ("open","high","low","close","volume"):
         tmp[col] = tmp[col].astype(float)
 
-    cols = ["timestamp","open","high","low","close","volume"]
-    tmp = tmp[cols].copy().sort_values("timestamp")
+    tmp = tmp[["timestamp","open","high","low","close","volume"]]
+    tmp = ensure_utc_index(tmp, ts_col="timestamp")
 
-    # 合併
-    merged = pd.concat([df_old[cols]] if len(df_old) else [], axis=0, ignore_index=True)
-    if len(merged):
-        merged = pd.concat([merged, tmp], ignore_index=True)
-    else:
-        merged = tmp
-    merged = merged.drop_duplicates(subset=["timestamp"], keep="last").sort_values("timestamp")
+    merged = pd.concat([df_old, tmp])
+    merged = merged[~merged.index.duplicated(keep="last")].sort_index()
 
-    merged.to_csv(csv_path, index=False)
+    merged.reset_index().to_csv(csv_path, index=False)
     return True
 
 def process_symbol(symbol: str, cfg: dict):

@@ -9,12 +9,14 @@ from csp.data.labeling import make_labels
 from csp.models.classifier_multi import MultiThresholdClassifier
 from csp.utils.config import get_symbol_features
 from csp.utils.io import load_cfg
+from csp.utils.tz import ensure_utc_index
 
 
 def load_csv(csv_path: str, days: int | None = None) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-    df = df.set_index("timestamp").sort_index()
+    df = ensure_utc_index(df, ts_col="timestamp")
+    print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
+    assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     if days is not None:
         limit = days * 24 * 60 // 15
         df = df.iloc[-limit:]
