@@ -1,6 +1,7 @@
 from __future__ import annotations
 import argparse
 import json
+import traceback
 
 import numpy as np
 import pandas as pd
@@ -46,7 +47,14 @@ def main():
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
-    res = run_once(csv_path, cfg, df=df, debug=args.debug)
+    symbol = (cfg.get("symbols") or ["?"])[0]
+    try:
+        res = run_once(csv_path, cfg, df=df, debug=args.debug)
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(f"[ERR][{symbol}] {repr(e)}")
+        print(f"[ERR][{symbol}] traceback:\n{tb}")
+        res = {"symbol": symbol, "error": str(e)}
 
     if "error" in res:
         line = f"{res.get('symbol', '?')}: ERROR {res['error']}"

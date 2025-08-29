@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 
 from dateutil import tz
@@ -140,6 +141,9 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         try:
             res = process_symbol(sym, cfg)
         except Exception as e:
+            tb = traceback.format_exc()
+            print(f"[ERR][{sym}] {repr(e)}")
+            print(f"[ERR][{sym}] traceback:\n{tb}")
             res = {"symbol": sym, "side": "NONE", "error": str(e)}
         sig = res if res.get("side") in ("LONG", "SHORT") else None
         if res.get("price") is not None and sig:
