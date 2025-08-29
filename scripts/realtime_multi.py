@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import traceback
 from dateutil import tz
 
 from csp.data.fetcher import update_csv_with_latest
@@ -45,6 +46,9 @@ def main():
             # run_once 會自動挑選 models/<SYMBOL>/ 或全域 models/
             res = run_once(csv_path, cfg, debug=args.debug)
         except Exception as e:
+            tb = traceback.format_exc()
+            print(f"[ERR][{sym}] {repr(e)}")
+            print(f"[ERR][{sym}] traceback:\n{tb}")
             res = {"symbol": sym, "side": None, "error": str(e)}
         res["score"] = sanitize_score(res.get("score", res.get("proba_up")))
         if stale:
