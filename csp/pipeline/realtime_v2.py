@@ -19,7 +19,12 @@ import xgboost as xgb
 import numpy as np
 from dateutil import tz
 
-from csp.utils.tz import ensure_utc_index, ensure_utc_ts, now_utc as _now_utc
+from csp.utils.tz_safe import (
+    normalize_df_to_utc_index,
+    safe_ts_to_utc,
+    now_utc,
+    floor_utc,
+)
 
 from csp.data.loader import load_15m_csv
 from csp.features.h16 import build_features_15m_4h
@@ -189,14 +194,14 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
     if df is None:
         df15 = load_15m_csv(csv_path)
     else:
-        df15 = ensure_utc_index(df)
+        df15 = normalize_df_to_utc_index(df)
         print(f"[DIAG] df.index.tz={df15.index.tz}, head_ts={df15.index[:3].tolist()}")
     assert str(df15.index.tz) == "UTC", "[DIAG] index not UTC"
     df15 = initialize_history(df15)
 
     # 時序檢查
-    latest_ts = ensure_utc_ts(df15.index[-1])
-    now_ts = _now_utc()
+    latest_ts = safe_ts_to_utc(df15.index[-1])
+    now_ts = now_utc()
     lag_minutes = (now_ts - latest_ts).total_seconds() / 60.0
     print(
         f"[TS] latest_kline_ts UTC={latest_ts.isoformat()} | TW={latest_ts.tz_convert(TW).isoformat()}"

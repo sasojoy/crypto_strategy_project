@@ -6,7 +6,12 @@ from dateutil import tz
 from pathlib import Path
 import numpy as np
 from csp.data.binance import fetch_klines_range
-from csp.utils.tz import ensure_utc_index, ensure_utc_ts, now_utc as _now_utc, floor_to
+from csp.utils.tz_safe import (
+    normalize_df_to_utc_index,
+    safe_ts_to_utc,
+    now_utc,
+    floor_utc,
+)
 
 
 TZ_TW = tz.gettz("Asia/Taipei")
@@ -101,15 +106,15 @@ def read_or_fetch_latest(
     limit: int = 210,
 ):
     interval_td = pd.to_timedelta(interval)
-    now_ts = _now_utc() if now_utc is None else ensure_utc_ts(now_utc)
-    floor_now = floor_to(now_ts, interval)
+    now_ts = now_utc() if now_utc is None else safe_ts_to_utc(now_utc)
+    floor_now = floor_utc(now_ts, interval)
 
     path = Path(csv_path)
     if path.exists():
         df = pd.read_csv(path)
     else:
         df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
-    df = ensure_utc_index(df, ts_col="timestamp")
+    df = normalize_df_to_utc_index(df, ts_col="timestamp")
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
@@ -171,7 +176,7 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
             "reason": "stale_data_after_refresh",
         }
 
-    now_ts = _now_utc()
+    now_ts = now_utc()
     lag_minutes = (now_ts - bar_close_exact).total_seconds() / 60.0
     if lag_minutes > 15:
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "stale_data"}
@@ -218,5 +223,5 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
     price = float(df["close"].iloc[-1]) if not df.empty else 0.0
     sig["price"] = price
     sig["symbol"] = symbol
-    sig["ts"] = _now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+    sig["ts"] = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
     return sig

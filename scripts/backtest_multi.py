@@ -15,7 +15,12 @@ import requests
 from csp.backtesting.backtest_v2 import run_backtest_for_symbol
 from csp.metrics.report import summarize
 from csp.utils.io import load_cfg
-from csp.utils.tz import ensure_utc_ts
+from csp.utils.tz_safe import (
+    normalize_df_to_utc_index,
+    safe_ts_to_utc,
+    now_utc,
+    floor_utc,
+)
 
 BINANCE_BASE = "https://api.binance.com"
 
@@ -24,24 +29,24 @@ def to_utc(dt: datetime) -> datetime:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
 
-def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
 def read_local_csv(csv_path: str) -> pd.DataFrame:
     p = Path(csv_path)
     if not p.exists():
-        return pd.DataFrame(columns=["timestamp","open","high","low","close","volume"])
+        return pd.DataFrame(
+            columns=["timestamp", "open", "high", "low", "close", "volume"]
+        )
     df = pd.read_csv(p)
-    # 寬鬆解析 timestamp 欄位
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     else:
         raise ValueError(f"{csv_path} 缺少 timestamp 欄位")
-    # 嘗試補齊必要欄位
-    for c in ["open","high","low","close"]:
+    for c in ["open", "high", "low", "close"]:
         if c not in df.columns:
             raise ValueError(f"{csv_path} 缺少必要欄位：{c}")
-    return df.dropna(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
+    df = normalize_df_to_utc_index(df, ts_col="timestamp")
+    print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
+    assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
+    return df
 
 def write_local_csv(csv_path: str, df: pd.DataFrame) -> None:
     Path(csv_path).parent.mkdir(parents=True, exist_ok=True)
@@ -108,7 +113,7 @@ def append_missing_15m(csv_path: str, symbol: str, end_utc: datetime) -> None:
 def slice_by_days(csv_path: str, days: int, end_utc: datetime) -> Tuple[pd.Timestamp, pd.Timestamp]:
     end_ts = pd.Timestamp(end_utc)
     start_ts = end_ts - pd.Timedelta(days=days)
-    return (ensure_utc_ts(start_ts), ensure_utc_ts(end_ts))
+    return (safe_ts_to_utc(start_ts), safe_ts_to_utc(end_ts))
 
 def main():
     ap = argparse.ArgumentParser()

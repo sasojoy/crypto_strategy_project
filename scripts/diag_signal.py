@@ -3,12 +3,17 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-from csp.utils.tz import ensure_utc_ts
+from csp.utils.tz_safe import (
+    normalize_df_to_utc_index,
+    safe_ts_to_utc,
+    now_utc,
+    floor_utc,
+)
 
 
 def _fmt_ts(ts_utc):
     tz = pytz.timezone("Asia/Taipei")
-    ts = ensure_utc_ts(ts_utc)
+    ts = safe_ts_to_utc(ts_utc)
     return ts.tz_convert(tz).strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -44,13 +49,20 @@ def main():
             continue
 
         df = pd.read_csv(csv_path)
+        df = normalize_df_to_utc_index(
+            df, ts_col="timestamp" if "timestamp" in df.columns else None
+        )
+        print(
+            f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}"
+        )
+        assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
         cols_lower = {c.lower() for c in df.columns}
         need = {"open","high","low","close","volume","timestamp"}
         if not need.issubset(cols_lower):
             print(f"❌ 缺必要欄位。現有：{sorted(df.columns)}")
             continue
 
-        ts = pd.to_datetime(df["timestamp"].iloc[-1], utc=True)
+        ts = df.index[-1]
         age_min = (pd.Timestamp.utcnow() - ts).total_seconds()/60.0
         print(f"📈 最後一根: {_fmt_ts(ts)} | 與現在差距: {age_min:.2f} 分")
 

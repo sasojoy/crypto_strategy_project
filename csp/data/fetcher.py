@@ -8,7 +8,12 @@ from typing import Optional
 import pandas as pd
 import requests
 
-from csp.utils.tz import ensure_utc_index, ensure_utc_ts, now_utc as _now_utc, floor_to
+from csp.utils.tz_safe import (
+    normalize_df_to_utc_index,
+    safe_ts_to_utc,
+    now_utc,
+    floor_utc,
+)
 
 
 def fetch_klines(
@@ -84,11 +89,11 @@ def fetch_klines(
         df[c] = df[c].astype(float)
     df = df[["timestamp", "open", "high", "low", "close", "volume"]]
 
-    df = ensure_utc_index(df, ts_col="timestamp")
+    df = normalize_df_to_utc_index(df, ts_col="timestamp")
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
-    cutoff = floor_to(_now_utc(), interval)
+    cutoff = floor_utc(now_utc(), interval)
     df = df.loc[df.index <= cutoff]
     return df
 
@@ -112,18 +117,18 @@ def update_csv_with_latest(
         df = pd.read_csv(path)
     else:
         df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
-    df = ensure_utc_index(df, ts_col="timestamp")
+    df = normalize_df_to_utc_index(df, ts_col="timestamp")
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
     interval_td = pd.to_timedelta(interval)
-    now_ts = _now_utc() if now_utc is None else ensure_utc_ts(now_utc)
-    last_closed = floor_to(now_ts, interval)
+    now_ts = now_utc() if now_utc is None else safe_ts_to_utc(now_utc)
+    last_closed = floor_utc(now_ts, interval)
 
     last_ts = df.index[-1] if not df.empty else None
     if last_ts is None:
         days = int(os.getenv("DAYS", 30))
-        start_dt = floor_to(last_closed - pd.Timedelta(days=days), interval)
+        start_dt = floor_utc(last_closed - pd.Timedelta(days=days), interval)
     else:
         start_dt = last_ts + interval_td
     start_ts = int(start_dt.timestamp() * 1000)
