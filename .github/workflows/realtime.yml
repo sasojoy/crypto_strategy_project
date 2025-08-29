@@ -51,3 +51,11 @@ jobs:
             tail -n 200 logs/backtest_${{ github.run_id }}.log || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Grep tz_localize offenders
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Files containing tz_localize( :"
+            grep -RIn --line-number --include="*.py" "tz_localize(" || true
+          } >> "$GITHUB_STEP_SUMMARY"
