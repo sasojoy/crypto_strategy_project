@@ -12,7 +12,12 @@ from typing import Union, Tuple, Optional, Dict
 
 import pandas as pd
 from csp.utils.io import load_cfg
-from csp.utils.timeframe import normalize_df_ts
+from csp.utils.tz_safe import (
+    normalize_df_to_utc_index,
+    safe_ts_to_utc,
+    now_utc,
+    floor_utc,
+)
 
 try:
     from csp.utils.dates import resolve_time_range_like, slice_by_utc
@@ -40,11 +45,11 @@ def _read_csv_smart(path: Union[str, Path]) -> pd.DataFrame:
                 df.index = pd.to_datetime(df.index, utc=True)
             except Exception:
                 raise ValueError(f"找不到 timestamp 欄位（嘗試過 {ts_candidates}）。請確認 CSV 欄位。")
-            df = normalize_df_ts(df, ts_col=None)
+            df = normalize_df_to_utc_index(df, ts_col=None)
         else:
             raise ValueError(f"找不到 timestamp 欄位（嘗試過 {ts_candidates}）。請確認 CSV 欄位。")
     else:
-        df = normalize_df_ts(df, ts_col=ts_col)
+        df = normalize_df_to_utc_index(df, ts_col=ts_col)
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     return df
@@ -106,7 +111,10 @@ def train(input_data: Union[pd.DataFrame, str, Path], cfg: dict, *, date_args: d
     if isinstance(input_data, (str, Path)):
         df = _read_csv_smart(input_data)
     elif isinstance(input_data, pd.DataFrame):
-        df = normalize_df_ts(input_data.copy(), ts_col="timestamp" if "timestamp" in input_data.columns else None)
+        df = normalize_df_to_utc_index(
+            input_data.copy(),
+            ts_col="timestamp" if "timestamp" in input_data.columns else None,
+        )
         print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
         assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     else:

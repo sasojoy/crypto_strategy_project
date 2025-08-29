@@ -10,7 +10,12 @@ from csp.data.loader import load_15m_csv
 from csp.utils.dates import resolve_time_range_like
 from csp.optimize.feature_opt import optimize_symbol, apply_best_params_to_cfg
 from csp.utils.io import load_cfg
-from csp.utils.timeframe import normalize_df_ts
+from csp.utils.tz_safe import (
+    normalize_df_to_utc_index,
+    safe_ts_to_utc,
+    now_utc,
+    floor_utc,
+)
 
 
 def _read_date_args_from_env() -> dict:
@@ -54,7 +59,9 @@ def main() -> None:
     for sym in symbols:
         csv_path = cfg["io"]["csv_paths"][sym]
         df = load_15m_csv(csv_path)
-        df = normalize_df_ts(df, ts_col="timestamp" if "timestamp" in df.columns else None)
+        df = normalize_df_to_utc_index(
+            df, ts_col="timestamp" if "timestamp" in df.columns else None
+        )
         # DIAG
         print(f"[DIAG] feature_optimize: index.tz={df.index.tz}, columns={list(df.columns)[:8]}...")
         assert str(df.index.tz) == "UTC", "[DIAG] feature_optimize: index must be UTC"

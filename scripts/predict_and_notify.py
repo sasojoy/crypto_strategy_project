@@ -8,7 +8,12 @@ import pandas as pd
 from csp.pipeline.realtime_v2 import run_once
 from csp.utils.notifier import notify as base_notify
 from csp.utils.io import load_cfg
-from csp.utils.timeframe import normalize_df_ts
+from csp.utils.tz_safe import (
+    normalize_df_to_utc_index,
+    safe_ts_to_utc,
+    now_utc,
+    floor_utc,
+)
 
 
 def notify(message, telegram_cfg, *, score=None, x_last=None):
@@ -35,7 +40,9 @@ def main():
             raise ValueError("--csv not provided and cfg.io.csv_paths empty")
 
     df = pd.read_csv(csv_path)
-    df = normalize_df_ts(df, ts_col="timestamp" if "timestamp" in df.columns else None)
+    df = normalize_df_to_utc_index(
+        df, ts_col="timestamp" if "timestamp" in df.columns else None
+    )
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 

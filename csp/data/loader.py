@@ -3,7 +3,12 @@ from __future__ import annotations
 import pandas as pd
 from pathlib import Path
 
-from csp.utils.tz import ensure_utc_index
+from csp.utils.tz_safe import (
+    normalize_df_to_utc_index,
+    safe_ts_to_utc,
+    now_utc,
+    floor_utc,
+)
 
 def _pick_timestamp_col(df: pd.DataFrame) -> str:
     # 常見欄位別名
@@ -61,7 +66,7 @@ def load_15m_csv(path: str | Path) -> pd.DataFrame:
     if "volume" in df.columns:
         cols.append("volume")
     df = df[cols]
-    df = ensure_utc_index(df, ts_col="timestamp")
+    df = normalize_df_to_utc_index(df, ts_col="timestamp")
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     return df

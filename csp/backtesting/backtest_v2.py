@@ -8,8 +8,12 @@ import pandas as pd
 import xgboost as xgb
 import joblib
 from csp.utils.io import load_cfg
-from csp.utils.tz import ensure_utc_ts
-from csp.utils.timeframe import normalize_df_ts
+from csp.utils.tz_safe import (
+    normalize_df_to_utc_index,
+    safe_ts_to_utc,
+    now_utc,
+    floor_utc,
+)
 
 from csp.data.loader import load_15m_csv
 from csp.features.h16 import build_features_15m_4h
@@ -160,11 +164,13 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
         pass
     df15 = load_15m_csv(csv_path)
     # Normalize df15 to UTC DatetimeIndex (works whether there's a 'timestamp' column or not)
-    df15 = normalize_df_ts(df15, ts_col="timestamp" if "timestamp" in df15.columns else None)
+    df15 = normalize_df_to_utc_index(
+        df15, ts_col="timestamp" if "timestamp" in df15.columns else None
+    )
     # Ensure start_ts (and end_ts if exists) are UTC-aware
-    start_ts = ensure_utc_ts(start_ts)
+    start_ts = safe_ts_to_utc(start_ts)
     if 'end_ts' in locals():
-        end_ts = ensure_utc_ts(end_ts)
+        end_ts = safe_ts_to_utc(end_ts)
 
     # DIAG
     print(f"[DIAG][backtest] df15.index.tz={df15.index.tz}, head_ts={df15.index[:3].tolist()}")
