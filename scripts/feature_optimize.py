@@ -10,6 +10,7 @@ from csp.data.loader import load_15m_csv
 from csp.utils.dates import resolve_time_range_like
 from csp.optimize.feature_opt import optimize_symbol, apply_best_params_to_cfg
 from csp.utils.io import load_cfg
+from csp.utils.timeframe import normalize_df_ts
 
 
 def _read_date_args_from_env() -> dict:
@@ -53,34 +54,12 @@ def main() -> None:
     for sym in symbols:
         csv_path = cfg["io"]["csv_paths"][sym]
         df = load_15m_csv(csv_path)
-        # Ensure a timestamp column exists for legacy paths
-        if "timestamp" not in df.columns:
-            df["timestamp"] = df.index
-
-        # Robust timestamp extraction: column or index
-
-        def _get_utc_index(df):
-            # Case A: explicit 'timestamp' column exists
-            if "timestamp" in df.columns:
-                ts = pd.to_datetime(df["timestamp"], utc=True)
-                return pd.DatetimeIndex(ts, tz="UTC")
-            # Case B: already on DatetimeIndex
-            if isinstance(df.index, pd.DatetimeIndex):
-                if df.index.tz is None:
-                    return df.index.tz_localize("UTC")
-                return df.index.tz_convert("UTC")
-            # Case C: fallback - try to coerce an index to datetime
-            idx = pd.to_datetime(df.index, utc=True, errors="raise")
-            return pd.DatetimeIndex(idx, tz="UTC")
-
-        idx = _get_utc_index(df)
+        df = normalize_df_ts(df, ts_col="timestamp" if "timestamp" in df.columns else None)
         # DIAG
-        print(f"[DIAG] feature_optimize: idx.tz={getattr(idx, 'tz', None)}, has_col={'timestamp' in df.columns}, columns={list(df.columns)[:8]}...")
-
-        df = df.set_index(idx)
+        print(f"[DIAG] feature_optimize: index.tz={df.index.tz}, columns={list(df.columns)[:8]}...")
         assert str(df.index.tz) == "UTC", "[DIAG] feature_optimize: index must be UTC"
 
-        start_ts, end_ts = resolve_time_range_like(env_args, idx)
+        start_ts, end_ts = resolve_time_range_like(env_args, df.index)
         print(f"[OPT] {sym} {start_ts}~{end_ts} trials={args.trials}")
         study = optimize_symbol(args.cfg, sym, start_ts, end_ts, args.trials, base_out)
         print(f"[BEST {sym}] value={study.best_value:.6f} params={study.best_params}")
