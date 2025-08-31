@@ -4,7 +4,7 @@ from datetime import datetime
 import pytz
 
 from csp.utils.tz_safe import (
-    normalize_df_to_utc_index,
+    normalize_df_to_utc,
     safe_ts_to_utc,
     now_utc,
     floor_utc,
@@ -49,9 +49,7 @@ def main():
             continue
 
         df = pd.read_csv(csv_path)
-        df = normalize_df_to_utc_index(
-            df, ts_col="timestamp" if "timestamp" in df.columns else None
-        )
+        df = normalize_df_to_utc(df)
         print(
             f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}"
         )

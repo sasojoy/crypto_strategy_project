@@ -3,7 +3,7 @@ from .tz_safe import (
     safe_ts_to_utc,
     safe_index_to_utc,
     safe_series_to_utc,
-    normalize_df_to_utc_index,
+    normalize_df_to_utc,
     now_utc,
     floor_utc,
     ceil_utc,
@@ -15,7 +15,9 @@ def ensure_utc_ts(ts):
     return safe_ts_to_utc(ts)
 
 def ensure_utc_index(df, ts_col="timestamp"):
-    return normalize_df_to_utc_index(df, ts_col=ts_col)
+    if ts_col != "timestamp" and ts_col in df.columns:
+        df = df.rename(columns={ts_col: "timestamp"})
+    return normalize_df_to_utc(df)
 
 def floor_to(ts, freq="15min"):
     return floor_utc(ts, freq)

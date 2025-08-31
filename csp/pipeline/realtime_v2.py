@@ -20,7 +20,7 @@ import numpy as np
 from dateutil import tz
 
 from csp.utils.tz_safe import (
-    normalize_df_to_utc_index,
+    normalize_df_to_utc,
     safe_ts_to_utc,
     now_utc,
     floor_utc,
@@ -194,7 +194,7 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
     if df is None:
         df15 = load_15m_csv(csv_path)
     else:
-        df15 = normalize_df_to_utc_index(df)
+        df15 = normalize_df_to_utc(df)
         print(f"[DIAG] df.index.tz={df15.index.tz}, head_ts={df15.index[:3].tolist()}")
     assert str(df15.index.tz) == "UTC", "[DIAG] index not UTC"
     df15 = initialize_history(df15)

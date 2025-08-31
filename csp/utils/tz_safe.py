@@ -10,13 +10,18 @@ def safe_ts_to_utc(ts):
     return ts.tz_convert(UTC)
 
 def safe_index_to_utc(idx):
-    """Return a UTC-aware DatetimeIndex from idx."""
+    """Return a UTC-aware DatetimeIndex from ``idx``."""
     if isinstance(idx, pd.DatetimeIndex):
         if idx.tz is None:
             return idx.tz_localize(UTC)
         return idx.tz_convert(UTC)
-    idx = pd.to_datetime(idx, utc=True, errors="raise")
-    return pd.DatetimeIndex(idx, tz=UTC)
+    # ``idx`` might be array-like or Series
+    idx = pd.to_datetime(idx, errors="raise")
+    if isinstance(idx, pd.Series):
+        idx = pd.DatetimeIndex(idx)
+    if getattr(idx, "tz", None) is None:
+        return idx.tz_localize(UTC)
+    return idx.tz_convert(UTC)
 
 def safe_series_to_utc(s):
     """Return a UTC-aware Series of datetimes."""
@@ -24,22 +29,26 @@ def safe_series_to_utc(s):
     s = pd.to_datetime(s, utc=True, errors="raise")
     return s.dt.tz_convert(UTC)
 
-def normalize_df_to_utc_index(df, ts_col="timestamp"):
+def normalize_df_to_utc(df):
+    """Normalize ``df`` so its index is UTC-aware.
+
+    If a ``timestamp`` column exists, it will be converted to UTC and used as
+    the index.  Otherwise, an existing DatetimeIndex (or one that can be parsed
+    from the current index) will be converted.  A mirror ``timestamp`` column is
+    guaranteed to exist.
     """
-    Ensure df has a UTC DatetimeIndex using ts_col if present.
-    Also mirror a 'timestamp' column for legacy code.
-    """
-    if ts_col and ts_col in df.columns:
-        df[ts_col] = pd.to_datetime(df[ts_col], utc=True, errors="raise")
-        df = df.set_index(ts_col, drop=True)
-    elif not isinstance(df.index, pd.DatetimeIndex):
-        df.index = pd.to_datetime(df.index, utc=True, errors="raise")
-    # Make index UTC
-    if df.index.tz is None:
-        df.index = df.index.tz_localize(UTC)
+    if "timestamp" in df.columns:
+        df["timestamp"] = df["timestamp"].apply(safe_ts_to_utc)
+        df = df.set_index("timestamp", drop=True)
     else:
-        df.index = df.index.tz_convert(UTC)
-    if "timestamp" not in df.columns:
+        if isinstance(df.index, pd.DatetimeIndex):
+            df.index = safe_index_to_utc(df.index)
+        elif not isinstance(df.index, pd.RangeIndex):
+            try:
+                df.index = safe_index_to_utc(df.index)
+            except Exception:
+                pass
+    if "timestamp" not in df.columns and isinstance(df.index, pd.DatetimeIndex):
         df["timestamp"] = df.index
     return df.sort_index()
 
