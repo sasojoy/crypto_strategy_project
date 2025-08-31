@@ -4,6 +4,8 @@ import argparse
 import json
 import time
 import traceback
+import os
+import numpy as np
 from datetime import datetime, timedelta, timezone
 
 from dateutil import tz
@@ -124,6 +126,7 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     symbols = cfg.get("symbols", [])
     csv_map = cfg.get("io", {}).get("csv_paths", {})
     results = {}
+    os.makedirs("logs/diag", exist_ok=True)
 
     for sym in symbols:
         csv_path = csv_map.get(sym)
@@ -144,7 +147,12 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             tb = traceback.format_exc()
             print(f"[ERR][{sym}] {repr(e)}")
             print(f"[ERR][{sym}] traceback:\n{tb}")
-            res = {"symbol": sym, "side": "NONE", "error": str(e)}
+            res = {
+                "symbol": sym,
+                "side": "NONE",
+                "score": float("nan"),
+                "reason": f"LOOP_EXCEPTION:{type(e).__name__}",
+            }
         sig = res if res.get("side") in ("LONG", "SHORT") else None
         if res.get("price") is not None and sig:
             notify_signal(sym, sig, float(res.get("price")), telegram_conf)
@@ -221,6 +229,19 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
                     telegram_conf,
                 )
         results[sym] = res
+
+    # snapshot if any bad scores
+    bad = [
+        r
+        for r in results.values()
+        if isinstance(r.get("score"), float)
+        and (np.isnan(r["score"]) or not np.isfinite(r["score"]))
+    ]
+    if bad:
+        snap = {"ts": datetime.utcnow().isoformat(), "bad": bad}
+        with open("logs/diag/realtime_nan_snapshot.json", "w") as f:
+            json.dump(snap, f, ensure_ascii=False, indent=2)
+        print("[DIAG] dumped logs/diag/realtime_nan_snapshot.json")
 
     lines = []
     for sym, r in results.items():
