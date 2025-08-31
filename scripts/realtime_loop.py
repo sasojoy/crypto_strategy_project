@@ -21,7 +21,7 @@ from csp.utils.notifier import (
 from csp.runtime.exit_watchdog import check_exit_once
 from csp.utils.io import load_cfg
 from csp.utils.tz_safe import (
-    normalize_df_to_utc_index,
+    normalize_df_to_utc,
     safe_ts_to_utc,
     now_utc,
     floor_utc,
@@ -58,7 +58,7 @@ def ensure_latest_csv(symbol: str, csv_path: str, fresh_min: float = 5.0):
         df_old = pd.read_csv(csv_path)
     except FileNotFoundError:
         df_old = pd.DataFrame(columns=["timestamp","open","high","low","close","volume"])
-    df_old = normalize_df_to_utc_index(df_old, ts_col="timestamp")
+    df_old = normalize_df_to_utc(df_old)
     print(f"[DIAG] df.index.tz={df_old.index.tz}, head_ts={df_old.index[:3].tolist()}")
     assert str(df_old.index.tz) == "UTC", "[DIAG] index not UTC"
 
@@ -91,7 +91,7 @@ def ensure_latest_csv(symbol: str, csv_path: str, fresh_min: float = 5.0):
         tmp[col] = tmp[col].astype(float)
 
     tmp = tmp[["timestamp","open","high","low","close","volume"]]
-    tmp = normalize_df_to_utc_index(tmp, ts_col="timestamp")
+    tmp = normalize_df_to_utc(tmp)
 
     merged = pd.concat([df_old, tmp])
     merged = merged[~merged.index.duplicated(keep="last")].sort_index()

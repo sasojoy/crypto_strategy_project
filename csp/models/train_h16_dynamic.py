@@ -13,7 +13,7 @@ from typing import Union, Tuple, Optional, Dict
 import pandas as pd
 from csp.utils.io import load_cfg
 from csp.utils.tz_safe import (
-    normalize_df_to_utc_index,
+    normalize_df_to_utc,
     safe_ts_to_utc,
     now_utc,
     floor_utc,
@@ -37,19 +37,22 @@ def _read_csv_smart(path: Union[str, Path]) -> pd.DataFrame:
     假設檔案至少有 ['timestamp', 'open', 'high', 'low', 'close'] 或類似欄位。
     """
     df = pd.read_csv(path)
+    df = normalize_df_to_utc(df)
     ts_candidates = ["timestamp", "time", "open_time", "datetime"]
     ts_col = next((c for c in ts_candidates if c in df.columns), None)
     if ts_col is None:
         if df.index.name:
             try:
-                df.index = pd.to_datetime(df.index, utc=True)
+                df.index = pd.to_datetime(df.index)
             except Exception:
                 raise ValueError(f"找不到 timestamp 欄位（嘗試過 {ts_candidates}）。請確認 CSV 欄位。")
-            df = normalize_df_to_utc_index(df, ts_col=None)
+            df = normalize_df_to_utc(df)
         else:
             raise ValueError(f"找不到 timestamp 欄位（嘗試過 {ts_candidates}）。請確認 CSV 欄位。")
     else:
-        df = normalize_df_to_utc_index(df, ts_col=ts_col)
+        if ts_col != "timestamp":
+            df = df.rename(columns={ts_col: "timestamp"})
+        df = normalize_df_to_utc(df)
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     return df
@@ -111,10 +114,7 @@ def train(input_data: Union[pd.DataFrame, str, Path], cfg: dict, *, date_args: d
     if isinstance(input_data, (str, Path)):
         df = _read_csv_smart(input_data)
     elif isinstance(input_data, pd.DataFrame):
-        df = normalize_df_to_utc_index(
-            input_data.copy(),
-            ts_col="timestamp" if "timestamp" in input_data.columns else None,
-        )
+        df = normalize_df_to_utc(input_data.copy())
         print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
         assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     else:

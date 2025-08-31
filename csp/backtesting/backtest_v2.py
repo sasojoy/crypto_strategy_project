@@ -9,7 +9,7 @@ import xgboost as xgb
 import joblib
 from csp.utils.io import load_cfg
 from csp.utils.tz_safe import (
-    normalize_df_to_utc_index,
+    normalize_df_to_utc,
     safe_ts_to_utc,
     now_utc,
     floor_utc,
@@ -163,10 +163,8 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
     except Exception:
         pass
     df15 = load_15m_csv(csv_path)
-    # Normalize df15 to UTC DatetimeIndex (works whether there's a 'timestamp' column or not)
-    df15 = normalize_df_to_utc_index(
-        df15, ts_col="timestamp" if "timestamp" in df15.columns else None
-    )
+    # Normalize df15 to UTC DatetimeIndex
+    df15 = normalize_df_to_utc(df15)
     # Ensure start_ts (and end_ts if exists) are UTC-aware
     start_ts = safe_ts_to_utc(start_ts)
     if 'end_ts' in locals():

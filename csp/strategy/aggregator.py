@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from csp.data.binance import fetch_klines_range
 from csp.utils.tz_safe import (
-    normalize_df_to_utc_index,
+    normalize_df_to_utc,
     safe_ts_to_utc,
     now_utc,
     floor_utc,
@@ -114,7 +114,7 @@ def read_or_fetch_latest(
         df = pd.read_csv(path)
     else:
         df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
-    df = normalize_df_to_utc_index(df, ts_col="timestamp")
+    df = normalize_df_to_utc(df)
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 

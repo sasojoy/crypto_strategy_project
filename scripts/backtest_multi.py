@@ -16,7 +16,7 @@ from csp.backtesting.backtest_v2 import run_backtest_for_symbol
 from csp.metrics.report import summarize
 from csp.utils.io import load_cfg
 from csp.utils.tz_safe import (
-    normalize_df_to_utc_index,
+    normalize_df_to_utc,
     safe_ts_to_utc,
     now_utc,
     floor_utc,
@@ -36,14 +36,13 @@ def read_local_csv(csv_path: str) -> pd.DataFrame:
             columns=["timestamp", "open", "high", "low", "close", "volume"]
         )
     df = pd.read_csv(p)
-    if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
-    else:
+    df = normalize_df_to_utc(df)
+    if "timestamp" not in df.columns:
         raise ValueError(f"{csv_path} 缺少 timestamp 欄位")
     for c in ["open", "high", "low", "close"]:
         if c not in df.columns:
             raise ValueError(f"{csv_path} 缺少必要欄位：{c}")
-    df = normalize_df_to_utc_index(df, ts_col="timestamp")
+    df = normalize_df_to_utc(df)
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     return df

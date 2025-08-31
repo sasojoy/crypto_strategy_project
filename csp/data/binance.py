@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 
 from csp.utils.tz_safe import (
-    normalize_df_to_utc_index,
+    normalize_df_to_utc,
     safe_ts_to_utc,
     now_utc,
     floor_utc,
@@ -40,7 +40,7 @@ def _klines_to_df(data: list, interval: str = "15m") -> pd.DataFrame:
     for c in ["open", "high", "low", "close", "volume"]:
         df[c] = df[c].astype(float)
     df = df[["timestamp", "open", "high", "low", "close", "volume"]]
-    df = normalize_df_to_utc_index(df, ts_col="timestamp")
+    df = normalize_df_to_utc(df)
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     return df

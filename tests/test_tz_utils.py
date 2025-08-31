@@ -1,5 +1,5 @@
 import pandas as pd
-from csp.utils.tz_safe import normalize_df_to_utc_index, UTC
+from csp.utils.tz_safe import normalize_df_to_utc, UTC
 
 
 def test_ensure_utc_index_naive_and_tw():
@@ -10,7 +10,7 @@ def test_ensure_utc_index_naive_and_tw():
         "low": [1, 2],
         "close": [1, 2],
     })
-    out1 = normalize_df_to_utc_index(df_naive, ts_col="timestamp")
+    out1 = normalize_df_to_utc(df_naive)
     assert str(out1.index.tz) == UTC
 
     df_tw = pd.DataFrame({
@@ -20,5 +20,5 @@ def test_ensure_utc_index_naive_and_tw():
         "low": [1, 2],
         "close": [1, 2],
     })
-    out2 = normalize_df_to_utc_index(df_tw, ts_col="timestamp")
+    out2 = normalize_df_to_utc(df_tw)
     assert str(out2.index.tz) == UTC

@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 
 from csp.utils.tz_safe import (
-    normalize_df_to_utc_index,
+    normalize_df_to_utc,
     safe_ts_to_utc,
     now_utc,
     floor_utc,
@@ -29,6 +29,7 @@ def load_15m_csv(path: str | Path) -> pd.DataFrame:
         raise FileNotFoundError(f"CSV not found: {p}")
 
     df = pd.read_csv(p)
+    df = normalize_df_to_utc(df)
     # 欄位名稱轉小寫（保留原始名稱用於對應）
     orig_cols = df.columns.tolist()
     lower_map = {c: c.lower() for c in orig_cols}
@@ -66,7 +67,7 @@ def load_15m_csv(path: str | Path) -> pd.DataFrame:
     if "volume" in df.columns:
         cols.append("volume")
     df = df[cols]
-    df = normalize_df_to_utc_index(df, ts_col="timestamp")
+    df = normalize_df_to_utc(df)
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     return df
