@@ -17,11 +17,17 @@ from csp.utils.tz_safe import (
 )
 
 
-def notify(message, telegram_cfg, *, score=None, x_last=None):
+def notify(message, telegram_cfg, *, score=None, x_last=None, res=None):
     if score is not None and np.isnan(score):
         series = pd.Series(x_last)
         nan_cols = series[series.isna()].index.tolist()
         print(f"[DIAG] Signal=NONE | score=nan | reason=NAN_FEATURES | cols={nan_cols}")
+    if res is not None:
+        sym = res.get("symbol", "?")
+        line = f"{sym}: {res.get('side','NONE')} | score={res.get('score')}"
+        if res.get("reason") and res["reason"] != "OK":
+            line += f" | reason={res['reason']}"
+        print(line)
     base_notify(message, telegram_cfg)
 
 
@@ -68,6 +74,7 @@ def main():
         cfg.get("notify", {}).get("telegram"),
         score=res.get("score"),
         x_last=res.get("diag_X_last"),
+        res=res,
     )
     print(json.dumps(res, ensure_ascii=False, indent=2))
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import traceback
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -274,43 +275,105 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
     model = bundle["model"]
     scaler = bundle["scaler"]
     feature_cols = bundle["feature_names"]
-    X = feats[feature_cols]
-    print(
-        f"[DIAG] X last row finite? {np.isfinite(X.iloc[-1].fillna(0)).all()} "
-        f"nan_count={X.iloc[-1].isna().sum()}"
-    )
-    print(f"[DIAG] X last row values={X.iloc[-1].to_dict()}")
-    print(f"[DIAG] model={type(model)}, has_proba={hasattr(model, 'predict_proba')}")
-    try:
-        _diag_proba = model.predict_proba(X.iloc[[-1]])[0]
-        print(f"[DIAG] proba={_diag_proba}")
-    except Exception as e:
-        print(f"[DIAG] predict_proba failed: {e}")
-    Xs = scaler.transform(X)
 
-    if bundle["model_type"] == "sklearn":
-        proba_seq = np.clip(model.predict_proba(Xs)[:, 1], 0.0, 1.0)
-    else:
-        dmat = xgb.DMatrix(Xs, feature_names=feature_cols)
-        proba_seq = np.clip(model.predict(dmat, output_margin=False), 0.0, 1.0)
+    # --- Diagnostics around feature matrix ---
+    os.makedirs("logs/diag", exist_ok=True)
+    feature_list = feature_cols
+    try:
+        X = feats[feature_list]
+    except Exception as _e:
+        print(
+            f"[DIAG][{sym}] feature_list mismatch: {repr(_e)}; "
+            f"got={list(feats.columns)[:10]}..."
+        )
+        X = feats[feature_cols]
+    x_last = X.iloc[-1].replace([np.inf, -np.inf], np.nan)
+    nan_cols = x_last[x_last.isna()].index.tolist()
+    print(
+        f"[DIAG][{sym}] x_last finite? {np.isfinite(x_last.fillna(0)).all()}  "
+        f"nan_count={x_last.isna().sum()}"
+    )
+    if nan_cols:
+        ctx = {
+            "symbol": sym,
+            "nan_cols": nan_cols,
+            "x_last": x_last.to_dict(),
+            "columns": list(X.columns),
+            "ts": str(X.index[-1]) if hasattr(X, "index") else None,
+        }
+        with open(f"logs/diag/{sym}_nan_ctx.json", "w") as f:
+            json.dump(ctx, f, ensure_ascii=False, indent=2)
+        print(f"[DIAG][{sym}] dumped logs/diag/{sym}_nan_ctx.json")
+
+    model_path = bundle.get("model_path")
+    scaler_path = bundle.get("scaler_path")
+    print(
+        f"[DIAG][{sym}] model_path={model_path} exists={os.path.exists(model_path) if model_path else False}"
+    )
+    if scaler_path is not None:
+        print(
+            f"[DIAG][{sym}] scaler_path={scaler_path} exists={os.path.exists(scaler_path)}"
+        )
+
+    try:
+        X1 = X.iloc[[-1]].copy()
+        if scaler is not None:
+            X1 = scaler.transform(X1)
+            ok = np.isfinite(X1).all()
+            print(f"[DIAG][{sym}] scaler.transform finite? {ok}")
+            if not ok:
+                np.save(f"logs/diag/{sym}_X1.npy", X1)
+                print(f"[DIAG][{sym}] dumped logs/diag/{sym}_X1.npy")
+    except Exception as e:
+        print(f"[DIAG][{sym}] scaler.transform failed: {e}")
+        print(f"[DIAG][{sym}] traceback:\n{traceback.format_exc()}")
+
+    score = np.nan
+    try:
+        if hasattr(model, "predict_proba"):
+            proba = model.predict_proba(X1)[0]
+            print(f"[DIAG][{sym}] proba={proba}")
+            score = float(proba[1]) if len(proba) > 1 else float(proba[0])
+        else:
+            pred = model.predict(X1)[0]
+            print(f"[DIAG][{sym}] pred={pred}")
+            score = float(pred) if np.isfinite(pred) else np.nan
+    except Exception as e:
+        print(f"[DIAG][{sym}] predict failed: {e}")
+        print(f"[DIAG][{sym}] traceback:\n{traceback.format_exc()}")
+        score = np.nan
+        reason = f"PREDICT_EXCEPTION:{type(e).__name__}"
+
+    # 再跑完整序列以供其他診斷使用
+    try:
+        Xs = scaler.transform(X) if scaler is not None else X.values
+        if hasattr(model, "predict_proba"):
+            proba_seq = np.clip(model.predict_proba(Xs)[:, 1], 0.0, 1.0)
+        else:
+            dmat = xgb.DMatrix(Xs, feature_names=feature_cols)
+            proba_seq = np.clip(model.predict(dmat, output_margin=False), 0.0, 1.0)
+    except Exception as e:
+        print(f"[DIAG][{sym}] bulk predict failed: {e}")
+        print(f"[DIAG][{sym}] traceback:\n{traceback.format_exc()}")
+        proba_seq = np.array([])
 
     last = feats.iloc[-1]
-    proba_up = float(proba_seq[-1]) if len(proba_seq) else 0.0
     price = float(last["close"])
     atr_h4 = float(last.get("atr_h4", 0.0))
     ts = last["timestamp"].tz_convert(TW)
 
+    proba_up = float(score) if np.isfinite(score) else np.nan
     long_thr = float(cfg["execution"]["long_prob_threshold"])
     short_thr = float(cfg["execution"]["short_prob_threshold"])
     atr_cfg = cfg["execution"]["atr_tp_sl"]
-    side = _decide_side(proba_up, long_thr, short_thr)
+    side = _decide_side(proba_up, long_thr, short_thr) if np.isfinite(proba_up) else None
 
     log.info(f"最新訊號 [{sym}] @ {ts}")
     log.info(f"price={price:.2f}, proba_up={proba_up:.3f}, atr_h4={atr_h4:.2f}")
 
     # Debug info
     dbg = debug if debug is not None else (os.getenv("DEBUG") == "1")
-    diag_low_var = bool(len(proba_seq) >= 20 and (proba_seq[-20:] < 0.02).all())
+    diag_low_var = bool(len(proba_seq) >= 20 and (proba_seq[-20:] < 0.02).all()) if len(proba_seq) else False
     if dbg:
         print(f"[DEBUG] symbol={sym}")
         print(f"[DEBUG] model_path={bundle['model_path']}")
@@ -335,15 +398,34 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
     else:
         log.info("無進場訊號（等待）")
 
-    return {
-        "symbol": sym,
-        "price": price,
-        "proba_up": proba_up,
-        "score": proba_up,
-        "atr_h4": atr_h4,
-        "side": side if side else "NONE",
-        "tp": tp,
-        "sl": sl,
-        "diag_low_var": diag_low_var,
-        "diag_X_last": X.iloc[-1].to_dict(),
-    }
+    if isinstance(proba_up, float) and (np.isnan(proba_up) or not np.isfinite(proba_up)):
+        if 'reason' not in locals():
+            reason = "NAN_FEATURES" if nan_cols else "UNKNOWN_NAN"
+        result = {
+            "symbol": sym,
+            "price": price,
+            "proba_up": float('nan'),
+            "score": float('nan'),
+            "side": "NONE",
+            "atr_h4": atr_h4,
+            "tp": None,
+            "sl": None,
+            "diag_low_var": diag_low_var,
+            "diag_X_last": X.iloc[-1].to_dict(),
+            "reason": reason,
+        }
+    else:
+        result = {
+            "symbol": sym,
+            "price": price,
+            "proba_up": proba_up,
+            "score": float(proba_up),
+            "atr_h4": atr_h4,
+            "side": side if side else "NONE",
+            "tp": tp,
+            "sl": sl,
+            "diag_low_var": diag_low_var,
+            "diag_X_last": X.iloc[-1].to_dict(),
+            "reason": "OK",
+        }
+    return result

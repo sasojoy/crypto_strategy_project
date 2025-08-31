@@ -25,6 +25,17 @@ jobs:
           python scripts/predict_and_notify.py --cfg csp/configs/strategy.yaml 2>&1 | tee logs/realtime_${{ github.run_id }}.log
           python scripts/backtest_multi.py --cfg csp/configs/strategy.yaml --days 60 --save-summary 2>&1 | tee logs/backtest_${{ github.run_id }}.log
         continue-on-error: true
+      - name: Upload realtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realtime-diag-${{ github.run_id }}
+          path: |
+            logs/diag/*.json
+            logs/diag/*.npy
+            logs/*.log
+          if-no-files-found: warn
+          retention-days: 7
       - name: Upload diagnostics artifact
         uses: actions/upload-artifact@v4
         with:
