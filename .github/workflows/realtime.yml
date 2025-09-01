@@ -15,16 +15,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Run realtime/backtest with diagnostics
+      - name: Run realtime with diagnostics
         shell: bash
+        continue-on-error: true
         run: |
           mkdir -p logs
           set -o pipefail
           echo "[CI] run_id=${{ github.run_id }} commit=${{ github.sha }}"
           python -V
-          python scripts/predict_and_notify.py --cfg csp/configs/strategy.yaml 2>&1 | tee logs/realtime_${{ github.run_id }}.log
-          python scripts/backtest_multi.py --cfg csp/configs/strategy.yaml --days 60 --save-summary 2>&1 | tee logs/backtest_${{ github.run_id }}.log
-        continue-on-error: true
+          python scripts/realtime_loop.py --cfg csp/configs/strategy.yaml --delay-sec 15 2>&1 | tee logs/realtime_${{ github.run_id }}.log
       - name: Upload realtime diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -34,17 +33,6 @@ jobs:
             logs/diag/*.json
             logs/diag/*.npy
             logs/*.log
-          if-no-files-found: warn
-          retention-days: 7
-      - name: Upload diagnostics artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-diag-${{ github.run_id }}
-          path: |
-            logs/**/*.log
-            **/logs/**/*.log
-            **/backtest_summary*.json
-            **/feature_optimize_*_best.json
           if-no-files-found: warn
           retention-days: 7
       - name: Append DIAG to Job Summary
@@ -57,10 +45,8 @@ jobs:
             tail -n 200 logs/realtime_${{ github.run_id }}.log || true
             echo '```'
             echo ""
-            echo "### Backtest DIAG (tail)"
-            echo '```'
-            tail -n 200 logs/backtest_${{ github.run_id }}.log || true
-            echo '```'
+            echo "### NAN Context Files"
+            ls -l logs/diag || true
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Grep tz_localize offenders
         if: always()
