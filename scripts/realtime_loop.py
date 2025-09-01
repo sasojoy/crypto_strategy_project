@@ -7,6 +7,7 @@ import traceback
 import os
 import numpy as np
 from datetime import datetime, timedelta, timezone
+import logging
 
 from dateutil import tz
 
@@ -100,6 +101,94 @@ def ensure_latest_csv(symbol: str, csv_path: str, fresh_min: float = 5.0):
 
     merged.reset_index().to_csv(csv_path, index=False)
     return True
+
+
+def load_model(symbol: str, cfg_path: str = "csp/configs/strategy.yaml"):
+    """Load model and scaler for a given symbol and log the event."""
+    cfg = load_cfg(cfg_path)
+    try:
+        from csp.pipeline.realtime_v2 import _load_model_bundle
+        bundle = _load_model_bundle(cfg, symbol, debug=False)
+        if not bundle:
+            logging.warning(f"[MODEL] bundle not found for {symbol}")
+            return None, None
+        model = bundle["model"]
+        scaler = bundle.get("scaler")
+    except Exception as e:
+        logging.exception(f"[MODEL] load failed for {symbol}: {e}")
+        return None, None
+    logging.info(f"[MODEL] loaded for {symbol}")
+    return model, scaler
+
+
+def pick_latest_valid_row(features_df: pd.DataFrame, k: int = 3):
+    """從最後 k 根中，挑選第一個「無缺值」的列；若都不合格，回傳 None。"""
+    tail = features_df.tail(k)
+    na_counts = tail.isna().sum()
+    logging.info(f"[DIAG] tail_na_counts: {na_counts.to_dict()}")
+    for idx in tail.index[::-1]:
+        row = tail.loc[idx]
+        if not row.isna().any():
+            return idx, row
+    return None, None
+
+
+def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str = "csp/configs/strategy.yaml"):
+    """Build features, pick latest valid row and run prediction."""
+    from csp.features.h16 import build_features_15m_4h
+    from csp.core.feature import add_features
+    from csp.utils.config import get_symbol_features
+
+    cfg = load_cfg(cfg_path)
+    feat_params = get_symbol_features(cfg, symbol)
+
+    feats = build_features_15m_4h(
+        df_15m,
+        ema_windows=tuple(feat_params["ema_windows"]),
+        rsi_window=feat_params["rsi_window"],
+        bb_window=feat_params["bb_window"],
+        bb_std=feat_params["bb_std"],
+        atr_window=feat_params["atr_window"],
+        h4_resample=feat_params["h4_resample"],
+    )
+    feats = add_features(
+        feats,
+        prev_high_period=feat_params["prev_high_period"],
+        prev_low_period=feat_params["prev_low_period"],
+        bb_window=feat_params["bb_window"],
+        atr_window=feat_params["atr_window"],
+        atr_percentile_window=feat_params["atr_percentile_window"],
+    )
+
+    feature_cols = feat_params.get("feature_columns") or list(feats.columns)
+    idx, row = pick_latest_valid_row(feats[feature_cols], k=3)
+    if row is None:
+        logging.warning(
+            f"[WARN] no valid feature row for {symbol} (last 3 bars all contain NaN)."
+        )
+        return {
+            "symbol": symbol,
+            "side": "NONE",
+            "score": None,
+            "reason": "no_valid_features",
+        }
+
+    x = row.to_frame().T
+    try:
+        x2 = scaler.transform(x) if scaler is not None else x.values
+        proba = model.predict_proba(x2)[0, 1]
+        score = float(proba)
+    except Exception as e:
+        logging.exception(f"[ERROR] predict failed for {symbol}: {e}")
+        return {
+            "symbol": symbol,
+            "side": "NONE",
+            "score": None,
+            "reason": "predict_exception",
+        }
+
+    side = "LONG" if score >= 0.75 else ("SHORT" if score <= 0.25 else "NONE")
+    return {"symbol": symbol, "side": side, "score": score}
 
 def process_symbol(symbol: str, cfg: dict):
     sig = get_latest_signal(symbol, cfg, fresh_min=FRESH_MIN)
