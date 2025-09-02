@@ -21,6 +21,8 @@ from csp.utils.tz_safe import (
     now_utc,
     floor_utc,
 )
+from csp.utils.validate_data import ensure_data_ready
+from csp.data.fetcher import fetch_inc, fetch_full
 
 BINANCE_BASE = "https://api.binance.com"
 
@@ -118,7 +120,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cfg", required=True, help="path to strategy.yaml")
     ap.add_argument("--days", type=int, default=30, help="回測天數（會切資料區間）")
-    ap.add_argument("--fetch", choices=["auto","none"], default="auto", help="是否自動補資料（Binance）")
+    ap.add_argument("--validate", choices=["before", "off"], default="before", help="是否在回測前驗證並補齊資料")
+    ap.add_argument("--fetch-policy", choices=["auto", "inc", "full"], default="auto", help="資料抓取策略")
     ap.add_argument("--save-summary", action="store_true", help="啟用報表輸出")
     ap.add_argument("--out-dir", default="reports", help="輸出目錄（預設 reports）")
     ap.add_argument("--format", choices=["csv", "json", "both"], default="both", help="輸出格式（csv, json, both）")
@@ -139,15 +142,18 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     end_utc_dt = now_utc()
 
-    # 1) 自動補資料（如開啟）
-    if args.fetch == "auto":
+    # 1) 資料驗證及補齊（如開啟）
+    if args.validate == "before":
         for sym in symbols:
             csv_path = cfg["io"]["csv_paths"][sym]
-            print(f"[FETCH] {sym} -> {csv_path}")
-            try:
-                append_missing_15m(csv_path, sym, end_utc_dt)
-            except Exception as e:
-                print(f"[WARN] fetch {sym} 失敗：{e}（略過，使用現有 CSV）")
+            ensure_data_ready(sym, csv_path, fetch_policy=args.fetch_policy, do_validate=True)
+    else:
+        for sym in symbols:
+            csv_path = cfg["io"]["csv_paths"][sym]
+            if args.fetch_policy == "full":
+                fetch_full(sym, csv_path)
+            else:
+                fetch_inc(sym, csv_path)
 
     # 2) 依 days 產生時間窗
     start_ts, end_ts = slice_by_days("dummy.csv", args.days, end_utc_dt)
