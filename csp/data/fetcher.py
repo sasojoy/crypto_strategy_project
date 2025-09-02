@@ -160,3 +160,38 @@ def update_csv_with_latest(
     os.replace(tmp, path)
     time.sleep(0.25)
     return df
+
+
+def fetch_inc(symbol: str, csv_path: str) -> dict:
+    """
+    讀 CSV 最後一根時間，向來源補齊至最新的「已收」一根，追加寫回。
+    重用 update_csv_with_latest。
+    """
+    before = 0
+    try:
+        before = len(pd.read_csv(csv_path))
+    except Exception:
+        before = 0
+    df = update_csv_with_latest(symbol, csv_path)
+    appended = len(df) - before
+    last_ts = df["timestamp"].iloc[-1].isoformat() if len(df) else "none"
+    return {"ok": True, "mode": "inc", "appended": int(appended), "last_ts": last_ts}
+
+
+def fetch_full(symbol: str, csv_path: str) -> dict:
+    """
+    從來源 full 下載該 symbol 的 15m 歷史到最新「已收」一根，覆蓋寫回 CSV。
+    """
+    days = int(os.getenv("DAYS", 30))
+    interval = "15m"
+    now_ts = floor_utc(now_utc(), interval)
+    start_dt = floor_utc(now_ts - pd.Timedelta(days=days), interval)
+    start_ts = int(start_dt.timestamp() * 1000)
+    end_ts = int(now_ts.timestamp() * 1000)
+    df = fetch_klines(symbol, interval=interval, start_ts=start_ts, end_ts=end_ts)
+    path = Path(csv_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.reset_index().to_csv(path, index=False)
+    last_ts = df.index[-1].isoformat() if len(df) else "none"
+    print(f"[FETCH] {symbol} FULL rows={len(df)} last_ts={last_ts}")
+    return {"ok": True, "mode": "full", "rows": int(len(df)), "last_ts": last_ts}

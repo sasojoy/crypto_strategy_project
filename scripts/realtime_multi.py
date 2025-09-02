@@ -5,12 +5,13 @@ import json
 import traceback
 from dateutil import tz
 
-from csp.data.fetcher import update_csv_with_latest
 from csp.pipeline.realtime_v2 import run_once
 from csp.strategy.aggregator import sanitize_score
 TZ_TW = tz.gettz("Asia/Taipei")
 from csp.utils.notifier import notify
 from csp.utils.io import load_cfg
+from csp.utils.validate_data import ensure_data_ready
+import pandas as pd
 
 
 def main():
@@ -35,12 +36,11 @@ def main():
         stale = False
         if live_cfg.get("enabled"):
             try:
-                df = update_csv_with_latest(sym, csv_path, interval=live_cfg.get("interval", "15m"))
-                last_ts = df["timestamp"].iloc[-1]
+                info = ensure_data_ready(sym, csv_path)
+                last_ts = pd.to_datetime(info.get("last_ts"), utc=True)
                 print(f"  last closed UTC={last_ts.isoformat()} | TW={(last_ts.tz_convert(TZ_TW)).isoformat()}")
-                stale = bool(df.attrs.get("stale"))
             except Exception as e:
-                print(f"[WARN] live fetch failed for {sym}: {e}")
+                print(f"[WARN] data fetch failed for {sym}: {e}")
                 stale = True
         try:
             # run_once 會自動挑選 models/<SYMBOL>/ 或全域 models/

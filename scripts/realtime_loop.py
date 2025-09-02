@@ -6,6 +6,7 @@ import time
 import traceback
 import os
 import numpy as np
+import pandas as pd
 from datetime import datetime, timedelta, timezone
 import logging
 
@@ -29,78 +30,10 @@ from csp.utils.tz_safe import (
     now_utc,
     floor_utc,
 )
+from csp.utils.validate_data import ensure_data_ready
 
 TW = tz.gettz("Asia/Taipei")
-
 FRESH_MIN = 5.0  # 資料新鮮度門檻（分鐘）
-
-# --- ADD: live fetch helper (no extra deps needed) ---
-import math
-import pandas as pd
-import urllib.request, urllib.parse, json as _json
-
-BINANCE_BASE = "https://api.binance.com"
-INTERVAL = "15m"
-
-def _binance_klines(symbol: str, interval: str, end_ms: int | None, limit: int = 720):
-    """
-    Public klines; endTime inclusive-ish per Binance semantics.
-    """
-    qs = {"symbol": symbol, "interval": interval, "limit": limit}
-    if end_ms:
-        qs["endTime"] = end_ms
-    url = f"{BINANCE_BASE}/api/v3/klines?{urllib.parse.urlencode(qs)}"
-    with urllib.request.urlopen(url, timeout=15) as r:
-        return _json.loads(r.read().decode("utf-8"))
-
-def ensure_latest_csv(symbol: str, csv_path: str, fresh_min: float = 5.0):
-    """
-    將 csv 補到「現在 floor(15m)」。
-    """
-    try:
-        df_old = pd.read_csv(csv_path)
-    except FileNotFoundError:
-        df_old = pd.DataFrame(columns=["timestamp","open","high","low","close","volume"])
-    df_old = normalize_df_to_utc(df_old)
-    print(f"[DIAG] df.index.tz={df_old.index.tz}, head_ts={df_old.index[:3].tolist()}")
-    assert str(df_old.index.tz) == "UTC", "[DIAG] index not UTC"
-
-    now_ts = now_utc()
-    floor_now = floor_utc(now_ts, "15min")
-
-    last_ts = df_old.index.max() if len(df_old) else pd.NaT
-
-    if pd.notna(last_ts):
-        lag_min = (now_ts - last_ts).total_seconds() / 60.0
-        if lag_min <= (15.0 + fresh_min):
-            return False
-
-    # 以 floor_now 當作 endTime（ms）
-    end_ms = int(floor_now.value // 10**6)
-    # 多抓一點避免斷帶（~30 天 ≈ 2880 根）
-    kl = _binance_klines(symbol, INTERVAL, end_ms=end_ms, limit=2880)
-    if not kl:
-        return False
-
-    # 轉成 DataFrame
-    tmp = pd.DataFrame(kl, columns=[
-        "open_time","open","high","low","close","volume","close_time",
-        "_q","_n","_taker","_taker_vol","_i"
-    ])
-    # Binance 的 open_time/close_time 是 ms；「理論收盤點」= open_time + 15m
-    tmp["open_time"] = pd.to_datetime(tmp["open_time"], unit="ms", utc=True)
-    tmp["timestamp"] = tmp["open_time"] + pd.Timedelta(minutes=15)
-    for col in ("open","high","low","close","volume"):
-        tmp[col] = tmp[col].astype(float)
-
-    tmp = tmp[["timestamp","open","high","low","close","volume"]]
-    tmp = normalize_df_to_utc(tmp)
-
-    merged = pd.concat([df_old, tmp])
-    merged = merged[~merged.index.duplicated(keep="last")].sort_index()
-
-    merged.reset_index().to_csv(csv_path, index=False)
-    return True
 
 
 def load_model(symbol: str, cfg_path: str = "csp/configs/strategy.yaml"):
@@ -223,13 +156,10 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             print(f"[SKIP] {sym}: No CSV path in config")
             continue
         print(f"[REALTIME] {sym} <- {csv_path}")
-        # --- ADD: 先把 CSV 補到最新，再算訊號 ---
         try:
-            updated = ensure_latest_csv(sym, csv_path, fresh_min=FRESH_MIN)
-            if updated:
-                print(f"[FETCH] {sym}: csv updated to latest 15m close.")
+            ensure_data_ready(sym, csv_path)
         except Exception as fe:
-            print(f"[WARN] {sym}: live fetch failed: {fe}")
+            print(f"[WARN] {sym}: data fetch failed: {fe}")
         try:
             res = process_symbol(sym, cfg)
         except Exception as e:
