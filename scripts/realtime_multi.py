@@ -50,7 +50,8 @@ def main():
             print(f"[ERR][{sym}] {repr(e)}")
             print(f"[ERR][{sym}] traceback:\n{tb}")
             res = {"symbol": sym, "side": None, "error": str(e)}
-        res["score"] = sanitize_score(res.get("score", res.get("proba_up")))
+        tmp_score = sanitize_score(res.get("score", res.get("proba_up")))
+        res["score"] = tmp_score
         if stale:
             res["warning"] = "STALE DATA"
         results[sym] = res
@@ -65,6 +66,7 @@ def main():
         side_display = r["side"].upper() if r.get("side") else "WAIT"
         price = r.get("price")
         score = sanitize_score(r.get("score", r.get("proba_up", 0.0)))
+        score = 0.0 if score is None else float(score)
         tp = r.get("tp")
         sl = r.get("sl")
 

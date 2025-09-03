@@ -24,6 +24,14 @@ jobs:
           echo "[CI] run_id=${{ github.run_id }} commit=${{ github.sha }}"
           python -V
           python scripts/realtime_loop.py --cfg csp/configs/strategy.yaml --delay-sec 15 2>&1 | tee logs/realtime_${{ github.run_id }}.log
+      - name: Check realtime log
+        run: |
+          if grep -q "\[FATAL\]" logs/realtime_${{ github.run_id }}.log; then
+            echo "::error:: Found [FATAL] in trader logs."; exit 1
+          fi
+          if grep -q "score=nan" logs/realtime_${{ github.run_id }}.log; then
+            echo "::error:: Found score=nan"; exit 1
+          fi
       - name: Upload realtime diagnostics
         if: always()
         uses: actions/upload-artifact@v4
