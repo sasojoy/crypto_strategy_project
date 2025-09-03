@@ -18,6 +18,7 @@ import joblib
 import pandas as pd
 import xgboost as xgb
 import numpy as np
+import logging
 from dateutil import tz
 
 from csp.utils.tz_safe import (
@@ -184,6 +185,17 @@ def _decide_side(proba_up: float, long_thr: float, short_thr: float) -> Optional
     return None
 
 
+def pick_latest_valid_row(features_df: pd.DataFrame, k: int = 3):
+    """Return the latest row within last k without NaN/inf."""
+    tail = features_df.tail(k)
+    logging.info(f"[DIAG] tail_na_counts: {tail.isna().sum().to_dict()}")
+    for idx in tail.index[::-1]:
+        row = tail.loc[idx]
+        if not row.isna().any() and np.isfinite(row.to_numpy(dtype=float)).all():
+            return idx, row
+    return None, None
+
+
 def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | None = None, debug: bool | None = None) -> Dict[str, Any]:
     """Load latest data, run model inference and return trading signal."""
     cfg = load_cfg(cfg)
@@ -240,26 +252,6 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
         atr_window=feat_params["atr_window"],
         atr_percentile_window=feat_params["atr_percentile_window"],
     )
-    feature_cols = feat_params.get("feature_columns")
-    if feature_cols is None:
-        feature_cols = feats.columns.tolist()
-    row = feats[feature_cols].tail(1)
-    if row.isna().any(axis=1).iloc[0]:
-        nan_cols = row.columns[row.isna().any()].tolist()
-        print(f"[WARN] feature NaN columns: {nan_cols}")
-        feats[feature_cols] = feats[feature_cols].ffill()
-        row = feats[feature_cols].tail(1)
-        if row.isna().any(axis=1).iloc[0]:
-            last = feats.iloc[-1]
-            return {
-                "symbol": sym,
-                "price": float(last.get("close", 0.0)),
-                "proba_up": 0.0,
-                "score": 0.0,
-                "side": "NONE",
-                "reason": "feature_nan",
-            }
-
     bundle = _load_model_bundle(cfg, sym, debug=bool(debug))
     if not bundle:
         last = feats.iloc[-1]
@@ -275,6 +267,25 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
     model = bundle["model"]
     scaler = bundle["scaler"]
     feature_cols = bundle["feature_names"]
+    logging.info(
+        f"[MODEL] loaded for {sym} | n_features={getattr(model, 'n_features_in_', 'NA')}"
+    )
+
+    X = feats[feature_cols]
+    idx, row = pick_latest_valid_row(X, k=3)
+    if row is None:
+        logging.warning(
+            f"[WARN] no valid feature row for {sym} (last 3 bars contain NaN/inf)."
+        )
+        last = feats.iloc[-1]
+        return {
+            "symbol": sym,
+            "price": float(last.get("close", 0.0)),
+            "proba_up": 0.0,
+            "score": None,
+            "side": "NONE",
+            "reason": "no_valid_features",
+        }
 
     # --- Diagnostics around feature matrix ---
     os.makedirs("logs/diag", exist_ok=True)
@@ -287,7 +298,7 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
             f"got={list(feats.columns)[:10]}..."
         )
         X = feats[feature_cols]
-    x_last = X.iloc[-1].replace([np.inf, -np.inf], np.nan)
+    x_last = X.loc[idx].replace([np.inf, -np.inf], np.nan)
     nan_cols = x_last[x_last.isna()].index.tolist()
     print(
         f"[DIAG][{sym}] x_last finite? {np.isfinite(x_last.fillna(0)).all()}  "
@@ -299,7 +310,7 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
             "nan_cols": nan_cols,
             "x_last": x_last.to_dict(),
             "columns": list(X.columns),
-            "ts": str(X.index[-1]) if hasattr(X, "index") else None,
+            "ts": str(idx) if hasattr(X, "index") else None,
         }
         with open(f"logs/diag/{sym}_nan_ctx.json", "w") as f:
             json.dump(ctx, f, ensure_ascii=False, indent=2)
@@ -316,7 +327,7 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
         )
 
     try:
-        X1 = X.iloc[[-1]].copy()
+        X1 = row.to_frame().T
         if scaler is not None:
             X1 = scaler.transform(X1)
             ok = np.isfinite(X1).all()
@@ -404,14 +415,14 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
         result = {
             "symbol": sym,
             "price": price,
-            "proba_up": float('nan'),
-            "score": float('nan'),
+            "proba_up": None,
+            "score": None,
             "side": "NONE",
             "atr_h4": atr_h4,
             "tp": None,
             "sl": None,
             "diag_low_var": diag_low_var,
-            "diag_X_last": X.iloc[-1].to_dict(),
+            "diag_X_last": X.loc[idx].to_dict(),
             "reason": reason,
         }
     else:
@@ -425,7 +436,7 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
             "tp": tp,
             "sl": sl,
             "diag_low_var": diag_low_var,
-            "diag_X_last": X.iloc[-1].to_dict(),
+            "diag_X_last": X.loc[idx].to_dict(),
             "reason": "OK",
         }
     return result

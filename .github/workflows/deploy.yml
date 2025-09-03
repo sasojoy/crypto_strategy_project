@@ -67,3 +67,13 @@ jobs:
             sudo -n journalctl -u trader-once -n 80 --no-pager || true \
           "
 
+      - name: Check trader logs
+        run: |
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo -n cat /tmp/trader-once.log || true" > /tmp/trader-once.log
+          if grep -q "\[FATAL\]" /tmp/trader-once.log; then
+            echo "::error:: Found [FATAL] in trader logs."; exit 1
+          fi
+          if grep -q "score=nan" /tmp/trader-once.log; then
+            echo "::error:: Found score=nan"; exit 1
+          fi
+

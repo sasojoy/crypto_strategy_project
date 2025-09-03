@@ -50,7 +50,9 @@ def load_model(symbol: str, cfg_path: str = "csp/configs/strategy.yaml"):
     except Exception as e:
         logging.exception(f"[MODEL] load failed for {symbol}: {e}")
         return None, None
-    logging.info(f"[MODEL] loaded for {symbol}")
+    logging.info(
+        f"[MODEL] loaded for {symbol} | n_features={getattr(model, 'n_features_in_', 'NA')}"
+    )
     return model, scaler
 
 
@@ -61,7 +63,7 @@ def pick_latest_valid_row(features_df: pd.DataFrame, k: int = 3):
     logging.info(f"[DIAG] tail_na_counts: {na_counts.to_dict()}")
     for idx in tail.index[::-1]:
         row = tail.loc[idx]
-        if not row.isna().any():
+        if not row.isna().any() and np.isfinite(row.to_numpy(dtype=float)).all():
             return idx, row
     return None, None
 
@@ -128,7 +130,8 @@ def process_symbol(symbol: str, cfg: dict):
     if not sig:
         notify_guard("signal_unavailable", {"symbol": symbol})
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "signal_unavailable"}
-    sig["score"] = sanitize_score(sig.get("score"))
+    if sig.get("score") is not None:
+        sig["score"] = sanitize_score(sig.get("score"))
     return sig
 
 

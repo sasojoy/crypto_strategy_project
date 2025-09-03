@@ -1,5 +1,5 @@
 from __future__ import annotations
-import math, os, json
+import math, os, json, logging
 import pandas as pd
 from dateutil import tz
 
@@ -31,6 +31,16 @@ def _clean_prob_map(prob_map: dict) -> dict:
             continue
         clean[k] = f
     return clean
+
+
+def pick_latest_valid_row(features_df: pd.DataFrame, k: int = 3):
+    tail = features_df.tail(k)
+    logging.info(f"[DIAG] tail_na_counts: {tail.isna().sum().to_dict()}")
+    for idx in tail.index[::-1]:
+        row = tail.loc[idx]
+        if not row.isna().any() and np.isfinite(row.to_numpy(dtype=float)).all():
+            return idx, row
+    return None, None
 
 
 def aggregate_signal(prob_map: dict, enter_threshold: float = 0.75, method: str = "max_weighted") -> dict:
@@ -88,13 +98,13 @@ def aggregate_signal(prob_map: dict, enter_threshold: float = 0.75, method: str 
 def sanitize_score(x):
     import math
     if x is None:
-        return 0.0
+        return None
     if isinstance(x, float) and math.isnan(x):
-        return 0.0
+        return None
     try:
         return float(x)
     except Exception:
-        return 0.0
+        return None
 
 
 def read_or_fetch_latest(
@@ -199,20 +209,21 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
     if not feat_cols:
         print("[MODELS] loaded=0")
         print("[FEATURE] last_row_nan_cols=[]")
-        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
+        return {"symbol": symbol, "side": "NONE", "score": None, "reason": "no_models_loaded"}
     for c in feat_cols:
         if c not in dff.columns:
             print("[FEATURE] last_row_nan_cols=[]")
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "feature_missing"}
+            return {"symbol": symbol, "side": "NONE", "score": None, "reason": "feature_missing"}
 
-    X = dff[feat_cols].tail(1)
-    nan_cols = X.columns[X.isna().any()].tolist()
-    print(f"[FEATURE] last_row_nan_cols={nan_cols}")
-    if nan_cols:
-        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "feature_nan"}
+    Xall = dff[feat_cols]
+    idx, row = pick_latest_valid_row(Xall, k=3)
+    if row is None:
+        print("[FEATURE] last_row_nan_cols=[]")
+        return {"symbol": symbol, "side": "NONE", "score": None, "reason": "no_valid_features"}
+    X = row.to_frame().T
 
     m = MultiThresholdClassifier.load(model_dir)
-    print(f"[MODELS] loaded={len(m.models)}")
+    print(f"[MODEL] loaded for {symbol} | n_features={len(feat_cols)}")
     prob_map = m.predict_proba(X)
     th = cfg.get("strategy", {}).get("enter_threshold", 0.75)
     method = cfg.get("strategy", {}).get("aggregator_method", "max_weighted")
