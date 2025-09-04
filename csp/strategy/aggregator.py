@@ -1,5 +1,6 @@
 from __future__ import annotations
-import math, os, json, logging
+
+import math, os, json, logging, traceback, sys
 import pandas as pd
 from dateutil import tz
 from typing import Optional
@@ -7,13 +8,29 @@ from typing import Optional
 from pathlib import Path
 import numpy as np
 from csp.data.binance import fetch_klines_range
-from csp.utils.timez import ensure_utc_index, last_closed_15m
-# 改為以模組命名空間導入，避免函式名被區域/參數名遮蔽
-from csp.utils import time as time_utils
+from csp.utils.timez import (
+    ensure_utc_index,
+    last_closed_15m,
+    safe_ts_to_utc,
+    now_utc,
+)
 
 
 TZ_TW = tz.gettz("Asia/Taipei")
 logger = logging.getLogger(__name__)
+
+
+def _coerce_float_or_zero(x):
+    try:
+        if x is None:
+            return 0.0
+        xf = float(x)
+        if math.isnan(xf):
+            return 0.0
+        return xf
+    except Exception:
+        return 0.0
+
 
 def _weight(h: int) -> float:
     return math.sqrt(max(1, int(h)))
@@ -62,7 +79,7 @@ def aggregate_signal(prob_map: dict, enter_threshold: float = 0.75, method: str 
         elif downs > ups and downs>0: side, score = "SHORT", 1.0
         else:                         side, score = "NONE", 0.0
         pu = max(clean.values())
-        return {"side":side,"score":float(score),"prob_up_max":float(pu),
+        return {"side":side,"score":_coerce_float_or_zero(score),"prob_up_max":float(pu),
                 "prob_down_max":float(1.0-pu),"chosen_h":None,"chosen_t":None,
                 "reason":"majority"}
 
@@ -88,22 +105,12 @@ def aggregate_signal(prob_map: dict, enter_threshold: float = 0.75, method: str 
     (ch, ct) = chosen_ht
     pu = max(clean.values())
     side = "LONG" if pu >= enter_threshold else "NONE"
-    score = 0.0 if (score is None or math.isnan(score)) else float(score)
+    score = _coerce_float_or_zero(score)
     return {"side":side,"score":score,"prob_up_max":float(pu),"prob_down_max":float(1.0-pu),
             "chosen_h":int(ch),"chosen_t":float(ct),
             "reason":"ok" if side!="NONE" else "below_threshold"}
 
 
-def sanitize_score(x):
-    import math
-    if x is None:
-        return None
-    if isinstance(x, float) and math.isnan(x):
-        return None
-    try:
-        return float(x)
-    except Exception:
-        return None
 
 
 def read_or_fetch_latest(
@@ -115,14 +122,15 @@ def read_or_fetch_latest(
     limit: int = 210,
 ):
     interval_td = pd.to_timedelta(interval)
-    # 防呆：確保工具函式沒有被遮蔽
-    assert callable(time_utils.now_utc), "now_utc not callable (possibly shadowed)"
-    assert callable(time_utils.safe_ts_to_utc), "safe_ts_to_utc not callable (possibly shadowed)"
-
+    print(f"[DIAG] callable(safe_ts_to_utc)={callable(safe_ts_to_utc)} type={type(safe_ts_to_utc)}")
+    print(f"[DIAG] read_or_fetch_latest: now_ts_in={now_ts} (type={type(now_ts)})")
     if now_ts is None:
-        now_ts = time_utils.now_utc()
+        now_ts = now_utc()
     else:
-        now_ts = time_utils.safe_ts_to_utc(now_ts)
+        now_ts = safe_ts_to_utc(now_ts)
+    print(
+        f"[DIAG] read_or_fetch_latest: now_ts_utc={now_ts} (tz={getattr(now_ts,'tzinfo',None)})"
+    )
     anchor = last_closed_15m(now_ts)
 
     path = Path(csv_path)
@@ -136,7 +144,7 @@ def read_or_fetch_latest(
         getattr(df.index.tz, 'key', df.index.tz),
         list(df.index[:3]),
         now_ts,
-        type(time_utils.safe_ts_to_utc).__name__,
+        type(safe_ts_to_utc).__name__,
     )
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
@@ -178,61 +186,67 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
     except Exception:
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
 
-    csv_path = cfg["io"]["csv_paths"].get(symbol)
-    if not csv_path or not os.path.exists(csv_path):
-        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_data"}
+    try:
+        csv_path = cfg["io"]["csv_paths"].get(symbol)
+        if not csv_path or not os.path.exists(csv_path):
+            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_data"}
 
-    df, anchor, latest_close, is_stale = read_or_fetch_latest(symbol, csv_path)
-    lag_minutes = (anchor - latest_close).total_seconds() / 60 if pd.notna(latest_close) else float("inf")
-    print(f"[DIAG] latest_ts={latest_close} anchor={anchor} diff_min={lag_minutes:.2f}")
-    if is_stale:
-        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "stale_data"}
-    if lag_minutes > fresh_min:
-        return None
+        df, anchor, latest_close, is_stale = read_or_fetch_latest(symbol, csv_path)
+        lag_minutes = (anchor - latest_close).total_seconds() / 60 if pd.notna(latest_close) else float("inf")
+        print(f"[DIAG] latest_ts={latest_close} anchor={anchor} diff_min={lag_minutes:.2f}")
+        if is_stale:
+            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "stale_data"}
+        if lag_minutes > fresh_min:
+            return None
 
-    dff = add_features(df.copy())
+        dff = add_features(df.copy())
 
-    model_dir = os.path.join(cfg["io"].get("models_dir", "models"), symbol, "cls_multi")
-    if debug:
-        files = os.listdir(model_dir) if os.path.exists(model_dir) else []
-        print(f"[DEBUG] model_dir={model_dir} files={files} total={len(files)}")
-    meta_path = os.path.join(model_dir, "meta.json")
-    if not os.path.exists(model_dir) or not os.listdir(model_dir):
-        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
-    if not os.path.exists(meta_path):
-        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
-    meta = json.load(open(meta_path, "r", encoding="utf-8"))
-    feat_cols = meta.get("feature_columns") or []
-    if not feat_cols:
-        return {"symbol": symbol, "side": "NONE", "score": None, "reason": "no_models_loaded"}
-    x = dff.iloc[[-1]].replace([np.inf, -np.inf], np.nan).ffill().bfill()
-    x = x.reindex(feat_cols, axis=1)
-    missing = [c for c in feat_cols if c not in dff.columns]
-    if missing:
-        print(f"[DIAG] feature_missing={missing}")
-        return {"symbol": symbol, "side": "NONE", "score": None, "reason": "feature_mismatch"}
-    nan_cols = x.columns[x.iloc[0].isna()].tolist()
-    if nan_cols:
-        print(f"[DIAG] feature_nan_cols={nan_cols}")
-        return {"symbol": symbol, "side": "NONE", "score": None, "reason": "feature_nan"}
+        model_dir = os.path.join(cfg["io"].get("models_dir", "models"), symbol, "cls_multi")
+        if debug:
+            files = os.listdir(model_dir) if os.path.exists(model_dir) else []
+            print(f"[DEBUG] model_dir={model_dir} files={files} total={len(files)}")
+        meta_path = os.path.join(model_dir, "meta.json")
+        if not os.path.exists(model_dir) or not os.listdir(model_dir):
+            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
+        if not os.path.exists(meta_path):
+            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
+        meta = json.load(open(meta_path, "r", encoding="utf-8"))
+        feat_cols = meta.get("feature_columns") or []
+        if not feat_cols:
+            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
+        x = dff.iloc[[-1]].replace([np.inf, -np.inf], np.nan).ffill().bfill()
+        x = x.reindex(feat_cols, axis=1)
+        missing = [c for c in feat_cols if c not in dff.columns]
+        if missing:
+            print(f"[DIAG] feature_missing={missing}")
+            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "feature_mismatch"}
+        nan_cols = x.columns[x.iloc[0].isna()].tolist()
+        if nan_cols:
+            print(f"[DIAG] feature_nan_cols={nan_cols}")
+            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "feature_nan"}
 
-    m = MultiThresholdClassifier.load(model_dir)
-    model_files = os.listdir(model_dir)
-    print(f"[DIAG] models_loaded={model_files}")
-    prob_map = m.predict_proba(x)
-    print(f"[DIAG] predict_proba={prob_map}")
-    prob_map = {k: float(v) for k, v in prob_map.items() if v is not None and not pd.isna(v)}
-    if not prob_map:
-        return {"symbol": symbol, "side": "NONE", "score": None, "reason": "empty_or_invalid_inputs"}
-    th = cfg.get("strategy", {}).get("enter_threshold", 0.75)
-    method = cfg.get("strategy", {}).get("aggregator_method", "max_weighted")
-    sig = aggregate_signal(prob_map, enter_threshold=th, method=method)
-    if not sig.get("side"):
-        sig["side"] = "NONE"
-    sig["score"] = sanitize_score(sig.get("score"))
-    price = float(df["close"].iloc[-1]) if not df.empty else 0.0
-    sig["price"] = price
-    sig["symbol"] = symbol
-    sig["ts"] = time_utils.now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
-    print(f"[DIAG] final side={sig['side']} score={sig.get('score')} reason={sig.get('reason')}")
-    return sig
+        m = MultiThresholdClassifier.load(model_dir)
+        model_files = os.listdir(model_dir)
+        print(f"[DIAG] models_loaded={model_files}")
+        prob_map = m.predict_proba(x)
+        print(f"[DIAG] predict_proba={prob_map}")
+        prob_map = {k: float(v) for k, v in prob_map.items() if v is not None and not pd.isna(v)}
+        if not prob_map:
+            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "empty_or_invalid_inputs"}
+        th = cfg.get("strategy", {}).get("enter_threshold", 0.75)
+        method = cfg.get("strategy", {}).get("aggregator_method", "max_weighted")
+        sig = aggregate_signal(prob_map, enter_threshold=th, method=method)
+        if not sig.get("side"):
+            sig["side"] = "NONE"
+        sig["score"] = _coerce_float_or_zero(sig.get("score"))
+        price = float(df["close"].iloc[-1]) if not df.empty else 0.0
+        sig["price"] = price
+        sig["symbol"] = symbol
+        sig["ts"] = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+        print(f"[DIAG] final side={sig['side']} score={sig.get('score')} reason={sig.get('reason')}")
+        return sig
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}", file=sys.stderr)
+        print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}

@@ -3,16 +3,28 @@ from __future__ import annotations
 import argparse
 import json
 import traceback
+import math
 from dateutil import tz
 
 from csp.pipeline.realtime_v2 import run_once
-from csp.strategy.aggregator import sanitize_score
 TZ_TW = tz.gettz("Asia/Taipei")
 from csp.utils.notifier import notify
 from csp.utils.io import load_cfg
 from csp.utils.validate_data import ensure_data_ready
 from csp.utils.timez import to_utc_ts
 import pandas as pd
+
+
+def sanitize_score(x):
+    try:
+        if x is None:
+            return 0.0
+        xf = float(x)
+        if math.isnan(xf) or math.isinf(xf):
+            return 0.0
+        return xf
+    except Exception:
+        return 0.0
 
 
 def main():
