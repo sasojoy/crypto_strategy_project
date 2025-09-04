@@ -163,9 +163,10 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         except Exception as e:
             logger.error("[ERR][%s] %r", sym, e)
             logger.error("[ERR][%s] traceback:", sym, exc_info=True)
-            if "NoneType' object is not callable" in str(e):
+            if "object is not callable" in str(e):
                 logger.error(
-                    "[HINT] 可能是把函式當變數名稱遮蔽了（e.g., 參數命名與工具函式同名）。已修正請重試。"
+                    "[HINT] 可能發生函式名稱被變數遮蔽（shadowing），請檢查是否有同名變數覆蓋工具函式，"
+                    "或改用 csp.utils.time 命名空間呼叫（time_utils.safe_ts_to_utc / time_utils.now_utc）。"
                 )
             res = {
                 "symbol": sym,
