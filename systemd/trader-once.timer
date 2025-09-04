@@ -1,11 +1,12 @@
 [Unit]
-Description=Run trader-once.service every 15 minutes with 15s delay
+Description=Run trader-once every 15 minutes + 15 seconds
 
 [Timer]
-OnCalendar=*:00/15
+# 每 15 分鐘觸發（:00、:15、:30、:45）的第 15 秒
+OnCalendar=*:0/15:15
 AccuracySec=1s
-Unit=trader-once.service
 Persistent=true
+Unit=trader-once.service
 
 [Install]
 WantedBy=timers.target
