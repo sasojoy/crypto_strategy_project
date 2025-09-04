@@ -1,0 +1,14 @@
+[Unit]
+Description=Crypto Strategy Realtime Loop (15m, one-shot)
+After=network.target
+
+[Service]
+Type=oneshot
+User=deploy
+WorkingDirectory=/opt/crypto_strategy_project
+ExecStart=/bin/bash -lc '. .venv/bin/activate && python scripts/realtime_loop.py --cfg csp/configs/strategy.yaml --delay-sec 15'
+Restart=no
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

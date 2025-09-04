@@ -1,11 +1,11 @@
 [Unit]
-Description=Run trader.service every 15 minutes
+Description=Run trader.service on a timer (optional)
 
 [Timer]
-OnCalendar=*:0/15
-Persistent=true
-AccuracySec=1s
+OnBootSec=1min
+OnUnitActiveSec=15min
 Unit=trader.service
+Persistent=true
 
 [Install]
 WantedBy=timers.target

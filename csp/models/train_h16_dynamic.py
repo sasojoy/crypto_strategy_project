@@ -12,12 +12,7 @@ from typing import Union, Tuple, Optional, Dict
 
 import pandas as pd
 from csp.utils.io import load_cfg
-from csp.utils.tz_safe import (
-    normalize_df_to_utc,
-    safe_ts_to_utc,
-    now_utc,
-    floor_utc,
-)
+from csp.utils.timez import ensure_utc_index, to_utc_ts
 
 try:
     from csp.utils.dates import resolve_time_range_like, slice_by_utc
@@ -37,7 +32,6 @@ def _read_csv_smart(path: Union[str, Path]) -> pd.DataFrame:
     假設檔案至少有 ['timestamp', 'open', 'high', 'low', 'close'] 或類似欄位。
     """
     df = pd.read_csv(path)
-    df = normalize_df_to_utc(df)
     ts_candidates = ["timestamp", "time", "open_time", "datetime"]
     ts_col = next((c for c in ts_candidates if c in df.columns), None)
     if ts_col is None:
@@ -46,13 +40,13 @@ def _read_csv_smart(path: Union[str, Path]) -> pd.DataFrame:
                 df.index = pd.to_datetime(df.index)
             except Exception:
                 raise ValueError(f"找不到 timestamp 欄位（嘗試過 {ts_candidates}）。請確認 CSV 欄位。")
-            df = normalize_df_to_utc(df)
+            df = ensure_utc_index(df)
         else:
             raise ValueError(f"找不到 timestamp 欄位（嘗試過 {ts_candidates}）。請確認 CSV 欄位。")
     else:
         if ts_col != "timestamp":
             df = df.rename(columns={ts_col: "timestamp"})
-        df = normalize_df_to_utc(df)
+        df = ensure_utc_index(df, "timestamp")
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     return df
@@ -83,18 +77,27 @@ def _resolve_date_args(date_args=None, **kwargs) -> Dict[str, Optional[Union[str
 
 # === 日期區間應用（含 warmup） ===
 def _apply_date_range(df: pd.DataFrame, date_args: dict) -> Tuple[pd.DataFrame, Optional[pd.Timestamp], Optional[pd.Timestamp]]:
-    if resolve_time_range_like is None or slice_by_utc is None:
-        # 未安裝 utils，就直接回傳原 df
-        return df, None, None
     idx = df.index
     if not isinstance(idx, pd.DatetimeIndex):
         raise ValueError("資料缺少 DatetimeIndex，無法做日期切片。")
-    utc_start, utc_end = resolve_time_range_like(date_args, idx)
-    # warmup 緩衝（避免技術指標/label 在區間起頭失真）
+
+    start_str = date_args.get("start")
+    end_str = date_args.get("end")
+    days = date_args.get("days")
+
+    if start_str or end_str:
+        utc_start = to_utc_ts(start_str) if start_str else idx.min()
+        utc_end = to_utc_ts(end_str) if end_str else idx.max()
+    elif days is not None:
+        utc_end = idx.max()
+        utc_start = utc_end - pd.Timedelta(days=int(days))
+    else:
+        return df, None, None
+
     buf_bars = max(INDICATOR_MAX_WINDOW, HORIZON_MAX) + SAFETY_BARS
     buf_minutes = buf_bars * BAR_MINUTES
     utc_start_warm = utc_start - pd.Timedelta(minutes=buf_minutes)
-    sliced = slice_by_utc(df, start_utc=utc_start_warm, end_utc=utc_end)
+    sliced = df.loc[utc_start_warm:utc_end]
     if sliced.empty:
         raise ValueError(f"No data in selected range: {utc_start} ~ {utc_end} (UTC)")
     return sliced, utc_start, utc_end
@@ -114,7 +117,7 @@ def train(input_data: Union[pd.DataFrame, str, Path], cfg: dict, *, date_args: d
     if isinstance(input_data, (str, Path)):
         df = _read_csv_smart(input_data)
     elif isinstance(input_data, pd.DataFrame):
-        df = normalize_df_to_utc(input_data.copy())
+        df = ensure_utc_index(input_data.copy())
         print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
         assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
     else:

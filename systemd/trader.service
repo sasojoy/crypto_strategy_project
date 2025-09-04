@@ -1,13 +1,15 @@
 [Unit]
-Description=Crypto Strategy Realtime Loop
+Description=Crypto Strategy Long-running Realtime
 After=network.target
 
 [Service]
 Type=simple
+User=deploy
 WorkingDirectory=/opt/crypto_strategy_project
-ExecStartPre=/bin/sleep 15
-ExecStart=/opt/crypto_strategy_project/run_realtime.sh
+ExecStart=/bin/bash -lc '. .venv/bin/activate && python scripts/realtime_loop.py --cfg csp/configs/strategy.yaml --delay-sec 15 --infinite'
 Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
