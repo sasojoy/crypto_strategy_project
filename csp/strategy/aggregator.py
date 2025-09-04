@@ -6,10 +6,12 @@ from dateutil import tz
 from pathlib import Path
 import numpy as np
 from csp.data.binance import fetch_klines_range
-from csp.utils.timez import ensure_utc_index, to_utc_ts, now_utc, last_closed_15m
+from csp.utils.timez import ensure_utc_index, last_closed_15m
+from csp.utils.tz_safe import safe_ts_to_utc, now_utc as utc_now
 
 
 TZ_TW = tz.gettz("Asia/Taipei")
+logger = logging.getLogger(__name__)
 
 def _weight(h: int) -> float:
     return math.sqrt(max(1, int(h)))
@@ -107,11 +109,14 @@ def read_or_fetch_latest(
     csv_path: str,
     *,
     interval: str = "15m",
-    now: pd.Timestamp | None = None,
+    now_ts: pd.Timestamp | None = None,
     limit: int = 210,
 ):
     interval_td = pd.to_timedelta(interval)
-    now_ts = now_utc() if now is None else to_utc_ts(now)
+    if now_ts is None:
+        now_ts = utc_now()
+    else:
+        now_ts = safe_ts_to_utc(now_ts)
     anchor = last_closed_15m(now_ts)
 
     path = Path(csv_path)
@@ -120,7 +125,12 @@ def read_or_fetch_latest(
     else:
         df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
     df = ensure_utc_index(df, "timestamp")
-    print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
+    logger.debug(
+        "[DIAG] df.index.tz=%s, head_ts=%s, now_ts=%s",
+        getattr(df.index.tz, 'key', df.index.tz),
+        list(df.index[:3]),
+        now_ts,
+    )
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
     latest_close = df.index.max() if not df.empty else pd.NaT
@@ -216,6 +226,6 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
     price = float(df["close"].iloc[-1]) if not df.empty else 0.0
     sig["price"] = price
     sig["symbol"] = symbol
-    sig["ts"] = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+    sig["ts"] = utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
     print(f"[DIAG] final side={sig['side']} score={sig.get('score')} reason={sig.get('reason')}")
     return sig

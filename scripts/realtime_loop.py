@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import time
-import traceback
 import os
 import numpy as np
 import pandas as pd
@@ -29,6 +28,7 @@ from csp.utils.validate_data import ensure_data_ready
 
 TW = tz.gettz("Asia/Taipei")
 FRESH_MIN = 5.0  # 資料新鮮度門檻（分鐘）
+logger = logging.getLogger(__name__)
 
 
 def load_model(symbol: str, cfg_path: str = "csp/configs/strategy.yaml"):
@@ -161,9 +161,12 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         try:
             res = process_symbol(sym, cfg)
         except Exception as e:
-            tb = traceback.format_exc()
-            print(f"[ERR][{sym}] {repr(e)}")
-            print(f"[ERR][{sym}] traceback:\n{tb}")
+            logger.error("[ERR][%s] %r", sym, e)
+            logger.error("[ERR][%s] traceback:", sym, exc_info=True)
+            if "NoneType' object is not callable" in str(e):
+                logger.error(
+                    "[HINT] 可能是把函式當變數名稱遮蔽了（e.g., 參數命名與工具函式同名）。已修正請重試。"
+                )
             res = {
                 "symbol": sym,
                 "side": "NONE",
