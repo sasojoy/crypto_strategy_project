@@ -8,10 +8,11 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 import logging
+import math
 
 from dateutil import tz
 
-from csp.strategy.aggregator import get_latest_signal, sanitize_score
+from csp.strategy.aggregator import get_latest_signal
 from csp.strategy.position_sizing import (
     blended_sizing, SizingInput, ExchangeRule, kelly_fraction
 )
@@ -25,6 +26,35 @@ from csp.runtime.exit_watchdog import check_exit_once
 from csp.utils.io import load_cfg
 # timezone utilities handled within aggregator
 from csp.utils.validate_data import ensure_data_ready
+
+
+def sanitize_score(x):
+    try:
+        if x is None:
+            return 0.0
+        xf = float(x)
+        if math.isnan(xf) or math.isinf(xf):
+            return 0.0
+        return xf
+    except Exception:
+        return 0.0
+
+
+class _NoNaNJSONEncoder(json.JSONEncoder):
+    def iterencode(self, o, _one_shot=False):
+        def _clean(v):
+            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                return 0.0
+            return v
+        return super().iterencode(_walk(o, _clean))
+
+
+def _walk(o, f):
+    if isinstance(o, dict):
+        return {k: _walk(v, f) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_walk(v, f) for v in o]
+    return f(o)
 
 TW = tz.gettz("Asia/Taipei")
 FRESH_MIN = 5.0  # 資料新鮮度門檻（分鐘）
@@ -283,7 +313,23 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             lines.append(f"{sym}: {side} | score={scr:.3f} | reason={reason}{note}")
     notify("⏱️ 多幣別即時訊號\n" + "\n".join(lines), cfg.get("notify", {}).get("telegram"))
 
-    print(json.dumps(results, ensure_ascii=False, indent=2))
+    payload = {
+        sym: {
+            "symbol": sym,
+            "side": d.get("side", "NONE"),
+            "score": sanitize_score(d.get("score")),
+            "reason": d.get("reason"),
+        }
+        for sym, d in results.items()
+    }
+    print(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            cls=_NoNaNJSONEncoder,
+            separators=(",", ": "),
+        )
+    )
     now_ts = datetime.now(tz=TW)
     for r in results.values():
         price = r.get("price")

@@ -1,13 +1,6 @@
 import pandas as pd
 
-UTC = "UTC"
-
-def safe_ts_to_utc(ts):
-    """Return a UTC-aware pandas.Timestamp from ts (scalar)."""
-    ts = pd.Timestamp(ts)
-    if ts.tzinfo is None:
-        return ts.tz_localize(UTC)
-    return ts.tz_convert(UTC)
+from .timez import safe_ts_to_utc, now_utc, UTC
 
 def safe_index_to_utc(idx):
     """Return a UTC-aware DatetimeIndex from ``idx``."""
@@ -51,9 +44,6 @@ def normalize_df_to_utc(df):
     if "timestamp" not in df.columns and isinstance(df.index, pd.DatetimeIndex):
         df["timestamp"] = df.index
     return df.sort_index()
-
-def now_utc():
-    return pd.Timestamp.now(tz=UTC)
 
 def floor_utc(ts, freq="15min"):
     return safe_ts_to_utc(ts).floor(freq)
