@@ -11,6 +11,7 @@ TZ_TW = tz.gettz("Asia/Taipei")
 from csp.utils.notifier import notify
 from csp.utils.io import load_cfg
 from csp.utils.validate_data import ensure_data_ready
+from csp.utils.timez import to_utc_ts
 import pandas as pd
 
 
@@ -37,7 +38,7 @@ def main():
         if live_cfg.get("enabled"):
             try:
                 info = ensure_data_ready(sym, csv_path)
-                last_ts = pd.to_datetime(info.get("last_ts"), utc=True)
+                last_ts = to_utc_ts(info.get("last_ts"))
                 print(f"  last closed UTC={last_ts.isoformat()} | TW={(last_ts.tz_convert(TZ_TW)).isoformat()}")
             except Exception as e:
                 print(f"[WARN] data fetch failed for {sym}: {e}")

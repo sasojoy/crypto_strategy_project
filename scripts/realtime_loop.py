@@ -24,12 +24,7 @@ from csp.utils.notifier import (
 )
 from csp.runtime.exit_watchdog import check_exit_once
 from csp.utils.io import load_cfg
-from csp.utils.tz_safe import (
-    normalize_df_to_utc,
-    safe_ts_to_utc,
-    now_utc,
-    floor_utc,
-)
+# timezone utilities handled within aggregator
 from csp.utils.validate_data import ensure_data_ready
 
 TW = tz.gettz("Asia/Taipei")

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run trader-once.service every 15 minutes with 15s delay
+
+[Timer]
+OnCalendar=*:00/15
+AccuracySec=1s
+Unit=trader-once.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target
