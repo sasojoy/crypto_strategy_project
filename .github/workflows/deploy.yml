@@ -59,57 +59,24 @@ jobs:
 
       - name: Install systemd units and restart timer
         run: |
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            set -e
-            cd /opt/crypto_strategy_project
-
-            # 4.1 寫入/更新 systemd 單元檔（建議把這兩個 unit 檔納入 repo，這裡用 tee 覆蓋安裝）
-            sudo -n tee /etc/systemd/system/trader-once.service >/dev/null << "UNIT"
-[Unit]
-Description=Crypto Strategy Realtime Once (venv)
-After=network.target
-[Service]
-Type=oneshot
-User=deploy
-WorkingDirectory=/opt/crypto_strategy_project
-ExecStartPre=/usr/bin/find /opt/crypto_strategy_project -name __pycache__ -type d -exec rm -rf {} +
-ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py --cfg /opt/crypto_strategy_project/csp/configs/strategy.yaml --delay-sec 15 --once
-Nice=10
-EnvironmentFile=-/opt/crypto_strategy_project/.env
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-            sudo -n tee /etc/systemd/system/trader-once.timer >/dev/null << "UNIT"
-[Unit]
-Description=Run trader-once every 15 minutes + 15 seconds
-[Timer]
-OnCalendar=*:0/15:15
-AccuracySec=1s
-Persistent=true
-Unit=trader-once.service
-[Install]
-WantedBy=timers.target
-UNIT
-
-            # 4.2 套用單元異動
-            sudo -n systemctl daemon-reload
-
-            # 4.3 停止舊常駐服務（若存在）
-            sudo -n systemctl stop trader.service || true
-            sudo -n systemctl stop trader-once.service || true
-
-            # 4.4 啟用/啟動 timer（oneshot 由 timer 排程）
-            sudo -n systemctl enable --now trader-once.timer
-
-            # 4.5 立即觸發一次，驗證新程式有被載入
-            sudo -n systemctl start trader-once.service
-
-            # 4.6 顯示最近日誌，確認沒有 "'NoneType' object is not callable"
-            sudo -n journalctl -u trader-once -n 120 --no-pager || true
-
-            # 4.7 顯示狀態，確認不再是「連續 16h 相同 PID」
-            systemctl status trader-once.service --no-pager || true
-            systemctl status trader-once.timer   --no-pager || true
-          '
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/crypto_strategy_project
+          # 以 repo 內檔案安裝 unit，避免 YAML heredoc 解析問題
+          sudo -n install -m 0644 deploy/systemd/trader-once.service /etc/systemd/system/trader-once.service
+          sudo -n install -m 0644 deploy/systemd/trader-once.timer   /etc/systemd/system/trader-once.timer
+          # 套用變更
+          sudo -n systemctl daemon-reload
+          # 停掉舊常駐（若存在）
+          sudo -n systemctl stop trader.service || true
+          sudo -n systemctl stop trader-once.service || true
+          # 啟用/啟動 timer
+          sudo -n systemctl enable --now trader-once.timer
+          # 立即觸發一次，驗證新程式有被載入
+          sudo -n systemctl start trader-once.service
+          # 顯示最近日誌與狀態
+          sudo -n journalctl -u trader-once -n 120 --no-pager || true
+          systemctl status trader-once.service --no-pager || true
+          systemctl status trader-once.timer   --no-pager || true
+REMOTE
 
