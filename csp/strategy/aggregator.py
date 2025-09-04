@@ -2,12 +2,14 @@ from __future__ import annotations
 import math, os, json, logging
 import pandas as pd
 from dateutil import tz
+from typing import Optional
 
 from pathlib import Path
 import numpy as np
 from csp.data.binance import fetch_klines_range
 from csp.utils.timez import ensure_utc_index, last_closed_15m
-from csp.utils.tz_safe import safe_ts_to_utc, now_utc as utc_now
+# 改為以模組命名空間導入，避免函式名被區域/參數名遮蔽
+from csp.utils import time as time_utils
 
 
 TZ_TW = tz.gettz("Asia/Taipei")
@@ -109,14 +111,18 @@ def read_or_fetch_latest(
     csv_path: str,
     *,
     interval: str = "15m",
-    now_ts: pd.Timestamp | None = None,
+    now_ts: Optional[pd.Timestamp] = None,
     limit: int = 210,
 ):
     interval_td = pd.to_timedelta(interval)
+    # 防呆：確保工具函式沒有被遮蔽
+    assert callable(time_utils.now_utc), "now_utc not callable (possibly shadowed)"
+    assert callable(time_utils.safe_ts_to_utc), "safe_ts_to_utc not callable (possibly shadowed)"
+
     if now_ts is None:
-        now_ts = utc_now()
+        now_ts = time_utils.now_utc()
     else:
-        now_ts = safe_ts_to_utc(now_ts)
+        now_ts = time_utils.safe_ts_to_utc(now_ts)
     anchor = last_closed_15m(now_ts)
 
     path = Path(csv_path)
@@ -126,10 +132,11 @@ def read_or_fetch_latest(
         df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
     df = ensure_utc_index(df, "timestamp")
     logger.debug(
-        "[DIAG] df.index.tz=%s, head_ts=%s, now_ts=%s",
+        "[DIAG] df.index.tz=%s, head_ts=%s, now_ts=%s, safe_ts_to_utc=%s",
         getattr(df.index.tz, 'key', df.index.tz),
         list(df.index[:3]),
         now_ts,
+        type(time_utils.safe_ts_to_utc).__name__,
     )
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
@@ -226,6 +233,6 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
     price = float(df["close"].iloc[-1]) if not df.empty else 0.0
     sig["price"] = price
     sig["symbol"] = symbol
-    sig["ts"] = utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    sig["ts"] = time_utils.now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
     print(f"[DIAG] final side={sig['side']} score={sig.get('score')} reason={sig.get('reason')}")
     return sig
