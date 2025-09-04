@@ -12,7 +12,8 @@ from csp.utils.timez import (
     ensure_utc_index,
     last_closed_15m,
 )
-from csp.utils import time as time_utils  # 以模組命名空間導入，避免函式名被區域變數遮蔽
+# 以模組命名空間導入，避免函式名遭區域變數/參數遮蔽
+from csp.utils import time as time_utils
 
 
 TZ_TW = tz.gettz("Asia/Taipei")
@@ -121,10 +122,6 @@ def read_or_fetch_latest(
     limit: int = 210,
 ):
     interval_td = pd.to_timedelta(interval)
-    print(
-        f"[DIAG] callable(safe_ts_to_utc)={callable(time_utils.safe_ts_to_utc)} type={type(time_utils.safe_ts_to_utc)}"
-    )
-    print(f"[DIAG] read_or_fetch_latest: now_ts_in={now_ts} (type={type(now_ts)})")
     # 防呆：確保工具函式沒有被遮蔽
     assert callable(time_utils.now_utc), "now_utc not callable (shadowed?)"
     assert callable(time_utils.safe_ts_to_utc), "safe_ts_to_utc not callable (shadowed?)"
@@ -132,9 +129,6 @@ def read_or_fetch_latest(
         now_ts = time_utils.now_utc()
     else:
         now_ts = time_utils.safe_ts_to_utc(now_ts)
-    print(
-        f"[DIAG] read_or_fetch_latest: now_ts_utc={now_ts} (tz={getattr(now_ts,'tzinfo',None)})"
-    )
     anchor = last_closed_15m(now_ts)
 
     path = Path(csv_path)
