@@ -11,9 +11,8 @@ from csp.data.binance import fetch_klines_range
 from csp.utils.timez import (
     ensure_utc_index,
     last_closed_15m,
-    safe_ts_to_utc,
-    now_utc,
 )
+from csp.utils import time as time_utils  # 以模組命名空間導入，避免函式名被區域變數遮蔽
 
 
 TZ_TW = tz.gettz("Asia/Taipei")
@@ -122,12 +121,17 @@ def read_or_fetch_latest(
     limit: int = 210,
 ):
     interval_td = pd.to_timedelta(interval)
-    print(f"[DIAG] callable(safe_ts_to_utc)={callable(safe_ts_to_utc)} type={type(safe_ts_to_utc)}")
+    print(
+        f"[DIAG] callable(safe_ts_to_utc)={callable(time_utils.safe_ts_to_utc)} type={type(time_utils.safe_ts_to_utc)}"
+    )
     print(f"[DIAG] read_or_fetch_latest: now_ts_in={now_ts} (type={type(now_ts)})")
+    # 防呆：確保工具函式沒有被遮蔽
+    assert callable(time_utils.now_utc), "now_utc not callable (shadowed?)"
+    assert callable(time_utils.safe_ts_to_utc), "safe_ts_to_utc not callable (shadowed?)"
     if now_ts is None:
-        now_ts = now_utc()
+        now_ts = time_utils.now_utc()
     else:
-        now_ts = safe_ts_to_utc(now_ts)
+        now_ts = time_utils.safe_ts_to_utc(now_ts)
     print(
         f"[DIAG] read_or_fetch_latest: now_ts_utc={now_ts} (tz={getattr(now_ts,'tzinfo',None)})"
     )
@@ -144,7 +148,7 @@ def read_or_fetch_latest(
         getattr(df.index.tz, 'key', df.index.tz),
         list(df.index[:3]),
         now_ts,
-        type(safe_ts_to_utc).__name__,
+        type(time_utils.safe_ts_to_utc).__name__,
     )
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 

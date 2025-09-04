@@ -4,6 +4,7 @@ import argparse
 import json
 import time
 import os
+import sys
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta, timezone
@@ -345,9 +346,21 @@ def main():
     ap = argparse.ArgumentParser(description="Run realtime every 15m + delay seconds (with live Binance fetch).")
     ap.add_argument("--cfg", default="csp/configs/strategy.yaml")
     ap.add_argument("--delay-sec", type=int, default=15)
+    ap.add_argument(
+        "--once",
+        action="store_true",
+        help="Run exactly one cycle and exit (for systemd oneshot+timer).",
+    )
     args = ap.parse_args()
 
     cfg = load_cfg(args.cfg)
+    if args.once:
+        try:
+            run_once(cfg)
+        except Exception as e:
+            print(f"[ERROR] loop run failed: {e}")
+        sys.exit(0)
+
     while True:
         now = datetime.now(tz=TW)
         target = next_quarter_with_delay(now, args.delay_sec)

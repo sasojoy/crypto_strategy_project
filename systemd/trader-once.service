@@ -1,14 +1,17 @@
 [Unit]
-Description=Crypto Strategy Realtime Loop (15m, one-shot)
+Description=Crypto Strategy Realtime Once (venv)
 After=network.target
 
 [Service]
 Type=oneshot
 User=deploy
 WorkingDirectory=/opt/crypto_strategy_project
-ExecStart=/bin/bash -lc '. .venv/bin/activate && python scripts/realtime_loop.py --cfg csp/configs/strategy.yaml --delay-sec 15'
-Restart=no
-Environment=PYTHONUNBUFFERED=1
+# 清掉舊 bytecode，避免吃到殘留
+ExecStartPre=/usr/bin/find /opt/crypto_strategy_project -name __pycache__ -type d -exec rm -rf {} +
+# 重點：只跑一次就退出。(--once 見第 2 節)
+ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py --cfg /opt/crypto_strategy_project/csp/configs/strategy.yaml --delay-sec 15 --once
+Nice=10
+EnvironmentFile=-/opt/crypto_strategy_project/.env
 
 [Install]
 WantedBy=multi-user.target
