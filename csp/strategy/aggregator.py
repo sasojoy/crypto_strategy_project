@@ -14,6 +14,7 @@ from csp.utils.timez import (
     ensure_utc_index,
     last_closed_15m,
     safe_ts_to_utc,
+    ensure_aware_utc,
     now_utc,
 )
 
@@ -22,17 +23,8 @@ TZ_TW = tz.gettz("Asia/Taipei")
 logger = logging.getLogger(__name__)
 
 
-def _ensure_utc_ts(ts: pd.Timestamp) -> pd.Timestamp:
-    """Make sure a single Timestamp is UTC-aware."""
-    if getattr(ts, "tzinfo", None) is None:
-        return ts.tz_localize("UTC")
-    return ts.tz_convert("UTC")
-
-
 def _coerce_float_or_zero(x):
     try:
-        if x is None:
-            return 0.0
         xf = float(x)
         if math.isnan(xf) or math.isinf(xf):
             return 0.0
@@ -140,6 +132,26 @@ def read_or_fetch_latest(
             f"[DIAG] read_or_fetch_latest: now_ts_in={now_ts} (type={type(now_ts)})",
             file=sys.stderr,
         )
+        if 'fetch_fn' in locals():
+            if not callable(fetch_fn):
+                print(
+                    f"[DIAG] BAD_FETCH_FN name=fetch_fn repr={repr(fetch_fn)} type={type(fetch_fn)}",
+                    file=sys.stderr,
+                )
+                return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
+        if 'fetch_latest' in locals():
+            if not callable(fetch_latest):
+                print(
+                    f"[DIAG] BAD_FETCH_FN name=fetch_latest repr={repr(fetch_latest)} type={type(fetch_latest)}",
+                    file=sys.stderr,
+                )
+                return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
+        if not callable(fetch_klines_range):
+            print(
+                f"[DIAG] BAD_FETCH_FN name=fetch_klines_range repr={repr(fetch_klines_range)} type={type(fetch_klines_range)}",
+                file=sys.stderr,
+            )
+            return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
         try:
             now_ts = safe_ts_to_utc(now_ts)
             print(
@@ -233,8 +245,8 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
             return res
         df, anchor, latest_close, is_stale = res
         try:
-            latest_close = _ensure_utc_ts(latest_close)
-            anchor = _ensure_utc_ts(anchor)
+            latest_close = ensure_aware_utc(latest_close)
+            anchor = ensure_aware_utc(anchor)
             lag_minutes = (anchor - latest_close).total_seconds() / 60.0
             print(
                 f"[DIAG] latest_ts={latest_close} anchor={anchor} diff_min={lag_minutes:.2f}",
