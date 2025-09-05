@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,16 +30,12 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      # 需先在 VM 設好：/etc/sudoers.d/deploy 允許必要指令 NOPASSWD
-      - name: Prepare remote dir
+      - name: Prepare remote dir (sudo NOPASSWD expected)
         run: |
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
-            sudo -n mkdir -p /opt/crypto_strategy_project && \
-            sudo -n chown -R deploy:deploy /opt/crypto_strategy_project \
-          "
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "sudo -n mkdir -p /opt/crypto_strategy_project && sudo -n chown -R ${USER:-$USER}:${USER:-$USER} /opt/crypto_strategy_project || sudo -n chown -R deploy:deploy /opt/crypto_strategy_project"
 
-      # 不要 --delete，並排除線上產物
-      - name: Sync files via rsync (safe)
+      - name: Sync files via rsync (safe, no models/logs)
         run: |
           rsync -az \
             --exclude='.git' \
@@ -50,33 +47,22 @@ jobs:
             -e 'ssh -o StrictHostKeyChecking=yes' \
             ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/crypto_strategy_project/
 
-      # 用 sudo 執行 deploy.sh（免密碼）
       - name: Run remote deploy script
         run: |
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
-            sudo -n bash /opt/crypto_strategy_project/deploy.sh \
-          "
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "cd /opt/crypto_strategy_project && sudo -n bash scripts/deploy.sh"
 
-      - name: Install systemd units and restart timer
+      - name: Install/enable systemd timer and show status
         run: |
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          cd /opt/crypto_strategy_project
-          # 以 repo 內檔案安裝 unit，避免 YAML heredoc 解析問題
-          sudo -n install -m 0644 deploy/systemd/trader-once.service /etc/systemd/system/trader-once.service
-          sudo -n install -m 0644 deploy/systemd/trader-once.timer   /etc/systemd/system/trader-once.timer
-          # 套用變更
-          sudo -n systemctl daemon-reload
-          # 停掉舊常駐（若存在）
-          sudo -n systemctl stop trader.service || true
-          sudo -n systemctl stop trader-once.service || true
-          # 啟用/啟動 timer
-          sudo -n systemctl enable --now trader-once.timer
-          # 立即觸發一次，驗證新程式有被載入
-          sudo -n systemctl start trader-once.service
-          # 顯示最近日誌與狀態
-          sudo -n journalctl -u trader-once -n 120 --no-pager || true
-          systemctl status trader-once.service --no-pager || true
-          systemctl status trader-once.timer   --no-pager || true
-REMOTE
-
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+            set -euo pipefail
+            sudo -n cp systemd/trader-once.service /etc/systemd/system/trader-once.service
+            sudo -n cp systemd/trader-once.timer   /etc/systemd/system/trader-once.timer
+            sudo -n systemctl daemon-reload
+            sudo -n systemctl stop trader.service || true
+            sudo -n systemctl stop trader-once.service || true
+            sudo -n systemctl enable --now trader-once.timer
+            sudo -n systemctl start trader-once.service
+            sudo -n systemctl status trader-once.timer --no-pager || true
+            sudo -n systemctl status trader-once.service --no-pager || true
+          "
