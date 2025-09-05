@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import sys, math, traceback
-import os, json, logging
+import sys, math, os, json, logging
 from typing import Optional
 from pathlib import Path
 
@@ -17,6 +16,7 @@ from csp.utils.timez import (
     ensure_aware_utc,
     now_utc,
 )
+from csp.utils.diag import log_diag, log_trace
 
 
 TZ_TW = tz.gettz("Asia/Taipei")
@@ -124,47 +124,32 @@ def read_or_fetch_latest(
 ):
     try:
         interval_td = pd.to_timedelta(interval)
-        print(
-            f"[DIAG] callable(safe_ts_to_utc)={callable(safe_ts_to_utc)} type={type(safe_ts_to_utc)}",
-            file=sys.stderr,
+        log_diag(
+            f"callable(safe_ts_to_utc)={callable(safe_ts_to_utc)} type={type(safe_ts_to_utc)}"
         )
-        print(
-            f"[DIAG] read_or_fetch_latest: now_ts_in={now_ts} (type={type(now_ts)})",
-            file=sys.stderr,
+        log_diag(
+            f"read_or_fetch_latest: now_ts_in={now_ts} (type={type(now_ts)})"
         )
-        if 'fetch_fn' in locals():
-            if not callable(fetch_fn):
-                print(
-                    f"[DIAG] BAD_FETCH_FN name=fetch_fn repr={repr(fetch_fn)} type={type(fetch_fn)}",
-                    file=sys.stderr,
-                )
-                return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
-        if 'fetch_latest' in locals():
-            if not callable(fetch_latest):
-                print(
-                    f"[DIAG] BAD_FETCH_FN name=fetch_latest repr={repr(fetch_latest)} type={type(fetch_latest)}",
-                    file=sys.stderr,
-                )
-                return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
+        for _name in ("fetch_fn", "fetch_latest", "loader"):
+            if _name in locals():
+                _val = locals()[_name]
+                if not callable(_val):
+                    log_diag(
+                        f"BAD_FETCH_FN name={_name} repr={repr(_val)} type={type(_val)}"
+                    )
+                    return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
         if not callable(fetch_klines_range):
-            print(
-                f"[DIAG] BAD_FETCH_FN name=fetch_klines_range repr={repr(fetch_klines_range)} type={type(fetch_klines_range)}",
-                file=sys.stderr,
+            log_diag(
+                f"BAD_FETCH_FN name=fetch_klines_range repr={repr(fetch_klines_range)} type={type(fetch_klines_range)}"
             )
             return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
         try:
             now_ts = safe_ts_to_utc(now_ts)
-            print(
-                f"[DIAG] read_or_fetch_latest: now_ts_utc={now_ts} (tz={getattr(now_ts,'tzinfo',None)})",
-                file=sys.stderr,
+            log_diag(
+                f"read_or_fetch_latest: now_ts_utc={now_ts} tz={getattr(now_ts,'tzinfo',None)}"
             )
         except Exception as e:
-            tb = traceback.format_exc()
-            print(
-                f"[DIAG] CONVERT_NOW_TS_FAIL type={type(e).__name__} msg={e}",
-                file=sys.stderr,
-            )
-            print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+            log_trace("CONVERT_NOW_TS_FAIL", e)
             return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
 
         if 'start_ts' in locals() and start_ts is not None:
@@ -218,12 +203,7 @@ def read_or_fetch_latest(
         print(f"[FETCH] retried={retried} endTime={anchor.isoformat()}")
         return df, anchor, latest_close, is_stale
     except Exception as e:
-        tb = traceback.format_exc()
-        print(
-            f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}",
-            file=sys.stderr,
-        )
-        print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+        log_trace("LOOP_EXCEPTION", e)
         return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
 
 
@@ -248,17 +228,11 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
             latest_close = ensure_aware_utc(latest_close)
             anchor = ensure_aware_utc(anchor)
             lag_minutes = (anchor - latest_close).total_seconds() / 60.0
-            print(
-                f"[DIAG] latest_ts={latest_close} anchor={anchor} diff_min={lag_minutes:.2f}",
-                file=sys.stderr,
+            log_diag(
+                f"latest_ts={latest_close} anchor={anchor} diff_min={lag_minutes:.2f}"
             )
         except Exception as e:
-            tb = traceback.format_exc()
-            print(
-                f"[DIAG] LAG_CALC_FAIL type={type(e).__name__} msg={e}",
-                file=sys.stderr,
-            )
-            print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+            log_trace("LAG_CALC_FAIL", e)
             return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
         if is_stale:
             return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "stale_data"}
@@ -270,7 +244,7 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
         model_dir = os.path.join(cfg["io"].get("models_dir", "models"), symbol, "cls_multi")
         if debug:
             files = os.listdir(model_dir) if os.path.exists(model_dir) else []
-            print(f"[DEBUG] model_dir={model_dir} files={files} total={len(files)}")
+            log_diag(f"model_dir={model_dir} files={files} total={len(files)}")
         meta_path = os.path.join(model_dir, "meta.json")
         if not os.path.exists(model_dir) or not os.listdir(model_dir):
             return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
@@ -284,18 +258,18 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
         x = x.reindex(feat_cols, axis=1)
         missing = [c for c in feat_cols if c not in dff.columns]
         if missing:
-            print(f"[DIAG] feature_missing={missing}")
+            log_diag(f"feature_missing={missing}")
             return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "feature_mismatch"}
         nan_cols = x.columns[x.iloc[0].isna()].tolist()
         if nan_cols:
-            print(f"[DIAG] feature_nan_cols={nan_cols}")
+            log_diag(f"feature_nan_cols={nan_cols}")
             return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "feature_nan"}
 
         m = MultiThresholdClassifier.load(model_dir)
         model_files = os.listdir(model_dir)
-        print(f"[DIAG] models_loaded={model_files}")
+        log_diag(f"models_loaded={model_files}")
         prob_map = m.predict_proba(x)
-        print(f"[DIAG] predict_proba={prob_map}")
+        log_diag(f"predict_proba={prob_map}")
         prob_map = {k: float(v) for k, v in prob_map.items() if v is not None and not pd.isna(v)}
         if not prob_map:
             return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "empty_or_invalid_inputs"}
@@ -309,10 +283,10 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
         sig["price"] = price
         sig["symbol"] = symbol
         sig["ts"] = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
-        print(f"[DIAG] final side={sig['side']} score={sig.get('score')} reason={sig.get('reason')}")
+        log_diag(
+            f"final side={sig['side']} score={sig.get('score')} reason={sig.get('reason')}"
+        )
         return sig
     except Exception as e:
-        tb = traceback.format_exc()
-        print(f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}", file=sys.stderr)
-        print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+        log_trace("LOOP_EXCEPTION", e)
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}

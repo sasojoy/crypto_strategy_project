@@ -10,23 +10,16 @@ import pandas as pd
 from datetime import datetime, timedelta, timezone
 import logging
 import math
-import traceback
 
 from dateutil import tz
+
+from csp.utils.diag import log_diag, log_trace
 
 
 def _install_global_excepthook():
     def _hook(exc_type, exc, tb):
         try:
-            print(
-                "[DIAG] GLOBAL_EXCEPTION type=%s msg=%s" % (exc_type.__name__, exc),
-                file=sys.stderr,
-            )
-            print(
-                "[DIAG] TRACEBACK\n%s"
-                % ("".join(traceback.format_exception(exc_type, exc, tb))),
-                file=sys.stderr,
-            )
+            log_trace("GLOBAL_EXCEPTION", exc)
         except Exception:
             pass
 
@@ -163,12 +156,7 @@ def process_symbol(symbol: str, cfg: dict):
         sig["score"] = sanitize_score(sig.get("score"))
         return sig
     except Exception as e:
-        tb = traceback.format_exc()
-        print(
-            f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}",
-            file=sys.stderr,
-        )
-        print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+        log_trace("LOOP_EXCEPTION", e)
         return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
 
 
@@ -203,9 +191,7 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         try:
             res = process_symbol(sym, cfg)
         except Exception as e:
-            tb = traceback.format_exc()
-            print(f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}", file=sys.stderr)
-            print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+            log_trace("LOOP_EXCEPTION", e)
             res = {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
         sig = res if res.get("side") in ("LONG", "SHORT") else None
         if res.get("price") is not None and sig:
@@ -353,12 +339,7 @@ def main():
         try:
             run_once(cfg)
         except Exception as e:
-            tb = traceback.format_exc()
-            print(
-                f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}",
-                file=sys.stderr,
-            )
-            print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+            log_trace("LOOP_EXCEPTION", e)
         sys.exit(0)
 
     while True:
@@ -371,12 +352,7 @@ def main():
         try:
             run_once(cfg)
         except Exception as e:
-            tb = traceback.format_exc()
-            print(
-                f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}",
-                file=sys.stderr,
-            )
-            print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+            log_trace("LOOP_EXCEPTION", e)
 
 
 if __name__ == "__main__":
