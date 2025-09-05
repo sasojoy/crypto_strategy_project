@@ -30,42 +30,32 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Prepare remote dir (sudo NOPASSWD expected)
-        run: |
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "sudo -n mkdir -p /opt/crypto_strategy_project && sudo -n chown -R ${USER:-$USER}:${USER:-$USER} /opt/crypto_strategy_project || sudo -n chown -R deploy:deploy /opt/crypto_strategy_project"
-
-      - name: Sync files via rsync (safe, no models/logs)
+      - name: Rsync project to VM
         run: |
           rsync -az \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='.venv' \
-            --exclude='models/**' \
-            --exclude='logs/**' \
-            --exclude='resources/*.csv' \
             -e 'ssh -o StrictHostKeyChecking=yes' \
-            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/crypto_strategy_project/
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USER }}/repo_tmp/
 
-      - name: Run remote deploy script
+      - name: Run remote deploy script (installs systemd units)
         run: |
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -lc "
+            set -euo pipefail
+            cd /home/${{ secrets.SSH_USER }}/repo_tmp
+            # 必須以 repo 目錄執行 deploy.sh，裡面會 rsync 到 /opt/crypto_strategy_project
+            sudo -n bash scripts/deploy.sh
+          "'
+
+      - name: Sanity check on VM (systemd + timer)
+        run: |
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -lc "
             set -euo pipefail
             cd /opt/crypto_strategy_project
-            sudo -n bash scripts/deploy.sh
-          "
-
-      - name: Install/enable systemd timer and show status
-        run: |
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-            set -euo pipefail
-            sudo -n cp systemd/trader-once.service /etc/systemd/system/trader-once.service
-            sudo -n cp systemd/trader-once.timer   /etc/systemd/system/trader-once.timer
-            sudo -n systemctl daemon-reload
-            sudo -n systemctl stop trader.service || true
-            sudo -n systemctl stop trader-once.service || true
-            sudo -n systemctl enable --now trader-once.timer
-            sudo -n systemctl start trader-once.service
+            echo [INFO] PWD: \$(pwd)
+            ls -la systemd || true
             sudo -n systemctl status trader-once.timer --no-pager || true
             sudo -n systemctl status trader-once.service --no-pager || true
-          "
+          "'
+
