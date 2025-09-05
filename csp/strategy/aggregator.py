@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sys, math, os, json, logging
+import sys, math, traceback, os, json, logging
 from typing import Optional
 from pathlib import Path
 
@@ -203,7 +203,7 @@ def read_or_fetch_latest(
         print(f"[FETCH] retried={retried} endTime={anchor.isoformat()}")
         return df, anchor, latest_close, is_stale
     except Exception as e:
-        log_trace("LOOP_EXCEPTION", e)
+        log_trace("LOOP_EXCEPTION(read_or_fetch_latest)", e)
         return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
 
 
@@ -288,5 +288,5 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
         )
         return sig
     except Exception as e:
-        log_trace("LOOP_EXCEPTION", e)
+        log_trace("LOOP_EXCEPTION(get_latest_signal)", e)
         return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}

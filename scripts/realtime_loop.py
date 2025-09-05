@@ -5,11 +5,13 @@ import json
 import time
 import os
 import sys
+import math
+import traceback
+
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 import logging
-import math
 
 from dateutil import tz
 
@@ -27,6 +29,12 @@ def _install_global_excepthook():
 
 
 _install_global_excepthook()
+
+if os.environ.get("DIAG_SELFTEST") == "1":
+    try:
+        raise RuntimeError("DIAG_SELFTEST_TRIGGER")
+    except Exception as e:
+        log_trace("SELFTEST", e)
 
 from csp.strategy.aggregator import get_latest_signal
 from csp.strategy.position_sizing import (
