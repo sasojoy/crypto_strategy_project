@@ -10,6 +10,7 @@ import pandas as pd
 from datetime import datetime, timedelta, timezone
 import logging
 import math
+import traceback
 
 from dateutil import tz
 
@@ -39,23 +40,6 @@ def sanitize_score(x):
         return xf
     except Exception:
         return 0.0
-
-
-class _NoNaNJSONEncoder(json.JSONEncoder):
-    def iterencode(self, o, _one_shot=False):
-        def _clean(v):
-            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
-                return 0.0
-            return v
-        return super().iterencode(_walk(o, _clean))
-
-
-def _walk(o, f):
-    if isinstance(o, dict):
-        return {k: _walk(v, f) for k, v in o.items()}
-    if isinstance(o, list):
-        return [_walk(v, f) for v in o]
-    return f(o)
 
 TW = tz.gettz("Asia/Taipei")
 FRESH_MIN = 5.0  # 資料新鮮度門檻（分鐘）
@@ -152,13 +136,21 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
     return {"symbol": symbol, "side": side, "score": score}
 
 def process_symbol(symbol: str, cfg: dict):
-    sig = get_latest_signal(symbol, cfg, fresh_min=FRESH_MIN)
-    if not sig:
-        notify_guard("signal_unavailable", {"symbol": symbol})
-        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "signal_unavailable"}
-    if sig.get("score") is not None:
+    try:
+        sig = get_latest_signal(symbol, cfg, fresh_min=FRESH_MIN)
+        if not sig:
+            notify_guard("signal_unavailable", {"symbol": symbol})
+            return {"side": "NONE", "score": 0.0, "reason": "signal_unavailable"}
         sig["score"] = sanitize_score(sig.get("score"))
-    return sig
+        return sig
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(
+            f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}",
+            file=sys.stderr,
+        )
+        print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+        return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
 
 
 def next_quarter_with_delay(now: datetime, delay_sec: int = 15) -> datetime:
@@ -192,19 +184,10 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         try:
             res = process_symbol(sym, cfg)
         except Exception as e:
-            logger.error("[ERR][%s] %r", sym, e)
-            logger.error("[ERR][%s] traceback:", sym, exc_info=True)
-            if "object is not callable" in str(e):
-                logger.error(
-                    "[HINT] 可能發生函式名稱被變數遮蔽（shadowing），請檢查是否有同名變數覆蓋工具函式，"
-                    "或改用 csp.utils.time 命名空間呼叫（time_utils.safe_ts_to_utc / time_utils.now_utc）。"
-                )
-            res = {
-                "symbol": sym,
-                "side": "NONE",
-                "score": float("nan"),
-                "reason": f"LOOP_EXCEPTION:{type(e).__name__}",
-            }
+            tb = traceback.format_exc()
+            print(f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}", file=sys.stderr)
+            print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+            res = {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
         sig = res if res.get("side") in ("LONG", "SHORT") else None
         if res.get("price") is not None and sig:
             notify_signal(sym, sig, float(res.get("price")), telegram_conf)
@@ -323,14 +306,7 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         }
         for sym, d in results.items()
     }
-    print(
-        json.dumps(
-            payload,
-            ensure_ascii=False,
-            cls=_NoNaNJSONEncoder,
-            separators=(",", ": "),
-        )
-    )
+    print(json.dumps(payload, ensure_ascii=False, separators=(",", ": ")))
     now_ts = datetime.now(tz=TW)
     for r in results.values():
         price = r.get("price")
@@ -358,7 +334,12 @@ def main():
         try:
             run_once(cfg)
         except Exception as e:
-            print(f"[ERROR] loop run failed: {e}")
+            tb = traceback.format_exc()
+            print(
+                f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}",
+                file=sys.stderr,
+            )
+            print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
         sys.exit(0)
 
     while True:
@@ -371,7 +352,12 @@ def main():
         try:
             run_once(cfg)
         except Exception as e:
-            print(f"[ERROR] loop run failed: {e}")
+            tb = traceback.format_exc()
+            print(
+                f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}",
+                file=sys.stderr,
+            )
+            print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
 
 
 if __name__ == "__main__":
