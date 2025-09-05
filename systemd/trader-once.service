@@ -12,6 +12,9 @@ ExecStartPre=/usr/bin/find /opt/crypto_strategy_project -name __pycache__ -type 
 ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py --cfg /opt/crypto_strategy_project/csp/configs/strategy.yaml --delay-sec 15 --once
 Nice=10
 EnvironmentFile=-/opt/crypto_strategy_project/.env
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
