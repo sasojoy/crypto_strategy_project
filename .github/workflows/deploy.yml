@@ -49,8 +49,11 @@ jobs:
 
       - name: Run remote deploy script
         run: |
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "cd /opt/crypto_strategy_project && sudo -n bash scripts/deploy.sh"
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+            set -euo pipefail
+            cd /opt/crypto_strategy_project
+            sudo -n bash scripts/deploy.sh
+          "
 
       - name: Install/enable systemd timer and show status
         run: |
