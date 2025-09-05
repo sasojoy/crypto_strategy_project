@@ -14,6 +14,27 @@ import traceback
 
 from dateutil import tz
 
+
+def _install_global_excepthook():
+    def _hook(exc_type, exc, tb):
+        try:
+            print(
+                "[DIAG] GLOBAL_EXCEPTION type=%s msg=%s" % (exc_type.__name__, exc),
+                file=sys.stderr,
+            )
+            print(
+                "[DIAG] TRACEBACK\n%s"
+                % ("".join(traceback.format_exception(exc_type, exc, tb))),
+                file=sys.stderr,
+            )
+        except Exception:
+            pass
+
+    sys.excepthook = _hook
+
+
+_install_global_excepthook()
+
 from csp.strategy.aggregator import get_latest_signal
 from csp.strategy.position_sizing import (
     blended_sizing, SizingInput, ExchangeRule, kelly_fraction
@@ -32,8 +53,6 @@ from csp.utils.validate_data import ensure_data_ready
 
 def sanitize_score(x):
     try:
-        if x is None:
-            return 0.0
         xf = float(x)
         if math.isnan(xf) or math.isinf(xf):
             return 0.0

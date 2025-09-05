@@ -39,6 +39,12 @@ def safe_ts_to_utc(ts) -> pd.Timestamp:
         return now_utc()
     return to_utc_ts(ts)
 
+
+def ensure_aware_utc(ts: pd.Timestamp) -> pd.Timestamp:
+    if getattr(ts, "tzinfo", None) is None:
+        return ts.tz_localize(UTC)
+    return ts.tz_convert(UTC)
+
 def last_closed_15m(now: pd.Timestamp | None = None) -> pd.Timestamp:
     if now is None:
         now = now_utc()
