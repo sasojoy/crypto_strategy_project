@@ -1,23 +1,32 @@
 from __future__ import annotations
 
-import math, os, json, logging, traceback, sys
+import sys, math, traceback
+import os, json, logging
+from typing import Optional
+from pathlib import Path
+
+import numpy as np
 import pandas as pd
 from dateutil import tz
-from typing import Optional
 
-from pathlib import Path
-import numpy as np
 from csp.data.binance import fetch_klines_range
 from csp.utils.timez import (
     ensure_utc_index,
     last_closed_15m,
+    safe_ts_to_utc,
+    now_utc,
 )
-# 以模組命名空間導入，避免函式名遭區域變數/參數遮蔽
-from csp.utils import time as time_utils
 
 
 TZ_TW = tz.gettz("Asia/Taipei")
 logger = logging.getLogger(__name__)
+
+
+def _ensure_utc_ts(ts: pd.Timestamp) -> pd.Timestamp:
+    """Make sure a single Timestamp is UTC-aware."""
+    if getattr(ts, "tzinfo", None) is None:
+        return ts.tz_localize("UTC")
+    return ts.tz_convert("UTC")
 
 
 def _coerce_float_or_zero(x):
@@ -25,7 +34,7 @@ def _coerce_float_or_zero(x):
         if x is None:
             return 0.0
         xf = float(x)
-        if math.isnan(xf):
+        if math.isnan(xf) or math.isinf(xf):
             return 0.0
         return xf
     except Exception:
@@ -121,59 +130,89 @@ def read_or_fetch_latest(
     now_ts: Optional[pd.Timestamp] = None,
     limit: int = 210,
 ):
-    interval_td = pd.to_timedelta(interval)
-    # 防呆：確保工具函式沒有被遮蔽
-    assert callable(time_utils.now_utc), "now_utc not callable (shadowed?)"
-    assert callable(time_utils.safe_ts_to_utc), "safe_ts_to_utc not callable (shadowed?)"
-    if now_ts is None:
-        now_ts = time_utils.now_utc()
-    else:
-        now_ts = time_utils.safe_ts_to_utc(now_ts)
-    anchor = last_closed_15m(now_ts)
-
-    path = Path(csv_path)
-    if path.exists():
-        df = pd.read_csv(path)
-    else:
-        df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
-    df = ensure_utc_index(df, "timestamp")
-    logger.debug(
-        "[DIAG] df.index.tz=%s, head_ts=%s, now_ts=%s, safe_ts_to_utc=%s",
-        getattr(df.index.tz, 'key', df.index.tz),
-        list(df.index[:3]),
-        now_ts,
-        type(time_utils.safe_ts_to_utc).__name__,
-    )
-    assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
-
-    latest_close = df.index.max() if not df.empty else pd.NaT
-    lag = (anchor - latest_close) if pd.notna(latest_close) else pd.Timedelta.max
-    is_stale = pd.isna(latest_close) or lag >= interval_td
-    retried = 0
-
-    if is_stale:
-        retried = 1
-        end_time = anchor
-        start_time = end_time - interval_td * max(limit, 210)
-        new_df = fetch_klines_range(
-            symbol,
-            interval,
-            int(start_time.timestamp() * 1000),
-            int(end_time.timestamp() * 1000),
+    try:
+        interval_td = pd.to_timedelta(interval)
+        print(
+            f"[DIAG] callable(safe_ts_to_utc)={callable(safe_ts_to_utc)} type={type(safe_ts_to_utc)}",
+            file=sys.stderr,
         )
-        df = pd.concat([df, new_df])
-        df = df[~df.index.duplicated(keep="last")].sort_index()
-        df.reset_index().to_csv(path, index=False)
+        print(
+            f"[DIAG] read_or_fetch_latest: now_ts_in={now_ts} (type={type(now_ts)})",
+            file=sys.stderr,
+        )
+        try:
+            now_ts = safe_ts_to_utc(now_ts)
+            print(
+                f"[DIAG] read_or_fetch_latest: now_ts_utc={now_ts} (tz={getattr(now_ts,'tzinfo',None)})",
+                file=sys.stderr,
+            )
+        except Exception as e:
+            tb = traceback.format_exc()
+            print(
+                f"[DIAG] CONVERT_NOW_TS_FAIL type={type(e).__name__} msg={e}",
+                file=sys.stderr,
+            )
+            print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+            return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
+
+        if 'start_ts' in locals() and start_ts is not None:
+            start_ts = safe_ts_to_utc(start_ts)
+        if 'end_ts' in locals() and end_ts is not None:
+            end_ts = safe_ts_to_utc(end_ts)
+
+        anchor = last_closed_15m(now_ts)
+
+        path = Path(csv_path)
+        if path.exists():
+            df = pd.read_csv(path)
+        else:
+            df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+        df = ensure_utc_index(df, "timestamp")
+        logger.debug(
+            "[DIAG] df.index.tz=%s, head_ts=%s, now_ts=%s, safe_ts_to_utc=%s",
+            getattr(df.index.tz, 'key', df.index.tz),
+            list(df.index[:3]),
+            now_ts,
+            type(safe_ts_to_utc).__name__,
+        )
+        assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
+
         latest_close = df.index.max() if not df.empty else pd.NaT
         lag = (anchor - latest_close) if pd.notna(latest_close) else pd.Timedelta.max
         is_stale = pd.isna(latest_close) or lag >= interval_td
+        retried = 0
 
-    diff_min = lag.total_seconds() / 60 if pd.notna(latest_close) else float("inf")
-    print(
-        f"[TIME] anchor={anchor.isoformat()} latest_close={latest_close.isoformat() if pd.notna(latest_close) else 'none'} diff_min={diff_min:.2f}"
-    )
-    print(f"[FETCH] retried={retried} endTime={anchor.isoformat()}")
-    return df, anchor, latest_close, is_stale
+        if is_stale:
+            retried = 1
+            end_time = anchor
+            start_time = end_time - interval_td * max(limit, 210)
+            new_df = fetch_klines_range(
+                symbol,
+                interval,
+                int(start_time.timestamp() * 1000),
+                int(end_time.timestamp() * 1000),
+            )
+            df = pd.concat([df, new_df])
+            df = df[~df.index.duplicated(keep="last")].sort_index()
+            df.reset_index().to_csv(path, index=False)
+            latest_close = df.index.max() if not df.empty else pd.NaT
+            lag = (anchor - latest_close) if pd.notna(latest_close) else pd.Timedelta.max
+            is_stale = pd.isna(latest_close) or lag >= interval_td
+
+        diff_min = lag.total_seconds() / 60 if pd.notna(latest_close) else float("inf")
+        print(
+            f"[TIME] anchor={anchor.isoformat()} latest_close={latest_close.isoformat() if pd.notna(latest_close) else 'none'} diff_min={diff_min:.2f}"
+        )
+        print(f"[FETCH] retried={retried} endTime={anchor.isoformat()}")
+        return df, anchor, latest_close, is_stale
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(
+            f"[DIAG] LOOP_EXCEPTION type={type(e).__name__} msg={e}",
+            file=sys.stderr,
+        )
+        print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+        return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
 
 
 # get_latest_signal（如已存在，請覆蓋為更嚴格版）
@@ -189,9 +228,26 @@ def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: 
         if not csv_path or not os.path.exists(csv_path):
             return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_data"}
 
-        df, anchor, latest_close, is_stale = read_or_fetch_latest(symbol, csv_path)
-        lag_minutes = (anchor - latest_close).total_seconds() / 60 if pd.notna(latest_close) else float("inf")
-        print(f"[DIAG] latest_ts={latest_close} anchor={anchor} diff_min={lag_minutes:.2f}")
+        res = read_or_fetch_latest(symbol, csv_path)
+        if isinstance(res, dict):
+            return res
+        df, anchor, latest_close, is_stale = res
+        try:
+            latest_close = _ensure_utc_ts(latest_close)
+            anchor = _ensure_utc_ts(anchor)
+            lag_minutes = (anchor - latest_close).total_seconds() / 60.0
+            print(
+                f"[DIAG] latest_ts={latest_close} anchor={anchor} diff_min={lag_minutes:.2f}",
+                file=sys.stderr,
+            )
+        except Exception as e:
+            tb = traceback.format_exc()
+            print(
+                f"[DIAG] LAG_CALC_FAIL type={type(e).__name__} msg={e}",
+                file=sys.stderr,
+            )
+            print(f"[DIAG] TRACEBACK\n{tb}", file=sys.stderr)
+            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
         if is_stale:
             return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "stale_data"}
         if lag_minutes > fresh_min:
