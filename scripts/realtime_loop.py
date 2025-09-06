@@ -36,8 +36,9 @@ if os.environ.get("DIAG_SELFTEST") == "1":
     except Exception as e:
         log_trace("SELFTEST", e)
 
-from csp.strategy.aggregator import get_latest_signal, read_or_fetch_latest
+from csp.strategy import aggregator
 from csp.strategy.model_hub import load_models_from_cfg
+from csp.utils.paths import resolve_resources_dir
 from csp.strategy.position_sizing import (
     blended_sizing, SizingInput, ExchangeRule, kelly_fraction
 )
@@ -158,16 +159,13 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
 
 def process_symbol(symbol: str, cfg: dict, models: dict):
     try:
-        csv_path = cfg["io"]["csv_paths"].get(symbol)
-        if not csv_path or not os.path.exists(csv_path):
-            return {"side": "NONE", "score": 0.0, "reason": "no_data"}
-        res = read_or_fetch_latest(symbol, csv_path, cfg=cfg)
+        res = aggregator.read_or_fetch_latest(symbol, cfg=cfg)
         if isinstance(res, dict):
             return res
-        df, anchor, latest_close, is_stale = res
-        if is_stale:
-            return {"side": "NONE", "score": 0.0, "reason": "stale_data"}
-        sig = get_latest_signal(symbol=symbol, df=df, cfg=cfg, models=models, now_ts=None)
+        df = res
+        sig = aggregator.get_latest_signal(
+            symbol=symbol, df=df, cfg=cfg, models=models, now_ts=None
+        )
         if not sig:
             notify_guard("signal_unavailable", {"symbol": symbol})
             return {"side": "NONE", "score": 0.0, "reason": "signal_unavailable"}
@@ -176,7 +174,11 @@ def process_symbol(symbol: str, cfg: dict, models: dict):
         return sig
     except Exception as e:
         log_trace("LOOP_EXCEPTION", e)
-        return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
+        return {
+            "side": "NONE",
+            "score": 0.0,
+            "reason": f"LOOP_EXCEPTION:{type(e).__name__}",
+        }
 
 
 def next_quarter_with_delay(now: datetime, delay_sec: int = 15) -> datetime:
@@ -193,19 +195,18 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     telegram_conf = cfg.get("notify", {}).get("telegram")
     symbols = cfg.get("symbols", [])
-    csv_map = cfg.get("io", {}).get("csv_paths", {})
     models = load_models_from_cfg(cfg)
-    if not models:
-        log_diag(
-            "realtime_loop: models empty -> downstream will return reason=no_models_loaded"
-        )
+    resources_dir = resolve_resources_dir(cfg)
+    log_diag(
+        f"realtime_loop: models_loaded={len(models)} resources_dir={resources_dir}"
+    )
     results = {}
     os.makedirs("logs/diag", exist_ok=True)
 
     for sym in symbols:
-        csv_path = csv_map.get(sym)
+        csv_path = aggregator._csv_path_for_symbol(sym, cfg)
         if not csv_path:
-            print(f"[SKIP] {sym}: No CSV path in config")
+            print(f"[SKIP] {sym}: csv not found under resources_dir")
             continue
         print(f"[REALTIME] {sym} <- {csv_path}")
         try:
@@ -216,7 +217,11 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             res = process_symbol(sym, cfg, models)
         except Exception as e:
             log_trace("LOOP_EXCEPTION", e)
-            res = {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
+            res = {
+                "side": "NONE",
+                "score": 0.0,
+                "reason": f"LOOP_EXCEPTION:{type(e).__name__}",
+            }
         sig = res if res.get("side") in ("LONG", "SHORT") else None
         if res.get("price") is not None and sig:
             notify_signal(sym, sig, float(res.get("price")), telegram_conf)

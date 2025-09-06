@@ -1,0 +1,12 @@
+# 提供參考，便於配置
+resources_dir: resources
+require_models: false
+
+models:
+  - name: dummy_xgb
+    type: xgboost
+    path: /opt/crypto_strategy_project/resources/models/xgb_main.json
+
+realtime:
+  fetch: csv_only
+  stale_threshold_min: 30
