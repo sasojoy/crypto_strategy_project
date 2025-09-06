@@ -48,14 +48,37 @@ jobs:
             sudo -n bash scripts/deploy.sh
           "'
 
-      - name: Sanity check on VM (systemd + timer)
+      - name: Sanity check on VM (status + recent logs + diag)
         run: |
           ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -lc "
             set -euo pipefail
             cd /opt/crypto_strategy_project
-            echo [INFO] PWD: \$(pwd)
+
+            echo
+            echo [INFO] Current directory: \$(pwd)
+            echo [INFO] List systemd files:
             ls -la systemd || true
+
+            echo
+            echo '== systemctl status (timer/service) =='
             sudo -n systemctl status trader-once.timer --no-pager || true
             sudo -n systemctl status trader-once.service --no-pager || true
+
+            echo
+            echo '== recent journal (last 200 lines, last 30 minutes) =='
+            if ! sudo -n journalctl -u trader-once.service --since "-30 min" -o cat | tail -n 200 ; then
+              sudo -n journalctl -u trader-once.service -n 200 -o cat || true
+            fi
+
+            echo
+            echo '== diag files (if any) =='
+            ls -l logs/diag 2>/dev/null || true
+            L=\$(ls -1t logs/diag/trace_*.log 2>/dev/null | head -n1 || true)
+            if [ -n "\${L}" ]; then
+              echo "-- showing \${L} --"
+              tail -n 200 "\${L}" || true
+            else
+              echo "(no diag trace files)"
+            fi
           "'
 
