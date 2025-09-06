@@ -18,6 +18,7 @@ from csp.utils.timez import (
 )
 from csp.utils.diag import log_diag, log_trace
 from csp.utils.framefix import safe_reset_index
+from csp.utils.paths import resolve_resources_dir
 
 
 TZ_TW = tz.gettz("Asia/Taipei")
@@ -25,38 +26,24 @@ logger = logging.getLogger(__name__)
 
 
 def _select_fetcher(cfg: Dict[str, Any]) -> Optional[callable]:
-    """
-    依 cfg 選擇即時抓資料的函式。若沒提供或無法呼叫，回傳 None。
-    """
     rt = (cfg or {}).get("realtime", {})
     mode = str(rt.get("fetch", "")).lower()
-
-    if mode in ("none", "csv_only", ""):
+    # TODO: wire actual live fetcher here if needed
+    if mode in ("", "none", "csv_only"):
         return None
-
-    if mode in ("binance", "live"):
-        try:
-            return functools.partial(fetch_klines_range)
-        except Exception:
-            return None
-
     return None
 
 
-def _fetch_local_csv(symbol: str, resources_dir: str) -> Optional[str]:
-    """
-    回傳該 symbol 的 CSV 路徑（若存在）。不處理讀檔細節，留給上游。
-    """
-    import os
-
-    mapping = {
+def _csv_path_for_symbol(symbol: str, cfg: Dict[str, Any]) -> Optional[str]:
+    m = {
         "BTCUSDT": "btc_15m.csv",
         "ETHUSDT": "eth_15m.csv",
         "BCHUSDT": "bch_15m.csv",
     }
-    fname = mapping.get(symbol)
+    fname = m.get(symbol)
     if not fname:
         return None
+    resources_dir = resolve_resources_dir(cfg)
     path = os.path.join(resources_dir, fname)
     return path if os.path.exists(path) else None
 
@@ -154,7 +141,6 @@ def aggregate_signal(prob_map: dict, enter_threshold: float = 0.75, method: str 
 
 def read_or_fetch_latest(
     symbol: str,
-    csv_path: str,
     *,
     cfg: Dict[str, Any],
     interval: str = "15m",
@@ -164,13 +150,17 @@ def read_or_fetch_latest(
     try:
         fetch_fn = _select_fetcher(cfg)
         if fetch_fn is None:
-            log_diag(f"{symbol}: fetch_fn is None -> will use local CSV only")
-        else:
-            if not callable(fetch_fn):
-                log_diag(
-                    f"BAD_FETCH_FN name=fetch_fn repr={repr(fetch_fn)} type={type(fetch_fn)}"
-                )
-                return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
+            log_diag(f"{symbol}: fetch disabled (csv_only/none) -> use local CSV only")
+        elif not callable(fetch_fn):
+            log_diag(
+                f"{symbol}: BAD_FETCH_FN type={type(fetch_fn)} repr={repr(fetch_fn)}"
+            )
+            return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
+
+        csv_path = _csv_path_for_symbol(symbol, cfg)
+        if not csv_path:
+            log_diag(f"{symbol}: csv not found under resources_dir -> stale_data")
+            return {"side": "NONE", "score": 0.0, "reason": "stale_data"}
 
         interval_td = pd.to_timedelta(interval)
         log_diag(
@@ -184,7 +174,11 @@ def read_or_fetch_latest(
             )
         except Exception as e:
             log_trace("CONVERT_NOW_TS_FAIL", e)
-            return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
+            return {
+                "side": "NONE",
+                "score": 0.0,
+                "reason": f"LOOP_EXCEPTION:{type(e).__name__}",
+            }
 
         anchor = last_closed_15m(now_ts)
 
@@ -192,7 +186,9 @@ def read_or_fetch_latest(
         if path.exists():
             df = pd.read_csv(path)
         else:
-            df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+            df = pd.DataFrame(
+                columns=["timestamp", "open", "high", "low", "close", "volume"]
+            )
         df = ensure_utc_index(df, "timestamp")
         logger.debug(
             "[DIAG] df.index.tz=%s, head_ts=%s, now_ts=%s, safe_ts_to_utc=%s",
@@ -220,7 +216,9 @@ def read_or_fetch_latest(
             )
             df = pd.concat([df, new_df])
             df = df[~df.index.duplicated(keep="last")].sort_index()
-            safe_reset_index(df, name="timestamp", overwrite=True).to_csv(path, index=False)
+            safe_reset_index(df, name="timestamp", overwrite=True).to_csv(
+                path, index=False
+            )
             latest_close = df.index.max() if not df.empty else pd.NaT
             lag = (anchor - latest_close) if pd.notna(latest_close) else pd.Timedelta.max
             is_stale = pd.isna(latest_close) or lag >= interval_td
@@ -230,7 +228,7 @@ def read_or_fetch_latest(
             f"[TIME] anchor={anchor.isoformat()} latest_close={latest_close.isoformat() if pd.notna(latest_close) else 'none'} diff_min={diff_min:.2f}"
         )
         print(f"[FETCH] retried={retried} endTime={anchor.isoformat()}")
-        return df, anchor, latest_close, is_stale
+        return df
     except Exception as e:
         log_trace("LOOP_EXCEPTION(read_or_fetch_latest)", e)
         return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
@@ -245,23 +243,31 @@ def get_latest_signal(
     now_ts: Optional[pd.Timestamp] = None,
 ):
     try:
-        if not models:
-            log_diag(f"{symbol}: no models loaded -> return NONE")
+        require_models = bool((cfg or {}).get("require_models", True))
+        if require_models and not models:
+            log_diag(f"{symbol}: no models loaded but require_models=True")
             return {"side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
+
+        rt = (cfg or {}).get("realtime", {})
+        stale_thr = float(rt.get("stale_threshold_min", 30))
 
         latest_close = ensure_aware_utc(df.index.max())
         anchor = (
             ensure_aware_utc(safe_ts_to_utc(now_ts))
             if now_ts is not None
-            else ensure_aware_utc(df.index.max())
+            else latest_close
         )
         if latest_close > anchor:
-            log_diag(f"{symbol}: anchor<{latest_close} -> align anchor to latest_close")
             anchor = latest_close
         lag_minutes = (anchor - latest_close).total_seconds() / 60.0
         log_diag(
             f"{symbol}: latest_ts={latest_close} anchor={anchor} diff_min={lag_minutes:.2f}"
         )
+
+        now_actual = ensure_aware_utc(safe_ts_to_utc(None))
+        if (now_actual - latest_close).total_seconds() / 60.0 > stale_thr:
+            log_diag(f"{symbol}: stale by >{stale_thr} min (latest={latest_close})")
+            return {"side": "NONE", "score": 0.0, "reason": "stale_data"}
 
         score = 0.0
         side = "NONE"
