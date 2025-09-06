@@ -13,6 +13,7 @@ ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_pro
 Nice=10
 EnvironmentFile=-/opt/crypto_strategy_project/.env
 Environment=PYTHONUNBUFFERED=1
+# Environment=MODEL_DIR=/opt/crypto_strategy_project/resources/models
 StandardOutput=journal
 StandardError=journal
 

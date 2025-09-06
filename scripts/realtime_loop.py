@@ -36,7 +36,8 @@ if os.environ.get("DIAG_SELFTEST") == "1":
     except Exception as e:
         log_trace("SELFTEST", e)
 
-from csp.strategy.aggregator import get_latest_signal
+from csp.strategy.aggregator import get_latest_signal, read_or_fetch_latest
+from csp.strategy.model_hub import load_models_from_cfg
 from csp.strategy.position_sizing import (
     blended_sizing, SizingInput, ExchangeRule, kelly_fraction
 )
@@ -155,13 +156,23 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
     side = "LONG" if score >= 0.75 else ("SHORT" if score <= 0.25 else "NONE")
     return {"symbol": symbol, "side": side, "score": score}
 
-def process_symbol(symbol: str, cfg: dict):
+def process_symbol(symbol: str, cfg: dict, models: dict):
     try:
-        sig = get_latest_signal(symbol, cfg, fresh_min=FRESH_MIN)
+        csv_path = cfg["io"]["csv_paths"].get(symbol)
+        if not csv_path or not os.path.exists(csv_path):
+            return {"side": "NONE", "score": 0.0, "reason": "no_data"}
+        res = read_or_fetch_latest(symbol, csv_path, cfg=cfg)
+        if isinstance(res, dict):
+            return res
+        df, anchor, latest_close, is_stale = res
+        if is_stale:
+            return {"side": "NONE", "score": 0.0, "reason": "stale_data"}
+        sig = get_latest_signal(symbol=symbol, df=df, cfg=cfg, models=models, now_ts=None)
         if not sig:
             notify_guard("signal_unavailable", {"symbol": symbol})
             return {"side": "NONE", "score": 0.0, "reason": "signal_unavailable"}
         sig["score"] = sanitize_score(sig.get("score"))
+        sig["price"] = float(df["close"].iloc[-1]) if not df.empty else None
         return sig
     except Exception as e:
         log_trace("LOOP_EXCEPTION", e)
@@ -183,6 +194,11 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     telegram_conf = cfg.get("notify", {}).get("telegram")
     symbols = cfg.get("symbols", [])
     csv_map = cfg.get("io", {}).get("csv_paths", {})
+    models = load_models_from_cfg(cfg)
+    if not models:
+        log_diag(
+            "realtime_loop: models empty -> downstream will return reason=no_models_loaded"
+        )
     results = {}
     os.makedirs("logs/diag", exist_ok=True)
 
@@ -197,7 +213,7 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         except Exception as fe:
             print(f"[WARN] {sym}: data fetch failed: {fe}")
         try:
-            res = process_symbol(sym, cfg)
+            res = process_symbol(sym, cfg, models)
         except Exception as e:
             log_trace("LOOP_EXCEPTION", e)
             res = {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}

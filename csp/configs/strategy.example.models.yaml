@@ -1,0 +1,11 @@
+# 只示範結構；把 path 換成你 VM 上實際模型檔案路徑
+models:
+  - name: xgb_main
+    type: xgboost
+    path: /opt/crypto_strategy_project/resources/models/xgb_main.json
+  - name: cat_aux
+    type: catboost
+    path: /opt/crypto_strategy_project/resources/models/cat_aux.cbm
+
+realtime:
+  fetch: csv_only   # live/binance/csv_only/none
