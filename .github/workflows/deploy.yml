@@ -1,4 +1,4 @@
-name: Deploy to GCP VM
+name: CI + Train + Deploy
 
 on:
   push:
@@ -10,14 +10,123 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build-train:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install deps
+        run: |
+          set -euxo pipefail
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -V
+          pip -V
+
+      - name: List repo structure (debug)
+        run: |
+          set -eux
+          ls -la
+          ls -la scripts || true
+          ls -la resources || true
+          ls -la csp/configs || true
+
+      - name: Sanity check: train script exists and importable
+        run: |
+          set -euxo pipefail
+          test -f scripts/train_multi.py
+          python -c "import importlib.util,sys; assert importlib.util.find_spec('scripts') and __import__('scripts.train_multi'); print('train_multi import OK', sys.version)"
+
+      - name: Ensure models/ exists
+        run: mkdir -p models
+
+      - name: Check strategy.yaml has non-empty model_hub.models
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+import yaml, sys
+cfg = yaml.safe_load(open('csp/configs/strategy.yaml'))
+mh = (cfg.get('model_hub') or {})
+models = (mh.get('models') or [])
+assert models, f"model_hub.models is empty in csp/configs/strategy.yaml: {mh}"
+print("model_hub.models =", models)
+PY
+
+      - name: Train models
+        run: |
+          set -euxo pipefail
+          python scripts/train_multi.py --cfg csp/configs/strategy.yaml
+
+      - name: Self-check outputs
+        run: |
+          set -euxo pipefail
+          python -c "import importlib.util; assert importlib.util.find_spec('scripts') and __import__('scripts.train_multi')"
+          ls -la scripts/train_multi.py
+          python - <<'PY'
+# quick argv smoke test
+import sys; print('OK argv', sys.version)
+PY
+          test -d models/BTCUSDT -a -d models/ETHUSDT -a -d models/BCHUSDT
+          python - <<'PY'
+import yaml, sys
+cfg=yaml.safe_load(open('csp/configs/strategy.yaml'))
+# 確保模型列表非空或能被推論
+mh=(cfg.get('model_hub') or {})
+models=(mh.get('models') or [])
+assert models, f"model_hub.models empty: {mh}"
+print('models in cfg:', models)
+PY
+
+      - name: Verify model outputs exist
+        run: |
+          set -euxo pipefail
+          for s in BTCUSDT ETHUSDT BCHUSDT; do
+            test -d "models/$s" || (echo "Missing models/$s" && exit 1)
+            ls -la "models/$s"
+          done
+
+      - name: Upload models as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-models
+          path: models/
+          if-no-files-found: error
+
   deploy:
+    needs: build-train
     runs-on: ubuntu-latest
     permissions:
       contents: read
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download trained models
+        uses: actions/download-artifact@v4
+        with:
+          name: trained-models
+          path: models/
+
+      - name: Show models before deploy (debug)
+        run: |
+          set -euxo pipefail
+          du -sh models || true
+          find models -maxdepth 2 -type f | head -n 50 || true
 
       - name: Start ssh-agent and load key
         uses: webfactory/ssh-agent@v0.9.0
@@ -32,6 +141,7 @@ jobs:
 
       - name: Rsync project to VM
         run: |
+          set -euxo pipefail
           rsync -az \
             --exclude='.git' \
             --exclude='.github' \
@@ -41,6 +151,7 @@ jobs:
 
       - name: Run remote deploy script (installs systemd units)
         run: |
+          set -euxo pipefail
           ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -lc "
             set -euo pipefail
             cd /home/${{ secrets.SSH_USER }}/repo_tmp
@@ -81,4 +192,3 @@ jobs:
             echo "(no diag trace files)"
           fi
           REMOTE
-
