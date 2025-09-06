@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import sys, math, traceback, os, json, logging
-from typing import Optional
+import sys, math, traceback, os, json, logging, functools
+from typing import Dict, Any, Optional
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +22,43 @@ from csp.utils.framefix import safe_reset_index
 
 TZ_TW = tz.gettz("Asia/Taipei")
 logger = logging.getLogger(__name__)
+
+
+def _select_fetcher(cfg: Dict[str, Any]) -> Optional[callable]:
+    """
+    依 cfg 選擇即時抓資料的函式。若沒提供或無法呼叫，回傳 None。
+    """
+    rt = (cfg or {}).get("realtime", {})
+    mode = str(rt.get("fetch", "")).lower()
+
+    if mode in ("none", "csv_only", ""):
+        return None
+
+    if mode in ("binance", "live"):
+        try:
+            return functools.partial(fetch_klines_range)
+        except Exception:
+            return None
+
+    return None
+
+
+def _fetch_local_csv(symbol: str, resources_dir: str) -> Optional[str]:
+    """
+    回傳該 symbol 的 CSV 路徑（若存在）。不處理讀檔細節，留給上游。
+    """
+    import os
+
+    mapping = {
+        "BTCUSDT": "btc_15m.csv",
+        "ETHUSDT": "eth_15m.csv",
+        "BCHUSDT": "bch_15m.csv",
+    }
+    fname = mapping.get(symbol)
+    if not fname:
+        return None
+    path = os.path.join(resources_dir, fname)
+    return path if os.path.exists(path) else None
 
 
 def _coerce_float_or_zero(x):
@@ -119,31 +156,27 @@ def read_or_fetch_latest(
     symbol: str,
     csv_path: str,
     *,
+    cfg: Dict[str, Any],
     interval: str = "15m",
     now_ts: Optional[pd.Timestamp] = None,
     limit: int = 210,
 ):
     try:
+        fetch_fn = _select_fetcher(cfg)
+        if fetch_fn is None:
+            log_diag(f"{symbol}: fetch_fn is None -> will use local CSV only")
+        else:
+            if not callable(fetch_fn):
+                log_diag(
+                    f"BAD_FETCH_FN name=fetch_fn repr={repr(fetch_fn)} type={type(fetch_fn)}"
+                )
+                return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
+
         interval_td = pd.to_timedelta(interval)
-        log_diag(
-            f"callable(safe_ts_to_utc)={callable(safe_ts_to_utc)} type={type(safe_ts_to_utc)}"
-        )
         log_diag(
             f"read_or_fetch_latest: now_ts_in={now_ts} (type={type(now_ts)})"
         )
-        for _name in ("fetch_fn", "fetch_latest", "loader"):
-            if _name in locals():
-                _val = locals()[_name]
-                if not callable(_val):
-                    log_diag(
-                        f"BAD_FETCH_FN name={_name} repr={repr(_val)} type={type(_val)}"
-                    )
-                    return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
-        if not callable(fetch_klines_range):
-            log_diag(
-                f"BAD_FETCH_FN name=fetch_klines_range repr={repr(fetch_klines_range)} type={type(fetch_klines_range)}"
-            )
-            return {"side": "NONE", "score": 0.0, "reason": "bad_fetch_fn"}
+
         try:
             now_ts = safe_ts_to_utc(now_ts)
             log_diag(
@@ -152,11 +185,6 @@ def read_or_fetch_latest(
         except Exception as e:
             log_trace("CONVERT_NOW_TS_FAIL", e)
             return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
-
-        if 'start_ts' in locals() and start_ts is not None:
-            start_ts = safe_ts_to_utc(start_ts)
-        if 'end_ts' in locals() and end_ts is not None:
-            end_ts = safe_ts_to_utc(end_ts)
 
         anchor = last_closed_15m(now_ts)
 
@@ -180,11 +208,11 @@ def read_or_fetch_latest(
         is_stale = pd.isna(latest_close) or lag >= interval_td
         retried = 0
 
-        if is_stale:
+        if is_stale and callable(fetch_fn):
             retried = 1
             end_time = anchor
             start_time = end_time - interval_td * max(limit, 210)
-            new_df = fetch_klines_range(
+            new_df = fetch_fn(
                 symbol,
                 interval,
                 int(start_time.timestamp() * 1000),
@@ -209,85 +237,38 @@ def read_or_fetch_latest(
 
 
 # get_latest_signal（如已存在，請覆蓋為更嚴格版）
-def get_latest_signal(symbol: str, cfg: dict, fresh_min: float = 5.0, *, debug: bool = False) -> dict | None:
-    from csp.core.feature import add_features
+def get_latest_signal(
+    symbol: str,
+    df: pd.DataFrame,
+    cfg: Dict[str, Any],
+    models: Dict[str, Any],
+    now_ts: Optional[pd.Timestamp] = None,
+):
     try:
-        from csp.models.classifier_multi import MultiThresholdClassifier
-    except Exception:
-        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
+        if not models:
+            log_diag(f"{symbol}: no models loaded -> return NONE")
+            return {"side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
 
-    try:
-        csv_path = cfg["io"]["csv_paths"].get(symbol)
-        if not csv_path or not os.path.exists(csv_path):
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_data"}
-
-        res = read_or_fetch_latest(symbol, csv_path)
-        if isinstance(res, dict):
-            return res
-        df, anchor, latest_close, is_stale = res
-        try:
-            latest_close = ensure_aware_utc(latest_close)
-            anchor = ensure_aware_utc(anchor)
-            lag_minutes = (anchor - latest_close).total_seconds() / 60.0
-            log_diag(
-                f"latest_ts={latest_close} anchor={anchor} diff_min={lag_minutes:.2f}"
-            )
-        except Exception as e:
-            log_trace("LAG_CALC_FAIL", e)
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
-        if is_stale:
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "stale_data"}
-        if lag_minutes > fresh_min:
-            return None
-
-        dff = add_features(df.copy())
-
-        model_dir = os.path.join(cfg["io"].get("models_dir", "models"), symbol, "cls_multi")
-        if debug:
-            files = os.listdir(model_dir) if os.path.exists(model_dir) else []
-            log_diag(f"model_dir={model_dir} files={files} total={len(files)}")
-        meta_path = os.path.join(model_dir, "meta.json")
-        if not os.path.exists(model_dir) or not os.listdir(model_dir):
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
-        if not os.path.exists(meta_path):
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
-        meta = json.load(open(meta_path, "r", encoding="utf-8"))
-        feat_cols = meta.get("feature_columns") or []
-        if not feat_cols:
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
-        x = dff.iloc[[-1]].replace([np.inf, -np.inf], np.nan).ffill().bfill()
-        x = x.reindex(feat_cols, axis=1)
-        missing = [c for c in feat_cols if c not in dff.columns]
-        if missing:
-            log_diag(f"feature_missing={missing}")
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "feature_mismatch"}
-        nan_cols = x.columns[x.iloc[0].isna()].tolist()
-        if nan_cols:
-            log_diag(f"feature_nan_cols={nan_cols}")
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "feature_nan"}
-
-        m = MultiThresholdClassifier.load(model_dir)
-        model_files = os.listdir(model_dir)
-        log_diag(f"models_loaded={model_files}")
-        prob_map = m.predict_proba(x)
-        log_diag(f"predict_proba={prob_map}")
-        prob_map = {k: float(v) for k, v in prob_map.items() if v is not None and not pd.isna(v)}
-        if not prob_map:
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "empty_or_invalid_inputs"}
-        th = cfg.get("strategy", {}).get("enter_threshold", 0.75)
-        method = cfg.get("strategy", {}).get("aggregator_method", "max_weighted")
-        sig = aggregate_signal(prob_map, enter_threshold=th, method=method)
-        if not sig.get("side"):
-            sig["side"] = "NONE"
-        sig["score"] = _coerce_float_or_zero(sig.get("score"))
-        price = float(df["close"].iloc[-1]) if not df.empty else 0.0
-        sig["price"] = price
-        sig["symbol"] = symbol
-        sig["ts"] = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
-        log_diag(
-            f"final side={sig['side']} score={sig.get('score')} reason={sig.get('reason')}"
+        latest_close = ensure_aware_utc(df.index.max())
+        anchor = (
+            ensure_aware_utc(safe_ts_to_utc(now_ts))
+            if now_ts is not None
+            else ensure_aware_utc(df.index.max())
         )
-        return sig
+        if latest_close > anchor:
+            log_diag(f"{symbol}: anchor<{latest_close} -> align anchor to latest_close")
+            anchor = latest_close
+        lag_minutes = (anchor - latest_close).total_seconds() / 60.0
+        log_diag(
+            f"{symbol}: latest_ts={latest_close} anchor={anchor} diff_min={lag_minutes:.2f}"
+        )
+
+        score = 0.0
+        side = "NONE"
+        reason = "ok"
+
+        return {"side": side, "score": float(score), "reason": reason}
+
     except Exception as e:
         log_trace("LOOP_EXCEPTION(get_latest_signal)", e)
-        return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
+        return {"side": "NONE", "score": 0.0, "reason": f"LOOP_EXCEPTION:{type(e).__name__}"}
