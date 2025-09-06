@@ -325,6 +325,24 @@ During CI runs, you can check the GitHub Actions logs for lines starting with `[
 These logs are for debugging only and do not affect trading logic.
 
 
+## 遠端 VM 健康檢查
+
+若要在 GitHub Actions 或其他 CI 流程中檢查部署於遠端 VM 的 `trader-once` 服務，可使用以下 SSH 指令。請先於環境變數或 secrets 中設定 `SSH_USER` 與 `SSH_HOST`：
+
+```bash
+ssh -o StrictHostKeyChecking=yes $SSH_USER@$SSH_HOST 'bash -lc "
+  set -euo pipefail
+  cd /opt/crypto_strategy_project
+
+  sudo systemctl status trader-once.timer --no-pager
+  sudo systemctl status trader-once.service --no-pager
+  sudo journalctl -u trader-once.service -n 200 -o cat
+"'
+```
+
+上述指令會顯示 `trader-once` 的 systemd 服務狀態以及最近 200 行日誌。僅能在使用 systemd 的 Linux 主機上執行；若於未啟動 systemd 的環境（如純容器）執行，將會出現 `System has not been booted with systemd` 的訊息。
+
+
 ---
 
 ## 常見問題 FAQ
