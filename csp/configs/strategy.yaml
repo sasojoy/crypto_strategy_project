@@ -1,120 +1,25 @@
 symbols:
-- BTCUSDT
-- ETHUSDT
-- BCHUSDT
-io:
-  csv_paths:
-    BTCUSDT: resources/btc_15m.csv
-    ETHUSDT: resources/eth_15m.csv
-    BCHUSDT: resources/bch_15m.csv
-  models_dir: models
-  logs_dir: logs
-  position_file: resources/current_position.yaml
-  live_fetch:
-    enabled: true
-    interval: 15m
-    limit: 96
-    api_base: https://api.binance.com
-strategy:
-  enter_threshold: 0.75
-  aggregator_method: "max_weighted"
-  weight_fn: "sqrt"
-model:
-  type: "xgboost"
-  horizons: [2, 4, 8, 16, 48, 192]
-  thresholds: [0.2, 0.5, 1.0, 2.0]
-  calibrate: "isotonic"
-  cv:
-    type: "expanding"
-    n_splits: 5
-    purge_bars: 2
-    embargo_bars: 2
-  out_dir: "models/{SYMBOL}/cls_multi"
-features:
-  prev_high_period: 20
-  prev_low_period: 20
-  bb_window: 24
-  atr_window: 14
-  atr_percentile_window: 100
-  default:
-    ema_windows:
-    - 9
-    - 21
-    - 50
-    h4_rule:
-      enabled: true
-      resample: 4H
-    rsi: {enabled: true, window: 14}
-    bollinger: {enabled: true, window: 20, std: 2.0}
-    atr: {enabled: true, window: 14}
-  per_symbol:
-    BTCUSDT:
-      rsi: {enabled: true, window: 20}
-      bollinger: {enabled: true, window: 24, std: 3.42}
-      atr: {enabled: true, window: 17}
-    ETHUSDT:
-      rsi: {enabled: true, window: 14}
-      bollinger: {enabled: true, window: 20, std: 2.0}
-      atr: {enabled: true, window: 14}
-train:
-  target_horizon_bars: 16
-  label_threshold: 0.0
-  test_size: 0.2
-  random_state: 42
-  xgb:
-    objective: binary:logistic
-    eval_metric: logloss
-    n_estimators: 600
-    max_depth: 6
-    learning_rate: 0.05
-    subsample: 0.9
-    colsample_bytree: 0.9
-execution:
-  long_prob_threshold: 0.62
-  short_prob_threshold: 0.65
-  atr_tp_sl:
-    long:
-      tp_mult: 1.6
-      sl_mult: 1.0
-    short:
-      tp_mult: 1.2
-      sl_mult: 0.8
-  max_holding_minutes: 240
-  entry_zone:
-    enabled: true
-    method: atr_discount
-    lookahead_bars: 16
-    long_x: 0.5
-    short_x: 0.5
-risk:
-  take_profit_ratio: 0.05
-  stop_loss_ratio: 0.02
-  max_holding_minutes: 240
-  flip_threshold: 0.6
-position_sizing:
-  mode: "hybrid"
-  risk_per_trade: 0.01
-  atr_k: 1.5
-  kelly_coef: 0.5
-  kelly_floor: -0.5
-  kelly_cap: 1.0
-  default_win_rate: 0.6
-  exchange_rule:
-    min_qty: 0.0001
-    qty_step: 0.0001
-    min_notional: 10
-    max_leverage: 10
-notify:
-  telegram:
-    enabled: true
-    bot_token_env: BOT_TOKEN
-    chat_id_env: CHAT_ID
-    bot_token: 7978688690:AAEYbCQMqoyCskxzms7gK-Moh1eYhF4X0rs
-    chat_id: '-4949591915'
-backtest:
-  initial_capital: 10000.0
-  risk_per_trade: 0.007
-  fee_rate: 0.0004
-  slippage: 0.0002
-entry_filter:
-  cooldown_bars: 4
+  - BTCUSDT
+  - ETHUSDT
+  - BCHUSDT
+
+# 先用本地 CSV（resources/*_15m.csv）與已訓練模型
+fetch:
+  mode: csv_only        # csv_only | none | binance
+  resources_dir: /opt/crypto_strategy_project/resources
+
+models:
+  BTCUSDT:
+    dir: /opt/crypto_strategy_project/models/BTCUSDT
+  ETHUSDT:
+    dir: /opt/crypto_strategy_project/models/ETHUSDT
+  BCHUSDT:
+    dir: /opt/crypto_strategy_project/models/BCHUSDT
+
+realtime:
+  require_models: true
+  # 若沒有模型就直接給 no_models_loaded（避免 score=nan）
+
+logging:
+  level: INFO
+  diag: true
