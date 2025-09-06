@@ -1,0 +1,170 @@
+name: CI Deploy to VM
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      REPO_DIR: /opt/crypto_strategy_project
+      # 依需要調整幣別（若 train_multi.py 不支援 --symbols，改為註解掉）
+      SYMBOLS: "BTCUSDT,ETHUSDT,BCHUSDT"
+      CFG_PATH: "csp/configs/strategy.yaml"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Pre-flight (show runner info)
+        run: |
+          bash --version
+          python3 --version
+          rsync --version | head -n1
+
+      # ────────────────────────────────────────────────────────────────────────────
+      # 將 repo 同步到 VM 的 /opt/crypto_strategy_project
+      # ────────────────────────────────────────────────────────────────────────────
+      - name: Rsync repo to VM
+        run: |
+          rsync -az --delete \
+            --exclude ".git" \
+            --exclude ".github" \
+            -e "ssh -o StrictHostKeyChecking=yes" \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REPO_DIR }}/
+
+      # ────────────────────────────────────────────────────────────────────────────
+      # 在 VM 上：建立/更新 .venv、安裝 requirements
+      # ────────────────────────────────────────────────────────────────────────────
+      - name: Setup venv & install deps on VM
+        run: |
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd "${REPO_DIR:-/opt/crypto_strategy_project}"
+
+          # 建立 venv（若不存在）
+          if [ ! -x ".venv/bin/python" ]; then
+            python3 -m venv .venv
+          fi
+
+          . .venv/bin/activate
+          python -V
+          pip install --upgrade pip wheel setuptools
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            echo "[WARN] requirements.txt not found; skipping."
+          fi
+          REMOTE
+
+      # ────────────────────────────────────────────────────────────────────────────
+      # 在 VM 上：訓練模型（輸出路徑：models/<symbol>/…）
+      # ────────────────────────────────────────────────────────────────────────────
+      - name: Train models on VM
+        run: |
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd "${REPO_DIR:-/opt/crypto_strategy_project}"
+          . .venv/bin/activate
+
+          echo "[TRAIN] start"
+          if [ -f "scripts/train_multi.py" ]; then
+            # 若 train_multi.py 支援 --symbols 就用；不支援就移除這個參數
+            if python scripts/train_multi.py --help 2>/dev/null | grep -q -- "--symbols"; then
+              python scripts/train_multi.py --cfg "${CFG_PATH:-csp/configs/strategy.yaml}" --symbols "${SYMBOLS:-}"
+            else
+              echo "[INFO] train_multi.py does not accept --symbols; running with cfg only"
+              python scripts/train_multi.py --cfg "${CFG_PATH:-csp/configs/strategy.yaml}"
+            fi
+          else
+            echo "[ERROR] scripts/train_multi.py not found" >&2
+            exit 2
+          fi
+          echo "[TRAIN] done"
+
+          echo "[CHECK] models directory"
+          ls -la models || true
+
+          # 基本檢查：任一幣別目錄存在即可（可依需求加強）
+          if [ ! -d "models" ] || [ -z "$(ls -A models 2>/dev/null)" ]; then
+            echo "[ERROR] No models produced under models/" >&2
+            exit 3
+          fi
+          REMOTE
+
+      # ────────────────────────────────────────────────────────────────────────────
+      # 在 VM 上：安裝/覆蓋 systemd units + (re)enable 定時器 + 立即跑一次
+      # ────────────────────────────────────────────────────────────────────────────
+      - name: Install/enable systemd units on VM
+        run: |
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd "${REPO_DIR:-/opt/crypto_strategy_project}"
+
+          # 你的 unit 檔目前在 repo 根目錄（依你現有日誌）
+          for f in trader-once.service trader-once.timer; do
+            if [ -f "$f" ]; then
+              echo "[SYSTEMD] install $f"
+              sudo -n cp "$f" "/etc/systemd/system/$f"
+            else
+              echo "[ERROR] $f not found in repo root" >&2
+              exit 4
+            fi
+          done
+
+          echo "[SYSTEMD] daemon-reload + enable timer"
+          sudo -n systemctl daemon-reload
+          # 先停服務再啟用 timer（避免 race）
+          sudo -n systemctl stop trader-once.service || true
+          sudo -n systemctl enable --now trader-once.timer
+
+          echo "[SYSTEMD] kick one run"
+          # 若希望立刻驗證一次，可以直接啟動 service（timer 會定期再觸發）
+          sudo -n systemctl start trader-once.service || true
+          REMOTE
+
+      # ────────────────────────────────────────────────────────────────────────────
+      # Sanity check（顯示 systemd 狀態 + 最近 30 分鐘 log + diag 檔案）
+      # ────────────────────────────────────────────────────────────────────────────
+      - name: Sanity check on VM (status/journal/diag)
+        run: |
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd "${REPO_DIR:-/opt/crypto_strategy_project}"
+
+          echo
+          echo "[INFO] Current directory: $(pwd)"
+          echo "[INFO] List systemd files in repo root:"
+          ls -la | egrep 'trader(-once)?\.(service|timer)$' || true
+
+          echo
+          echo "== systemctl status (timer/service) =="
+          sudo -n systemctl status trader-once.timer --no-pager || true
+          sudo -n systemctl status trader-once.service --no-pager || true
+
+          echo
+          echo "== recent journal (last 200 lines, last 30 minutes) =="
+          if ! sudo -n journalctl -u trader-once.service --since "-30 min" -o cat | tail -n 200 ; then
+            sudo -n journalctl -u trader-once.service -n 200 -o cat || true
+          fi
+
+          echo
+          echo "== diag files (if any) =="
+          ls -l logs/diag 2>/dev/null || true
+          L=$(ls -1t logs/diag/trace_*.log 2>/dev/null | head -n1 || true)
+          if [ -n "${L}" ]; then
+            echo "-- showing ${L} --"
+            tail -n 200 "${L}" || true
+          else
+            echo "(no diag trace files)"
+          fi
+          REMOTE
