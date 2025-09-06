@@ -26,8 +26,12 @@ def ensure_utc_index(df: pd.DataFrame, col: str = "timestamp") -> pd.DataFrame:
             idx = idx.tz_convert(UTC)
         df = df.copy()
         df.index = idx
-    df = df[~df.index.duplicated(keep="last")]
-    return df.sort_index()
+    df = df[~df.index.duplicated(keep="last")].sort_index()
+    # ensure no extra 'timestamp' column remains and keep neutral index name
+    if col in df.columns:
+        df = df.drop(columns=[col])
+    df.index.name = None
+    return df
 
 def now_utc() -> pd.Timestamp:
     return pd.Timestamp.now(tz=UTC)

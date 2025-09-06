@@ -17,6 +17,7 @@ from csp.utils.timez import (
     now_utc,
 )
 from csp.utils.diag import log_diag, log_trace
+from csp.utils.framefix import safe_reset_index
 
 
 TZ_TW = tz.gettz("Asia/Taipei")
@@ -191,7 +192,7 @@ def read_or_fetch_latest(
             )
             df = pd.concat([df, new_df])
             df = df[~df.index.duplicated(keep="last")].sort_index()
-            df.reset_index().to_csv(path, index=False)
+            safe_reset_index(df, name="timestamp", overwrite=True).to_csv(path, index=False)
             latest_close = df.index.max() if not df.empty else pd.NaT
             lag = (anchor - latest_close) if pd.notna(latest_close) else pd.Timedelta.max
             is_stale = pd.isna(latest_close) or lag >= interval_td

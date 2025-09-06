@@ -13,6 +13,8 @@ from typing import Union, Tuple, Optional, Dict
 import pandas as pd
 from csp.utils.io import load_cfg
 from csp.utils.timez import ensure_utc_index, to_utc_ts
+from csp.utils.framefix import safe_reset_index
+from csp.utils.diag import log_diag
 
 try:
     from csp.utils.dates import resolve_time_range_like, slice_by_utc
@@ -131,7 +133,7 @@ def train(input_data: Union[pd.DataFrame, str, Path], cfg: dict, *, date_args: d
         df2, utc_start, utc_end = _apply_date_range(df, dargs)
     else:
         df2, utc_start, utc_end = df, None, None
-    df2 = df2.reset_index().rename_axis(None)
+    df2 = safe_reset_index(df2, name="timestamp", overwrite=True).rename_axis(None)
 
     # 4) ==== 特徵 / 標籤 / 模型訓練 ====
     import json
@@ -178,8 +180,16 @@ def train(input_data: Union[pd.DataFrame, str, Path], cfg: dict, *, date_args: d
     # 建立標籤並對齊
     horizon = int(cfg.get("train", {}).get("target_horizon_bars", 16))
     y = make_labels(feats, horizon=horizon)
-    feats = feats.iloc[:-horizon].reset_index(drop=True)
-    y = y.iloc[:-horizon].reset_index(drop=True)
+    feats = feats.iloc[:-horizon]
+    log_diag(
+        f"about to reset_index: idx.name={feats.index.name}, cols={list(feats.columns)[:8]}... total_cols={len(feats.columns)}"
+    )
+    feats = feats.reset_index(drop=True)
+    y = y.iloc[:-horizon]
+    log_diag(
+        f"about to reset_index: idx.name={y.index.name}, cols=[]... total_cols=1"
+    )
+    y = y.reset_index(drop=True)
 
     # 擷取特徵欄位順序
     feature_cols = [c for c in feats.columns if c not in ["timestamp", "open", "high", "low", "close", "volume"]]
