@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 import requests
+from csp.utils.diag import log_diag
 
 # 依賴 backtest_v2 的核心邏輯
 from csp.backtesting.backtest_v2 import run_backtest_for_symbol
@@ -106,7 +107,11 @@ def append_missing_15m(csv_path: str, symbol: str, end_utc: datetime) -> None:
             break
 
     if rows:
-        df_new = pd.DataFrame(rows).sort_values("timestamp").reset_index(drop=True)
+        df_new = pd.DataFrame(rows).sort_values("timestamp")
+        log_diag(
+            f"about to reset_index: idx.name={df_new.index.name}, cols={list(df_new.columns)[:8]}... total_cols={len(df_new.columns)}"
+        )
+        df_new = df_new.reset_index(drop=True)
         df_old = read_local_csv(csv_path)
         df_all = pd.concat([df_old, df_new], ignore_index=True).drop_duplicates(subset=["timestamp"]).sort_values("timestamp")
         write_local_csv(csv_path, df_all)

@@ -15,6 +15,7 @@ from csp.utils.tz_safe import (
     now_utc,
     floor_utc,
 )
+from csp.utils.framefix import safe_reset_index
 
 
 def load_csv(csv_path: str, days: int | None = None) -> pd.DataFrame:
@@ -53,7 +54,7 @@ if __name__ == "__main__":
         df_raw = load_csv(csv_path, args.days)
         feat_params = get_symbol_features(cfg, sym)
         feats = build_features_15m_4h(
-            df_raw.reset_index(),
+            safe_reset_index(df_raw, name="timestamp", overwrite=True),
             ema_windows=tuple(feat_params["ema_windows"]),
             rsi_window=feat_params["rsi_window"],
             bb_window=feat_params["bb_window"],

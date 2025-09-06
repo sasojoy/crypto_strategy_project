@@ -7,6 +7,7 @@ from typing import Optional
 
 import pandas as pd
 import requests
+from csp.utils.framefix import safe_reset_index
 
 from csp.utils.tz_safe import (
     normalize_df_to_utc,
@@ -156,7 +157,7 @@ def update_csv_with_latest(
     print(f"[FETCH] {symbol} need={need} appended={appended} last_ts={last_str}")
 
     tmp = path.with_suffix(path.suffix + ".tmp")
-    df.reset_index().to_csv(tmp, index=False)
+    safe_reset_index(df, name="timestamp", overwrite=True).to_csv(tmp, index=False)
     os.replace(tmp, path)
     time.sleep(0.25)
     return df
@@ -191,7 +192,7 @@ def fetch_full(symbol: str, csv_path: str) -> dict:
     df = fetch_klines(symbol, interval=interval, start_ts=start_ts, end_ts=end_ts)
     path = Path(csv_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    df.reset_index().to_csv(path, index=False)
+    safe_reset_index(df, name="timestamp", overwrite=True).to_csv(path, index=False)
     last_ts = df.index[-1].isoformat() if len(df) else "none"
     print(f"[FETCH] {symbol} FULL rows={len(df)} last_ts={last_ts}")
     return {"ok": True, "mode": "full", "rows": int(len(df)), "last_ts": last_ts}

@@ -1,6 +1,8 @@
 from __future__ import annotations
 import pandas as pd
 import numpy as np
+from csp.utils.framefix import safe_reset_index
+from csp.utils.diag import log_diag
 
 """
 h16 特徵（以 15m 基礎 + 4H 聚合）
@@ -82,10 +84,15 @@ def build_features_15m_4h(
     feats = pd.concat(
         [df, h4_to_15[["atr_h4", "rsi_h4", "ema_h4_21", "ema_h4_50"]]],
         axis=1
-    ).reset_index()
+    )
+    feats = safe_reset_index(feats, name="timestamp", overwrite=True)
 
     # 去掉起始 NaN（均線/布林/ATR 等產生的缺值）
-    feats = feats.dropna().reset_index(drop=True)
+    feats = feats.dropna()
+    log_diag(
+        f"about to reset_index: idx.name={feats.index.name}, cols={list(feats.columns)[:8]}... total_cols={len(feats.columns)}"
+    )
+    feats = feats.reset_index(drop=True)
     return feats
 
 def make_labels(df: pd.DataFrame, horizon: int = 16) -> pd.Series:
