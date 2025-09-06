@@ -1,0 +1,136 @@
+name: CI Train & Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: {}
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [ BTCUSDT, ETHUSDT, BCHUSDT ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Train model (${{ matrix.symbol }})
+        env:
+          SYMBOL: ${{ matrix.symbol }}
+        run: |
+          mkdir -p models/${SYMBOL}
+          # 依專案實作，若 train_multi.py 支援多幣一起訓練，也可改成單幣模式
+          # 請實作/確認 train_multi.py 支援 --symbols 或 --symbol
+          # 這裡用單幣範例：
+          python scripts/train_multi.py --symbol "${SYMBOL}" --out "models/${SYMBOL}"
+          test -s "models/${SYMBOL}" || (echo "Model output empty for ${SYMBOL}" && exit 1)
+
+      - name: Upload models artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: models-all
+          path: models/
+
+  deploy:
+    needs: [ train ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download models
+        uses: actions/download-artifact@v4
+        with:
+          name: models-all
+          path: models
+
+      - name: Show tree
+        run: |
+          echo "=== models/ tree ==="
+          ls -laR models || true
+
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p "${{ secrets.SSH_PORT || 22 }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Rsync code + models to VM
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || 22 }}
+        run: |
+          set -euo pipefail
+          RSYNC_RSH="ssh -p ${SSH_PORT} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes"
+          # 同步整個 repo（包含 models/）
+          # 保留 venv，避免把 venv 搬來搬去；logs 也通常不必要上傳
+          rsync -avz --delete \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude ".venv" \
+            --exclude "logs" \
+            -e "${RSYNC_RSH}" ./ "${SSH_USER}@${SSH_HOST}:/opt/crypto_strategy_project/"
+
+      - name: Install systemd units + reload + enable
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || 22 }}
+        run: |
+          ssh -p "${SSH_PORT}" -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/crypto_strategy_project
+
+          echo "[DEPLOY] Ensure systemd unit files exist in project root"
+          test -f trader-once.service && sudo -n cp trader-once.service /etc/systemd/system/trader-once.service
+          test -f trader-once.timer   && sudo -n cp trader-once.timer   /etc/systemd/system/trader-once.timer
+          test -f trader.service      && sudo -n cp trader.service      /etc/systemd/system/trader.service || true
+          test -f trader.timer        && sudo -n cp trader.timer        /etc/systemd/system/trader.timer   || true
+
+          echo "[DEPLOY] daemon-reload & enable timer"
+          sudo -n systemctl daemon-reload
+          sudo -n systemctl stop trader-once.service || true
+          sudo -n systemctl enable --now trader-once.timer
+          # 立刻跑一次
+          sudo -n systemctl start trader-once.service
+
+          echo "[DEPLOY] show status"
+          sudo -n systemctl status trader-once.timer --no-pager || true
+          sudo -n systemctl status trader-once.service --no-pager || true
+          REMOTE
+
+      - name: Sanity check on VM (status + recent journal)
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || 22 }}
+        run: |
+          ssh -p "${SSH_PORT}" -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/crypto_strategy_project
+
+          echo
+          echo "== systemctl status (timer/service) =="
+          sudo -n systemctl status trader-once.timer --no-pager || true
+          sudo -n systemctl status trader-once.service --no-pager || true
+
+          echo
+          echo "== recent journal (last 200 lines, last 30 minutes) =="
+          if ! sudo -n journalctl -u trader-once.service --since "-30 min" -o cat | tail -n 200 ; then
+            sudo -n journalctl -u trader-once.service -n 200 -o cat || true
+          fi
+          REMOTE

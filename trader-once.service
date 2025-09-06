@@ -1,0 +1,21 @@
+[Unit]
+Description=Crypto Strategy Realtime Once (venv)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/crypto_strategy_project
+Environment="PYTHONUNBUFFERED=1"
+# 若 VM 沒建 venv，第一次建一個；有就跳過
+ExecStartPre=/usr/bin/bash -lc 'test -d .venv || python3 -m venv .venv && . .venv/bin/activate && pip install -U pip && pip install -r requirements.txt'
+# 清除 __pycache__
+ExecStartPre=/usr/bin/find /opt/crypto_strategy_project -name __pycache__ -type d -exec rm -rf {} +
+# 執行一次
+ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py --cfg /opt/crypto_strategy_project/csp/configs/strategy.yaml --delay-sec 15 --once
+Restart=no
+User=%i
+# 若不使用 user@ 服務，移除 User= 這行或改為實際帳號
+
+[Install]
+WantedBy=multi-user.target
