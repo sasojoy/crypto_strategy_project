@@ -11,21 +11,16 @@ io:
     BCHUSDT: resources/bch_15m.csv
   models_dir: models
 
-# 即時模式下要載入的模型清單
 models:
-  - name: BTCUSDT
-    type: xgboost
-    path: models/BTCUSDT/xgb_h16.json
-  - name: ETHUSDT
-    type: xgboost
-    path: models/ETHUSDT/xgb_h16.json
-  - name: BCHUSDT
-    type: xgboost
-    path: models/BCHUSDT/xgb_h16.json
+  use_manifest: true
+  manifest_path: models/manifest.json
+  globs:
+    - "models/*/model.pkl"
 
 realtime:
-  fetch: binance        # binance | csv_only | none
   require_models: true
+  fetch_mode: "csv_only_or_none"
+  resources_dir: "resources"
 
 logging:
   level: INFO

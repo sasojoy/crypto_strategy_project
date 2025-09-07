@@ -6,7 +6,8 @@ def repo_root() -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 def resolve_resources_dir(cfg: dict) -> str:
-    cfg_dir = (cfg or {}).get("resources_dir", "resources")
+    rt = (cfg or {}).get("realtime", {})
+    cfg_dir = rt.get("resources_dir") or (cfg or {}).get("resources_dir", "resources")
     if os.path.isabs(cfg_dir):
         return cfg_dir
     return os.path.join(repo_root(), cfg_dir)

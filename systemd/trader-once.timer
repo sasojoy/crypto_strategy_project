@@ -2,9 +2,8 @@
 Description=Run trader-once every 15 minutes + 15 seconds
 
 [Timer]
-# 每 15 分鐘觸發（:00、:15、:30、:45）的第 15 秒
-OnCalendar=*:0/15:15
-AccuracySec=1s
+OnCalendar=*:00/15:00
+AccuracySec=15s
 Persistent=true
 Unit=trader-once.service
 
