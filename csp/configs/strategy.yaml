@@ -3,22 +3,29 @@ symbols:
   - ETHUSDT
   - BCHUSDT
 
-# 先用本地 CSV（resources/*_15m.csv）與已訓練模型
-fetch:
-  mode: csv_only        # csv_only | none | binance
-  resources_dir: /opt/crypto_strategy_project/resources
+# 供訓練腳本使用的輸入/輸出路徑
+io:
+  csv_paths:
+    BTCUSDT: resources/btc_15m.csv
+    ETHUSDT: resources/eth_15m.csv
+    BCHUSDT: resources/bch_15m.csv
+  models_dir: models
 
+# 即時模式下要載入的模型清單
 models:
-  BTCUSDT:
-    dir: /opt/crypto_strategy_project/models/BTCUSDT
-  ETHUSDT:
-    dir: /opt/crypto_strategy_project/models/ETHUSDT
-  BCHUSDT:
-    dir: /opt/crypto_strategy_project/models/BCHUSDT
+  - name: BTCUSDT
+    type: xgboost
+    path: models/BTCUSDT/xgb_h16.json
+  - name: ETHUSDT
+    type: xgboost
+    path: models/ETHUSDT/xgb_h16.json
+  - name: BCHUSDT
+    type: xgboost
+    path: models/BCHUSDT/xgb_h16.json
 
 realtime:
+  fetch: binance        # binance | csv_only | none
   require_models: true
-  # 若沒有模型就直接給 no_models_loaded（避免 score=nan）
 
 logging:
   level: INFO

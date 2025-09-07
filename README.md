@@ -325,6 +325,25 @@ During CI runs, you can check the GitHub Actions logs for lines starting with `[
 These logs are for debugging only and do not affect trading logic.
 
 
+## CI Train & Deploy
+
+GitHub Actions workflow [`deploy.yml`](.github/workflows/deploy.yml) automates model
+training and deployment:
+
+1. **train** job installs dependencies and runs
+   `python scripts/train_multi.py --cfg csp/configs/strategy.yaml` to generate
+   models under `models/<SYMBOL>/` for BTCUSDT, ETHUSDT and BCHUSDT. The folder
+   is uploaded as an artifact.
+2. **deploy** job downloads the artifact, rsyncs the repository and models to the
+   VM at `/opt/crypto_strategy_project`, installs systemd unit files, reloads
+   systemd and triggers one run of `trader-once.service`.
+
+Required GitHub secrets:
+
+- `SSH_USER`
+- `SSH_HOST`
+- `SSH_KEY`
+
 ## 遠端 VM 健康檢查
 
 若要在 GitHub Actions 或其他 CI 流程中檢查部署於遠端 VM 的 `trader-once` 服務，可使用以下 SSH 指令。請先於環境變數或 secrets 中設定 `SSH_USER` 與 `SSH_HOST`：
