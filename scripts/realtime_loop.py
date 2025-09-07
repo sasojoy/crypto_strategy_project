@@ -13,6 +13,8 @@ import pandas as pd
 from datetime import datetime, timedelta, timezone
 import logging
 
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from dateutil import tz
 
 from csp.utils.diag import log_diag, log_trace
@@ -37,8 +39,9 @@ if os.environ.get("DIAG_SELFTEST") == "1":
         log_trace("SELFTEST", e)
 
 from csp.strategy import aggregator
-from csp.strategy.model_hub import load_models_from_cfg
+from csp.strategy.model_hub import load_models
 from csp.utils.paths import resolve_resources_dir
+from csp.utils.timez import last_closed_15m, now_utc
 from csp.strategy.position_sizing import (
     blended_sizing, SizingInput, ExchangeRule, kelly_fraction
 )
@@ -66,26 +69,6 @@ def sanitize_score(x):
 TW = tz.gettz("Asia/Taipei")
 FRESH_MIN = 5.0  # 資料新鮮度門檻（分鐘）
 logger = logging.getLogger(__name__)
-
-
-def load_model(symbol: str, cfg_path: str = "csp/configs/strategy.yaml"):
-    """Load model and scaler for a given symbol and log the event."""
-    cfg = load_cfg(cfg_path)
-    try:
-        from csp.pipeline.realtime_v2 import _load_model_bundle
-        bundle = _load_model_bundle(cfg, symbol, debug=False)
-        if not bundle:
-            logging.warning(f"[MODEL] bundle not found for {symbol}")
-            return None, None
-        model = bundle["model"]
-        scaler = bundle.get("scaler")
-    except Exception as e:
-        logging.exception(f"[MODEL] load failed for {symbol}: {e}")
-        return None, None
-    logging.info(
-        f"[MODEL] loaded for {symbol} | n_features={getattr(model, 'n_features_in_', 'NA')}"
-    )
-    return model, scaler
 
 
 def pick_latest_valid_row(features_df: pd.DataFrame, k: int = 3):
@@ -163,9 +146,23 @@ def process_symbol(symbol: str, cfg: dict, models: dict):
         if isinstance(res, dict):
             return res
         df = res
-        model, scaler = load_model(symbol, cfg_path="csp/configs/strategy.yaml")
-        if model is None:
+        latest_close = df.index.max()
+        anchor = last_closed_15m(now_utc())
+        diff_min = (
+            (anchor - latest_close).total_seconds() / 60.0
+            if pd.notna(latest_close)
+            else float("inf")
+        )
+        if pd.isna(latest_close) or diff_min >= FRESH_MIN:
+            print(
+                f"[STALE] {symbol}: anchor={anchor.isoformat()} latest_close={latest_close.isoformat() if pd.notna(latest_close) else 'none'} diff_min={diff_min:.2f}"
+            )
+            return {"side": "NONE", "score": 0.0, "reason": "stale_data"}
+        bundle = models.get(symbol)
+        if not bundle:
             return {"side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
+        model = bundle.get("model") if isinstance(bundle, dict) else bundle
+        scaler = bundle.get("scaler") if isinstance(bundle, dict) else None
         sig = predict_one(symbol, df, model, scaler, cfg_path="csp/configs/strategy.yaml")
         side = sig.get("side", "NONE")
         score = sanitize_score(sig.get("score"))
@@ -200,7 +197,10 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     telegram_conf = cfg.get("notify", {}).get("telegram")
     symbols = cfg.get("symbols", [])
-    models = load_models_from_cfg(cfg)
+    models = load_models(cfg)
+    rt_cfg = cfg.get("realtime", {})
+    fetch_mode = str(rt_cfg.get("fetch_mode", "")).lower()
+    fetch_disabled = fetch_mode in ("", "none", "csv_only", "csv_only_or_none")
     resources_dir = resolve_resources_dir(cfg)
     log_diag(
         f"realtime_loop: models_loaded={len(models)} resources_dir={resources_dir}"
@@ -214,10 +214,11 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             print(f"[SKIP] {sym}: csv not found under resources_dir")
             continue
         print(f"[REALTIME] {sym} <- {csv_path}")
-        try:
-            ensure_data_ready(sym, csv_path)
-        except Exception as fe:
-            print(f"[WARN] {sym}: data fetch failed: {fe}")
+        if not fetch_disabled:
+            try:
+                ensure_data_ready(sym, csv_path)
+            except Exception as fe:
+                print(f"[WARN] {sym}: data fetch failed: {fe}")
         try:
             res = process_symbol(sym, cfg, models)
         except Exception as e:
