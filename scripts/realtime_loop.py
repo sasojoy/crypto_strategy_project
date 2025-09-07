@@ -163,15 +163,20 @@ def process_symbol(symbol: str, cfg: dict, models: dict):
         if isinstance(res, dict):
             return res
         df = res
-        sig = aggregator.get_latest_signal(
-            symbol=symbol, df=df, cfg=cfg, models=models, now_ts=None
-        )
-        if not sig:
-            notify_guard("signal_unavailable", {"symbol": symbol})
-            return {"side": "NONE", "score": 0.0, "reason": "signal_unavailable"}
-        sig["score"] = sanitize_score(sig.get("score"))
-        sig["price"] = float(df["close"].iloc[-1]) if not df.empty else None
-        return sig
+        model, scaler = load_model(symbol, cfg_path="csp/configs/strategy.yaml")
+        if model is None:
+            return {"side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
+        sig = predict_one(symbol, df, model, scaler, cfg_path="csp/configs/strategy.yaml")
+        side = sig.get("side", "NONE")
+        score = sanitize_score(sig.get("score"))
+        result = {
+            "side": side,
+            "score": score,
+            "price": float(df["close"].iloc[-1]) if not df.empty else None,
+        }
+        if side == "NONE":
+            result["reason"] = "below_threshold"
+        return result
     except Exception as e:
         log_trace("LOOP_EXCEPTION", e)
         return {

@@ -1,188 +1,87 @@
-name: CI + Train + Deploy
+name: Train and Deploy
 
 on:
   push:
-    branches: [ main ]
+    branches: ["main"]
   workflow_dispatch:
 
-concurrency:
-  group: deploy-prod
-  cancel-in-progress: true
-
 jobs:
-  build-train:
+  train:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+          cache: "pip"
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install deps
-        shell: bash
+      - name: Install dependencies
         run: |
-          set -euxo pipefail
+          python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          python -V
-          pip -V
-
-      - name: List repo structure (debug)
-        shell: bash
-        run: |
-          set -eux
-          ls -la
-          ls -la scripts || true
-          ls -la resources || true
-          ls -la csp/configs || true
-
-      - name: Sanity check: train script exists and importable
-        shell: bash
-        run: |
-          set -euxo pipefail
-          test -f scripts/train_multi.py
-          python - <<'PY'
-import importlib.util, sys
-assert importlib.util.find_spec('scripts')
-__import__('scripts.train_multi')
-print('train_multi import OK', sys.version)
-PY
-
-      - name: Ensure models/ exists
-        shell: bash
-        run: mkdir -p models
-
-      - name: Check strategy.yaml has non-empty model_hub.models
-        shell: bash
-        run: |
-          set -euxo pipefail
-          python - <<'PY'
-import yaml, sys
-cfg = yaml.safe_load(open('csp/configs/strategy.yaml', 'r'))
-mh = (cfg.get('model_hub') or {})
-models = (mh.get('models') or [])
-assert models, f"model_hub.models is empty in csp/configs/strategy.yaml: {mh}"
-print("model_hub.models =", models)
-PY
+          pip install -e .
 
       - name: Train models
-        shell: bash
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           python scripts/train_multi.py --cfg csp/configs/strategy.yaml
 
-      - name: Self-check outputs
-        shell: bash
-        run: |
-          set -euxo pipefail
-          test -d models/BTCUSDT -a -d models/ETHUSDT -a -d models/BCHUSDT
-          find models -maxdepth 2 -type f | head -n 50 || true
-
-      - name: Upload models as artifact
+      - name: Upload models artifact
         uses: actions/upload-artifact@v4
         with:
-          name: trained-models
-          path: models/
-          if-no-files-found: error
+          name: models
+          path: models
 
   deploy:
-    needs: build-train
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    needs: train
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download trained models
+      - name: Download models artifact
         uses: actions/download-artifact@v4
         with:
-          name: trained-models
-          path: models/
+          name: models
+          path: models
 
-      - name: Show models before deploy (debug)
-        shell: bash
-        run: |
-          set -euxo pipefail
-          du -sh models || true
-          find models -maxdepth 2 -type f | head -n 50 || true
-
-      - name: Start ssh-agent and load key
+      - name: Start ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: |
-            ${{ secrets.SSH_KEY }}
+          ssh-private-key: ${{ secrets.SSH_KEY }}
 
       - name: Add host to known_hosts
-        shell: bash
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          chmod 700 ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-      - name: Rsync project to VM
-        shell: bash
+      - name: Rsync repo to VM
         run: |
-          set -euxo pipefail
-          rsync -az \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.venv' \
-            -e 'ssh -o StrictHostKeyChecking=yes' \
-            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USER }}/repo_tmp/
-
-      - name: Run remote deploy script (installs systemd units)
-        shell: bash
-        run: |
-          set -euxo pipefail
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -lc "
-            set -euo pipefail
-            cd /home/${{ secrets.SSH_USER }}/repo_tmp
-            sudo -n bash scripts/deploy.sh
-          "'
-
-      - name: Sanity check on VM (status + recent logs + diag)
-        shell: bash
-        run: |
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' <<'REMOTE'
           set -euo pipefail
-          cd /opt/crypto_strategy_project
+          rsync -az --delete --exclude '.git' -e "ssh -o StrictHostKeyChecking=yes" ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:repo_tmp/
 
-          echo
-          echo "[INFO] Current directory: $(pwd)"
-          echo "[INFO] List systemd files:"
-          ls -la systemd || true
-
-          echo
-          echo "== systemctl status (timer/service) =="
-          sudo -n systemctl status trader-once.timer --no-pager || true
-          sudo -n systemctl status trader-once.service --no-pager || true
-
-          echo
-          echo "== recent journal (last 200 lines, last 30 minutes) =="
-          if ! sudo -n journalctl -u trader-once.service --since "-30 min" -o cat | tail -n 200 ; then
-            sudo -n journalctl -u trader-once.service -n 200 -o cat || true
+      - name: Deploy on VM
+        run: |
+          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' <<'EOF'
+          set -euo pipefail
+          VM_PATH=/opt/crypto_strategy_project
+          sudo -n rsync -a --delete ~/repo_tmp/ $VM_PATH/
+          sudo -n rsync -a ~/repo_tmp/models/ $VM_PATH/models/
+          if [ -d "$VM_PATH/systemd" ]; then
+            sudo -n cp $VM_PATH/systemd/*.service /etc/systemd/system/ || true
+            sudo -n cp $VM_PATH/systemd/*.timer /etc/systemd/system/ || true
           fi
-
-          echo
-          echo "== diag files (if any) =="
-          ls -l logs/diag 2>/dev/null || true
-          L=$(ls -1t logs/diag/trace_*.log 2>/dev/null | head -n1 || true)
-          if [ -n "${L}" ]; then
-            echo "-- showing ${L} --"
-            tail -n 200 "${L}" || true
-          else
-            echo "(no diag trace files)"
-          fi
-          REMOTE
+          sudo -n systemctl daemon-reload
+          sudo -n systemctl enable --now trader-once.timer
+          sudo -n systemctl start trader-once.service
+          sudo -n systemctl status trader-once.timer --no-pager
+          sudo -n systemctl status trader-once.service --no-pager
+          ls -la $VM_PATH/models
+          grep -A4 -n "models" $VM_PATH/csp/configs/strategy.yaml || true
+          sudo -n journalctl -u trader-once.service --since "-30 min" -o cat | tail -n 200 || true
+EOF

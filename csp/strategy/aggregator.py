@@ -28,9 +28,12 @@ logger = logging.getLogger(__name__)
 def _select_fetcher(cfg: Dict[str, Any]) -> Optional[callable]:
     rt = (cfg or {}).get("realtime", {})
     mode = str(rt.get("fetch", "")).lower()
-    # TODO: wire actual live fetcher here if needed
     if mode in ("", "none", "csv_only"):
         return None
+    if mode in ("binance", "live"):
+        return lambda symbol, interval, start, end: fetch_klines_range(
+            symbol, interval, start, end
+        )
     return None
 
 
