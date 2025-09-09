@@ -38,7 +38,6 @@ if os.environ.get("DIAG_SELFTEST") == "1":
     except Exception as e:
         log_trace("SELFTEST", e)
 
-from csp.strategy import aggregator
 from csp.strategy.model_hub import load_models
 from csp.utils.paths import resolve_resources_dir
 from csp.utils.timez import last_closed_15m, now_utc
@@ -53,8 +52,7 @@ from csp.utils.notifier import (
 )
 from csp.runtime.exit_watchdog import check_exit_once
 from csp.utils.io import load_cfg
-# timezone utilities handled within aggregator
-from csp.utils.validate_data import ensure_data_ready
+from csp.data.feed import read_or_fetch_latest
 
 
 def sanitize_score(x):
@@ -140,13 +138,9 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
     side = "LONG" if score >= 0.75 else ("SHORT" if score <= 0.25 else "NONE")
     return {"symbol": symbol, "side": side, "score": score}
 
-def process_symbol(symbol: str, cfg: dict, models: dict):
+def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
     try:
-        res = aggregator.read_or_fetch_latest(symbol, cfg=cfg)
-        if isinstance(res, dict):
-            return res
-        df = res
-        latest_close = df.index.max()
+        df, latest_close = read_or_fetch_latest(cfg, symbol, csv_path, now_ts_in=None)
         anchor = last_closed_15m(now_utc())
         diff_min = (
             (anchor - latest_close).total_seconds() / 60.0
@@ -198,9 +192,6 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     telegram_conf = cfg.get("notify", {}).get("telegram")
     symbols = cfg.get("symbols", [])
     models = load_models(cfg)
-    rt_cfg = cfg.get("realtime", {})
-    fetch_mode = str(rt_cfg.get("fetch_mode", "")).lower()
-    fetch_disabled = fetch_mode in ("", "none", "csv_only", "csv_only_or_none")
     resources_dir = resolve_resources_dir(cfg)
     log_diag(
         f"realtime_loop: models_loaded={len(models)} resources_dir={resources_dir}"
@@ -209,18 +200,12 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     os.makedirs("logs/diag", exist_ok=True)
 
     for sym in symbols:
-        csv_path = aggregator._csv_path_for_symbol(sym, cfg)
-        if not csv_path:
-            print(f"[SKIP] {sym}: csv not found under resources_dir")
-            continue
+        csv1 = os.path.join(resources_dir, f"{sym.split('USDT')[0].lower()}_15m.csv")
+        csv2 = os.path.join(resources_dir, f"{sym.lower()}_15m.csv")
+        csv_path = csv1 if os.path.exists(csv1) else csv2
         print(f"[REALTIME] {sym} <- {csv_path}")
-        if not fetch_disabled:
-            try:
-                ensure_data_ready(sym, csv_path)
-            except Exception as fe:
-                print(f"[WARN] {sym}: data fetch failed: {fe}")
         try:
-            res = process_symbol(sym, cfg, models)
+            res = process_symbol(sym, cfg, models, csv_path)
         except Exception as e:
             log_trace("LOOP_EXCEPTION", e)
             res = {
