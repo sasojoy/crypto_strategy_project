@@ -2,6 +2,21 @@ symbols:
   - BTCUSDT
   - ETHUSDT
   - BCHUSDT
+# 自動抓取最新 K 線資料的設定
+fetch:
+  mode: public       # public / csv_only / none
+  source: binance_public
+  base_url: "https://api.binance.com"
+  interval: "15m"
+  batch_limit: 500   # 每次抓取蠟燭數（Binance 上限 1000；500 足夠且較穩定）
+  max_retries: 3
+  retry_sleep_sec: 1.0
+
+# 執行時相關參數
+runtime:
+  require_models: true
+  notify:
+    telegram: false
 
 # 供訓練腳本使用的輸入/輸出路徑
 io:
@@ -11,17 +26,17 @@ io:
     BCHUSDT: resources/bch_15m.csv
   models_dir: models
 
+# 模型相關設定
 models:
   use_manifest: true
   manifest_path: models/manifest.json
   globs:
     - "models/*/model.pkl"
 
-realtime:
-  require_models: true
-  fetch_mode: "csv_only_or_none"
-  resources_dir: "resources"
+# 資源檔案所在資料夾
+resources_dir: resources
 
+# 日誌設定
 logging:
   level: INFO
   diag: true
