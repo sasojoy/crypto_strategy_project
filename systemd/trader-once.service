@@ -1,9 +1,10 @@
 [Unit]
 Description=Crypto Strategy Realtime Once (venv)
 After=network-online.target
+Wants=network-online.target
 
 [Service]
-Type=simple
+Type=oneshot
 WorkingDirectory=/opt/crypto_strategy_project
 ExecStartPre=/usr/bin/find /opt/crypto_strategy_project -name __pycache__ -type d -exec rm -rf {} +
 ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py \

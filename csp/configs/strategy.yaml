@@ -4,13 +4,15 @@ symbols:
   - BCHUSDT
 # 自動抓取最新 K 線資料的設定
 fetch:
-  mode: public       # public / csv_only / none
+  mode: public_binance       # csv_only / none / public_binance
   source: binance_public
   base_url: "https://api.binance.com"
   interval: "15m"
   batch_limit: 500   # 每次抓取蠟燭數（Binance 上限 1000；500 足夠且較穩定）
   max_retries: 3
   retry_sleep_sec: 1.0
+  max_backfill_minutes: 360  # 一次最多補這麼多分鐘的缺口
+  writeback_csv: true        # 抓到新 K 線就寫回 CSV
 
 # 執行時相關參數
 runtime:

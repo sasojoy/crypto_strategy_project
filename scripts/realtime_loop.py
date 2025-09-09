@@ -52,7 +52,7 @@ from csp.utils.notifier import (
 )
 from csp.runtime.exit_watchdog import check_exit_once
 from csp.utils.io import load_cfg
-from csp.data.feed import read_or_fetch_latest
+from csp.data.public_klines import fetch_binance_klines_public
 
 
 def sanitize_score(x):
@@ -137,6 +137,101 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
 
     side = "LONG" if score >= 0.75 else ("SHORT" if score <= 0.25 else "NONE")
     return {"symbol": symbol, "side": side, "score": score}
+
+
+def floor_to_interval(ts: datetime, interval: str) -> datetime:
+    if interval.endswith("m"):
+        step = int(interval[:-1])
+        minute = (ts.minute // step) * step
+        return ts.replace(minute=minute, second=0, microsecond=0)
+    if interval.endswith("h"):
+        step = int(interval[:-1])
+        hour = (ts.hour // step) * step
+        return ts.replace(hour=hour, minute=0, second=0, microsecond=0)
+    raise ValueError(f"Unsupported interval: {interval}")
+
+
+def interval_to_timedelta(interval: str) -> timedelta:
+    if interval.endswith("m"):
+        return timedelta(minutes=int(interval[:-1]))
+    if interval.endswith("h"):
+        return timedelta(hours=int(interval[:-1]))
+    raise ValueError(f"Unsupported interval: {interval}")
+
+
+def read_or_fetch_latest(cfg, symbol: str, csv_path: str, now_ts_in=None):
+    """Read local CSV; if stale and fetching enabled, backfill via public API."""
+    fetch_cfg = cfg.get("fetch", {}) or {}
+    fetch_mode = fetch_cfg.get("mode", "csv_only")
+    interval = fetch_cfg.get("interval", "15m")
+    api_base = fetch_cfg.get("base_url", fetch_cfg.get("api_base", "https://api.binance.com"))
+    writeback_csv = bool(fetch_cfg.get("writeback_csv", True))
+    max_backfill_minutes = int(fetch_cfg.get("max_backfill_minutes", 360))
+
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(csv_path)
+
+    df = pd.read_csv(csv_path)
+    if df.empty:
+        df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+    if "timestamp" in df.columns:
+        ts = pd.to_datetime(df["timestamp"], utc=True)
+        df = df.drop(columns=["timestamp"])
+        df.index = ts
+    else:
+        df.index = pd.to_datetime(df.index, utc=True)
+    df.index.name = None
+
+    now_ts_utc = now_utc() if now_ts_in is None else now_ts_in
+    anchor = floor_to_interval(now_ts_utc, interval)
+    latest_close = df.index.max() if not df.empty else None
+
+    if fetch_mode in ("none", "csv_only"):
+        logger.debug(
+            "[DIAG] %s: fetch disabled (csv_only/none) -> use local CSV only", symbol
+        )
+        return df, latest_close
+
+    if latest_close is None:
+        start_fetch = anchor - timedelta(minutes=max_backfill_minutes)
+    else:
+        start_fetch = latest_close + interval_to_timedelta(interval)
+    end_fetch = anchor
+
+    if start_fetch < end_fetch:
+        try:
+            if fetch_mode == "public_binance":
+                new_df = fetch_binance_klines_public(
+                    symbol,
+                    start_fetch,
+                    end_fetch,
+                    interval=interval,
+                    api_base=api_base,
+                )
+            else:
+                raise ValueError(f"Unknown fetch mode: {fetch_mode}")
+
+            if not new_df.empty:
+                combined = pd.concat([df, new_df], axis=0).sort_index()
+                combined = combined[~combined.index.duplicated(keep="last")]
+                if writeback_csv:
+                    out = combined.copy()
+                    out.insert(0, "timestamp", out.index)
+                    out.to_csv(csv_path, index=False)
+                df = combined
+                latest_close = df.index.max()
+                logger.info(
+                    "[FETCH] %s added rows=%d new_latest=%s",
+                    symbol,
+                    len(new_df),
+                    latest_close.isoformat(),
+                )
+            else:
+                logger.info("[FETCH] %s no new rows", symbol)
+        except Exception as e:
+            logger.warning("[WARN] %s: fetch error: %s", symbol, e, exc_info=False)
+
+    return df, latest_close
 
 def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
     try:

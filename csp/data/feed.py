@@ -17,7 +17,7 @@ def _get_fetch_fn(cfg) -> Optional[Callable]:
     if mode in ("none", "csv_only", None):
         log.debug("fetch disabled (csv_only/none)")
         return None
-    if mode == "public":
+    if mode in ("public", "public_binance"):
         fcfg = cfg.get("fetch", {}) or {}
         base_url = fcfg.get("base_url", "https://api.binance.com")
         interval = fcfg.get("interval", "15m")
