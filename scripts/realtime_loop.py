@@ -69,15 +69,17 @@ FRESH_MIN = 5.0  # 資料新鮮度門檻（分鐘）
 logger = logging.getLogger(__name__)
 
 
-def pick_latest_valid_row(features_df: pd.DataFrame, k: int = 3):
-    """從最後 k 根中，挑選第一個「無缺值」的列；若都不合格，回傳 None。"""
-    tail = features_df.tail(k)
-    na_counts = tail.isna().sum()
-    logging.info(f"[DIAG] tail_na_counts: {na_counts.to_dict()}")
-    for idx in tail.index[::-1]:
-        row = tail.loc[idx]
-        if not row.isna().any() and np.isfinite(row.to_numpy(dtype=float)).all():
-            return idx, row
+def pick_latest_valid_row(feats: pd.DataFrame, k: int = 3):
+    """Pick the latest fully numeric & finite row among last *k* rows."""
+    num_cols = feats.select_dtypes(include=["number"]).columns.tolist()
+    if not num_cols:
+        return None, None
+    tail = feats[num_cols].tail(k)
+    logging.info(f"[DIAG] tail_na_counts: {tail.isna().sum().to_dict()}")
+    for idx, row in reversed(list(tail.iterrows())):
+        arr = row.to_numpy(dtype=float, copy=False)
+        if np.isfinite(arr).all() and not np.isnan(arr).any():
+            return idx, feats.loc[idx]
     return None, None
 
 
@@ -109,6 +111,12 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
     )
 
     feature_cols = feat_params.get("feature_columns") or list(feats.columns)
+    numeric_cols = feats.select_dtypes(include=["number"]).columns
+    feature_cols = [c for c in feature_cols if c in numeric_cols]
+    if not feature_cols:
+        logging.warning(f"[WARN] {symbol}: no numeric feature columns available after filtering")
+        return {"symbol": symbol, "side": "NONE", "score": None, "reason": "no_numeric_features"}
+
     idx, row = pick_latest_valid_row(feats[feature_cols], k=3)
     if row is None:
         logging.warning(
