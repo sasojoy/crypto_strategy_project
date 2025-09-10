@@ -5,19 +5,32 @@ from typing import Optional, List, Tuple
 import requests
 import pandas as pd
 
+
 def _to_millis(ts) -> int:
-    """接受 pandas Timestamp/str/int，轉成毫秒 UNIX。"""
+    """將各種時間型別轉成 UTC 毫秒。
+
+    接受數字、字串或 pandas 可解析的時間物件。若輸入為:
+
+    - **數字**: 直接視為毫秒並回傳。
+    - **naive 時間**: 視為 UTC 後再轉換。
+    - **tz-aware**: 轉換為 UTC 後再回傳。
+    """
     if ts is None:
         return None
     if isinstance(ts, (int, float)):
         return int(ts)
-    # pandas.Timestamp 或可被 pandas 解析的字串
-    return int(pd.Timestamp(ts, tz="UTC").value // 10**6)
+
+    t = pd.Timestamp(ts)
+    if t.tzinfo is None:
+        t = t.tz_localize("UTC")
+    else:
+        t = t.tz_convert("UTC")
+    return int(t.value // 10**6)
 
 def fetch_klines(
     symbol: str,
     interval: str,
-    end_ts_utc,                     # pandas.Timestamp/str/int
+    end_ts_utc: Optional[object] = None,  # pandas.Timestamp/str/int
     *,
     base_url: str = "https://api.binance.com",
     limit: int = 500,
@@ -27,6 +40,7 @@ def fetch_klines(
     透過 Binance 公開 API 取得最多 `limit` 根 K 線（以 endTime 截止，往回取）。
     免金鑰、只讀公開端點。
     回傳 DataFrame(index=close_time[ns, tz=UTC], columns=[open,high,low,close,volume]).
+    若未提供 `end_ts_utc` 則以當下時間為截止點。
     """
     end_ms = _to_millis(end_ts_utc)
     params = {

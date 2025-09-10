@@ -29,6 +29,33 @@ def _atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
     tr = pd.concat([(h - l).abs(), (h - prev_c).abs(), (l - prev_c).abs()], axis=1).max(axis=1)
     return tr.rolling(n).mean()
 
+
+def _ensure_time_index_utc(df: pd.DataFrame) -> pd.DataFrame:
+    """確保 DataFrame 具有 UTC 的 DatetimeIndex。
+
+    - 若存在 'timestamp' 欄位，將其轉成 UTC 後設為 index。
+    - 若已是 DatetimeIndex，則統一為 UTC 並命名為 'timestamp'。
+    """
+    if "timestamp" in df.columns:
+        ts = pd.to_datetime(df["timestamp"], utc=True)
+        d = df.drop(columns=["timestamp"], errors="ignore").copy()
+        d.index = ts
+        d.index.name = "timestamp"
+        return d
+
+    if isinstance(df.index, pd.DatetimeIndex):
+        d = df.copy()
+        idx = d.index
+        if idx.tz is None:
+            idx = idx.tz_localize("UTC")
+        else:
+            idx = idx.tz_convert("UTC")
+        d.index = idx
+        d.index.name = "timestamp"
+        return d
+
+    raise KeyError("Input DataFrame must contain 'timestamp' column or DatetimeIndex")
+
 def build_features_15m_4h(
     df15: pd.DataFrame,
     ema_windows=(9, 21, 50),
@@ -39,11 +66,11 @@ def build_features_15m_4h(
     h4_resample: str = "4H",
 ) -> pd.DataFrame:
     """
-    傳入：含欄位 timestamp/open/high/low/close[/volume] 的 15m DataFrame（timestamp 為 tz-aware）
-    回傳：加入 15m 與 4H 特徵後、對齊 15m 時間軸的 DataFrame（已去除起始 NaN）
+    傳入：含欄位 timestamp/open/high/low/close[/volume] 的 15m DataFrame，
+          或已以 timestamp 作為 index 的 DataFrame。接受 naive 或 tz-aware 時間。
+    回傳：加入 15m 與 4H 特徵後、對齊 15m 時間軸的 DataFrame（已去除起始 NaN）。
     """
-    df = df15.copy()
-    df = df.set_index("timestamp")
+    df = _ensure_time_index_utc(df15)
 
     # --- 15m features ---
     for w in ema_windows:
