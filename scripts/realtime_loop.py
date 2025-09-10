@@ -17,6 +17,8 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from dateutil import tz
 
+from typing import List, Tuple, Dict
+
 from csp.utils.diag import log_diag, log_trace
 
 
@@ -64,11 +66,12 @@ def ensure_latest_closed_anchor(now_utc: "pd.Timestamp") -> "pd.Timestamp":
     return floored
 
 
-def ensure_not_stale(df: "pd.DataFrame", symbol: str, now_utc: "pd.Timestamp") -> tuple[bool, str]:
+def ensure_not_stale(df: "pd.DataFrame", symbol: str, now_utc: "pd.Timestamp") -> Tuple[bool, str]:
     """檢查 df 是否有覆蓋到最新已收盤 anchor，一旦落後就回傳 (False, reason)。"""
     if df.empty:
         return False, "empty_df"
-    # 假設 df 的索引是 tz-aware UTC 的 datetimeindex；若不是要先 to_datetime + tz_localize('UTC')
+    df.index = pd.to_datetime(df.index, utc=True)
+    df.sort_index(inplace=True)
     last_close = df.index.max()
     anchor = ensure_latest_closed_anchor(now_utc)
     diff_min = (anchor - last_close).total_seconds() / 60.0
@@ -77,9 +80,21 @@ def ensure_not_stale(df: "pd.DataFrame", symbol: str, now_utc: "pd.Timestamp") -
     return True, ""
 
 
-def validate_numeric_features(feats: "pd.DataFrame", feature_cols: list[str]) -> None:
+def load_feature_names(models_dir: str, symbol: str) -> List[str]:
+    # 僅允許由模型輸出的特徵清單，推論必須以它為準
+    p = os.path.join(models_dir, symbol, "feature_names.json")
+    if not os.path.exists(p):
+        raise FileNotFoundError(f"feature_names.json not found: {p}")
+    with open(p, "r", encoding="utf-8") as f:
+        names = json.load(f)
+    if not isinstance(names, list) or not names:
+        raise ValueError(f"feature_names.json invalid/empty for {symbol}")
+    return names
+
+
+def validate_numeric_features(feats: "pd.DataFrame", cols: List[str]) -> None:
     bad = []
-    for c in feature_cols:
+    for c in cols:
         if c not in feats.columns:
             bad.append(f"{c} (missing)")
         else:
@@ -87,6 +102,36 @@ def validate_numeric_features(feats: "pd.DataFrame", feature_cols: list[str]) ->
                 bad.append(f"{c} ({feats[c].dtype})")
     if bad:
         raise ValueError("Non-numeric or missing feature columns detected: " + ", ".join(bad))
+
+
+def align_features_for_infer(
+    feats_reset: "pd.DataFrame",
+    models_dir: str,
+    symbol: str,
+    scaler,
+) -> "pd.DataFrame":
+    """
+    1) 讀取模型的 feature_names.json 作為唯一可信來源與順序
+    2) 排除非數值欄位（若 feature_names.json 竟含 timestamp，直接報錯）
+    3) 若 scaler.n_features_in_ 存在，強制長度一致；不一致就回傳清楚錯誤，請重訓或修正 metadata
+    """
+    names = load_feature_names(models_dir, symbol)
+    forbidden = [c for c in names if c.lower() in ("timestamp", "ts", "time")]
+    if forbidden:
+        raise ValueError(
+            f"feature_names.json for {symbol} contains non-numeric time-like columns: {forbidden}. Please retrain/export metadata correctly."
+        )
+    X = feats_reset.loc[:, names].copy()
+    validate_numeric_features(feats_reset, names)
+    if scaler is not None and hasattr(scaler, "n_features_in_"):
+        expected = int(scaler.n_features_in_)
+        if X.shape[1] != expected:
+            msg = (
+                f"[FEATURE_MISMATCH] {symbol}: X has {X.shape[1]} features, but scaler expects {expected}.\n"
+                f"names_from_model={len(names)}; first10={names[:10]}"
+            )
+            raise ValueError(msg)
+    return X
 
 
 def sanitize_score(x):
@@ -104,13 +149,12 @@ logger = logging.getLogger(__name__)
 
 
 def pick_latest_valid_row(df_feat: "pd.DataFrame", k: int = 3):
-    # 只選 numeric 欄位做有限值判斷
+    # 僅針對 numeric 欄位檢查有限值
     numeric_df = df_feat.select_dtypes(include=[np.number])
     for idx in range(len(df_feat) - 1, -1, -1):
-        row_full = df_feat.iloc[idx]
         row_num = numeric_df.iloc[idx]
         if not row_num.isna().any() and np.isfinite(row_num.to_numpy(dtype=float)).all():
-            return idx, row_full
+            return idx, df_feat.iloc[idx]
     raise RuntimeError("No valid feature row found in last k bars")
 
 
@@ -143,13 +187,10 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
     )
 
     feats = feats.reset_index()  # 這會把 timestamp 變成一個欄位
-    feature_cols = feat_params.get("feature_columns") or list(feats.columns)
-
-    # 僅用於特徵的 DataFrame（避免 timestamp 等混進來）
-    X = feats[feature_cols].copy()
-    validate_numeric_features(X, feature_cols)
+    models_dir = cfg.get("io", {}).get("models_dir", "models")
+    X_all = align_features_for_infer(feats, models_dir, symbol, scaler)
     try:
-        idx, row = pick_latest_valid_row(X, k=3)
+        idx, _ = pick_latest_valid_row(X_all, k=3)
     except RuntimeError:
         logging.warning(
             f"[WARN] no valid feature row for {symbol} (last 3 bars all contain NaN)."
@@ -161,9 +202,9 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
             "reason": "no_valid_features",
         }
 
-    x = row.to_frame().T
+    x = X_all.iloc[[idx]]
     try:
-        x2 = scaler.transform(x) if scaler is not None else x.values
+        x2 = scaler.transform(x.values) if scaler is not None else x.values
         proba = model.predict_proba(x2)[0, 1]
         score = float(proba)
     except Exception as e:
@@ -292,8 +333,13 @@ def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
                 df.index = pd.to_datetime(df.index, utc=True)
                 df = df.sort_index()
                 ok, reason = ensure_not_stale(df, symbol, pd.Timestamp.now(tz=UTC))
-                if not ok:
-                    return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": reason}
+
+        if not ok:
+            allow_one = cfg.get("realtime", {}).get("allow_stale_one_bar", True)
+            if allow_one and "diff_min=15.00" in reason:
+                logger.info(
+                    f"[WARN] {symbol} {reason} — allow_stale_one_bar=True, will proceed using last_close row"
+                )
             else:
                 return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": reason}
 
