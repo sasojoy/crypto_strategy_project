@@ -6,10 +6,11 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/crypto_strategy_project
-ExecStartPre=/usr/bin/find /opt/crypto_strategy_project -name __pycache__ -type d -exec rm -rf {} +
-ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py \
-  --cfg /opt/crypto_strategy_project/csp/configs/strategy.yaml --delay-sec 15 --once
+Environment=VIRTUAL_ENV=/opt/crypto_strategy_project/.venv
+Environment=PATH=/opt/crypto_strategy_project/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/opt/crypto_strategy_project/.venv/bin/python -c "import numpy, pandas"
+ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py --cfg /opt/crypto_strategy_project/csp/configs/strategy.yaml --delay-sec 15 --once
 Restart=no
 
 [Install]
