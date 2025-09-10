@@ -70,7 +70,17 @@ def build_features_15m_4h(
           或已以 timestamp 作為 index 的 DataFrame。接受 naive 或 tz-aware 時間。
     回傳：加入 15m 與 4H 特徵後、對齊 15m 時間軸的 DataFrame（已去除起始 NaN）。
     """
-    df = _ensure_time_index_utc(df15)
+    # Robustify: ensure 'timestamp' column exists and is UTC
+    df = df15
+    if "timestamp" not in df.columns:
+        if isinstance(df.index, pd.DatetimeIndex):
+            df = df.copy()
+            df["timestamp"] = df.index
+        else:
+            df = df.reset_index(drop=False).rename(columns={"index": "timestamp"})
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+    df = df.set_index("timestamp")
+    df = df.sort_index()
 
     # --- 15m features ---
     for w in ema_windows:

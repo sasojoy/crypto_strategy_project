@@ -102,6 +102,7 @@ TW = tz.gettz("Asia/Taipei")
 logger = logging.getLogger(__name__)
 
 
+
 def pick_latest_valid_row(df_feat: "pd.DataFrame", k: int = 3):
     # 只選 numeric 欄位做有限值判斷
     numeric_df = df_feat.select_dtypes(include=[np.number])
@@ -111,6 +112,7 @@ def pick_latest_valid_row(df_feat: "pd.DataFrame", k: int = 3):
         if not row_num.isna().any() and np.isfinite(row_num.to_numpy(dtype=float)).all():
             return idx, row_full
     raise RuntimeError("No valid feature row found in last k bars")
+
 
 
 def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str = "csp/configs/strategy.yaml"):
@@ -142,6 +144,7 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
 
     feats = feats.reset_index()  # 這會把 timestamp 變成一個欄位
     feature_cols = feat_params.get("feature_columns") or list(feats.columns)
+
     # 僅用於特徵的 DataFrame（避免 timestamp 等混進來）
     X = feats[feature_cols].copy()
     validate_numeric_features(X, feature_cols)
