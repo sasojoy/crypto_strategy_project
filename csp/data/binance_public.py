@@ -4,24 +4,23 @@ import time
 from typing import Optional, List, Tuple
 import requests
 import pandas as pd
+import numpy as np
 
 
 def _to_millis(ts) -> int:
-    """將各種時間型別轉成 UTC 毫秒。
+    """Convert various timestamp inputs to milliseconds since epoch (UTC).
 
-    接受數字、字串或 pandas 可解析的時間物件。若輸入為:
-
-    - **數字**: 直接視為毫秒並回傳。
-    - **naive 時間**: 視為 UTC 後再轉換。
-    - **tz-aware**: 轉換為 UTC 後再回傳。
+    Accepts None, int/float (incl. numpy scalars), or anything parseable by
+    :func:`pandas.Timestamp`. Naive datetimes are treated as UTC, while
+    timezone-aware objects are converted to UTC.
     """
     if ts is None:
         return None
-    if isinstance(ts, (int, float)):
+    if isinstance(ts, (int, float, np.integer, np.floating)):
         return int(ts)
 
     t = pd.Timestamp(ts)
-    if t.tzinfo is None:
+    if t.tzinfo is None or t.tz is None:
         t = t.tz_localize("UTC")
     else:
         t = t.tz_convert("UTC")
@@ -79,4 +78,5 @@ def fetch_klines(
     df = pd.DataFrame(rows)
     df = df.set_index("close_time").sort_index()
     df.index.name = None
-    return df[["open","high","low","close","volume","open_time"]]
+    df["timestamp"] = df.index
+    return df[["timestamp","open","high","low","close","volume","open_time"]]
