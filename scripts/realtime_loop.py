@@ -17,7 +17,14 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from dateutil import tz
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
+
+try:
+    # 供 min_notional 檢查（若你之後移檔，這裡記得同步 import 路徑）
+    from csp.exchange.minnotional import get_min_notional
+except Exception:
+    # 若模組尚未存在，延後在執行到下單 Guard 時再報錯，避免影響 signal_only
+    get_min_notional = None  # type: ignore
 
 from csp.utils.diag import log_diag, log_trace
 
@@ -158,6 +165,31 @@ def pick_latest_valid_row(df_feat: "pd.DataFrame", k: int = 3):
     raise RuntimeError("No valid feature row found in last k bars")
 
 
+# ========= 通知摘要格式 =========
+def _summarize_proba(d: Dict[str, Any]) -> str:
+    """把 {'2':0.61,'16':0.74} 這類字典，轉成簡短字串 h2=0.61,h16=0.74（最多 4 個）。"""
+    if not d:
+        return "-"
+    items = list(d.items())
+    try:
+        items.sort(key=lambda kv: int(kv[0]))
+    except Exception:
+        pass
+    items = items[:4]
+    return ", ".join([f"h{str(k)}={v:.2f}" for k, v in items])
+
+
+def format_signal_summary(one: Dict[str, Any]) -> str:
+    """單幣別摘要行：BTCUSDT: LONG | 0.957 | chosen_h=16 | proba=h2=0.61,h16=0.74"""
+    sym = one.get("symbol")
+    side = one.get("side", "NONE")
+    score = one.get("score", 0.0)
+    ch = one.get("chosen_h") or "-"
+    pb = _summarize_proba(one.get("proba_by_h") or {})
+    rsn = one.get("reason") or "-"
+    return f"{sym}: {side} | score={score:.3f} | chosen_h={ch} | proba={pb} | reason={rsn}"
+
+
 
 def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str = "csp/configs/strategy.yaml"):
     """Build features, pick latest valid row and run prediction."""
@@ -204,6 +236,7 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
 
     x = X_all.iloc[[idx]]
     try:
+        # 統一丟 numpy，避免 sklearn 「has feature names」警告
         x2 = scaler.transform(x.values) if scaler is not None else x.values
         proba = model.predict_proba(x2)[0, 1]
         score = float(proba)
@@ -217,7 +250,14 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
         }
 
     side = "LONG" if score >= 0.75 else ("SHORT" if score <= 0.25 else "NONE")
-    return {"symbol": symbol, "side": side, "score": score}
+    out = {"symbol": symbol, "side": side, "score": score}
+    if "proba_by_h" in locals():
+        out["proba_by_h"] = proba_by_h
+    if "chosen_h" in locals():
+        out["chosen_h"] = chosen_h
+    if "chosen_t" in locals():
+        out["chosen_t"] = chosen_t
+    return out
 
 
 def floor_to_interval(ts: datetime, interval: str) -> datetime:
@@ -338,7 +378,7 @@ def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
             allow_one = cfg.get("realtime", {}).get("allow_stale_one_bar", True)
             if allow_one and "diff_min=15.00" in reason:
                 logger.info(
-                    f"[WARN] {symbol} {reason} — allow_stale_one_bar=True, will proceed using last_close row"
+                    f"[WARN] {symbol} {reason} — allow_stale_one_bar=True, proceed with last_close"
                 )
             else:
                 return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": reason}
@@ -349,15 +389,43 @@ def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
         model = bundle.get("model") if isinstance(bundle, dict) else bundle
         scaler = bundle.get("scaler") if isinstance(bundle, dict) else None
         sig = predict_one(symbol, df, model, scaler, cfg_path="csp/configs/strategy.yaml")
+        # ---- Trade guard ----
+        trade_cfg = cfg.get("trade", {}) if 'cfg' in locals() else {}
+        trade_mode = (trade_cfg.get("mode") or "signal_only").lower()
+        if trade_mode == "signal_only":
+            sig.setdefault("reason", "-")
+            sig["_execution"] = "skipped(signal_only)"
+        else:
+            try:
+                last_px = float(df["close"].iloc[-1])
+            except Exception:
+                last_px = 0.0
+            fixed_qty = float(trade_cfg.get("fixed_qty") or 0.0)
+            notional = last_px * fixed_qty if (last_px and fixed_qty) else 0.0
+            min_need = 0.0
+            try:
+                if get_min_notional is None:
+                    raise RuntimeError("minnotional module not available")
+                min_need = float(get_min_notional(symbol, cfg))
+            except Exception:
+                logger.warning(f"[WARN] cannot resolve min_notional for {symbol}, fallback=0")
+                min_need = 0.0
+            if notional < min_need:
+                sig["reason"] = f"min_notional_reject  need≥{min_need:.2f} USDT, got={notional:.2f}"
+                sig["_execution"] = "rejected(min_notional)"
+        # ---- /Trade guard ----
         side = sig.get("side", "NONE")
         score = sanitize_score(sig.get("score"))
         result = {
+            "symbol": symbol,
             "side": side,
             "score": score,
             "price": float(df["close"].iloc[-1]) if not df.empty else None,
         }
         if side == "NONE":
-            result["reason"] = "below_threshold"
+            result["reason"] = sig.get("reason", "below_threshold")
+        if sig.get("_execution"):
+            result["_execution"] = sig["_execution"]
         return result
     except Exception as e:
         log_trace("LOOP_EXCEPTION", e)
@@ -408,7 +476,7 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         if res.get("price") is not None and sig:
             notify_signal(sym, sig, float(res.get("price")), telegram_conf)
         # --- position sizing ---
-        if res.get("side") in ("LONG", "SHORT"):
+        if res.get("side") in ("LONG", "SHORT") and res.get("_execution") != "skipped(signal_only)":
             ps_cfg = cfg.get("position_sizing", {})
             risk_cfg = cfg.get("risk", {})
             rule_cfg = ps_cfg.get("exchange_rule", {})
@@ -494,24 +562,11 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             json.dump(snap, f, ensure_ascii=False, indent=2)
         print("[DIAG] dumped logs/diag/realtime_nan_snapshot.json")
 
-    lines = []
-    for sym, r in results.items():
-        if "error" in r:
-            lines.append(f"{sym}: ERROR {r['error']}")
-        else:
-            side = r.get("side") or "NONE"
-            scr = sanitize_score(r.get("score"))
-            reason = r.get("reason", "-")
-            note = " [STALE DATA]" if r.get("warning") else ""
-            # 嚴禁 NaN 外流
-            try:
-                scr = float(scr)
-                if math.isnan(scr):
-                    scr = 0.0
-            except Exception:
-                scr = 0.0
-            lines.append(f"{sym}: {side} | score={scr:.3f} | reason={reason}{note}")
-    notify("⏱️ 多幣別即時訊號\n" + "\n".join(lines), cfg.get("notify", {}).get("telegram"))
+    formatted_lines = [format_signal_summary(results[sym]) for sym in results]
+    logger.info("[NOTIFY] ⏱️ 多幣別即時訊號")
+    for line in formatted_lines:
+        print(line)
+    notify("⏱️ 多幣別即時訊號\n" + "\n".join(formatted_lines), cfg.get("notify", {}).get("telegram"))
 
     payload = {
         sym: {
