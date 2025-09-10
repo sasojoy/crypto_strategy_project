@@ -18,6 +18,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from dateutil import tz
 
 from typing import List, Tuple, Dict, Any
+from pathlib import Path
+import hashlib, inspect
+import csp
 
 try:
     # 供 min_notional 檢查（若你之後移檔，這裡記得同步 import 路徑）
@@ -47,9 +50,22 @@ if os.environ.get("DIAG_SELFTEST") == "1":
     except Exception as e:
         log_trace("SELFTEST", e)
 
+_APP_FILE = Path(__file__).resolve()
+_APP_SHA8 = hashlib.sha1(_APP_FILE.read_bytes()).hexdigest()[:8]
+try:
+    _REL = json.loads((Path(__file__).resolve().parents[1] / "RELEASE.json").read_text())
+    _BUILD = (_REL.get("sha") or _APP_SHA8)[:8]
+    _BRANCH = _REL.get("branch") or "unknown"
+    _BUILT_AT = _REL.get("built_at") or "unknown"
+except Exception:
+    _BUILD, _BRANCH, _BUILT_AT = _APP_SHA8, "unknown", "unknown"
+print(f"[BOOT] realtime_loop.py={_APP_FILE}")
+print(f"[BOOT] file_sha8={_APP_SHA8}  build={_BUILD}  branch={_BRANCH}  built_at={_BUILT_AT}")
+print(f"[BOOT] csp_module_path={inspect.getfile(csp)}")
+
 from csp.strategy.model_hub import load_models
 from csp.utils.paths import resolve_resources_dir
-from csp.utils.timez import now_utc, UTC
+from csp.utils.timez import now_utc, UTC, ensure_utc_index
 from csp.strategy.position_sizing import (
     blended_sizing, SizingInput, ExchangeRule, kelly_fraction
 )
@@ -77,8 +93,7 @@ def ensure_not_stale(df: "pd.DataFrame", symbol: str, now_utc: "pd.Timestamp") -
     """檢查 df 是否有覆蓋到最新已收盤 anchor，一旦落後就回傳 (False, reason)。"""
     if df.empty:
         return False, "empty_df"
-    df.index = pd.to_datetime(df.index, utc=True)
-    df.sort_index(inplace=True)
+    df = ensure_utc_index(df)
     last_close = df.index.max()
     anchor = ensure_latest_closed_anchor(now_utc)
     diff_min = (anchor - last_close).total_seconds() / 60.0
@@ -176,7 +191,7 @@ def _summarize_proba(d: Dict[str, Any]) -> str:
     except Exception:
         pass
     items = items[:4]
-    return ", ".join([f"h{str(k)}={v:.2f}" for k, v in items])
+    return ", ".join([f"h{str(k)}={float(v):.2f}" for k, v in items])
 
 
 def format_signal_summary(one: Dict[str, Any]) -> str:
@@ -200,6 +215,7 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
     cfg = load_cfg(cfg_path)
     feat_params = get_symbol_features(cfg, symbol)
 
+    df_15m = ensure_utc_index(df_15m)
     feats = build_features_15m_4h(
         df_15m,
         ema_windows=tuple(feat_params["ema_windows"]),
@@ -357,12 +373,7 @@ def read_or_fetch_latest(cfg, symbol: str, csv_path: str, now_ts_in=None):
 def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
     try:
         df = pd.read_csv(csv_path)
-        if "timestamp" in df.columns:
-            df.index = pd.to_datetime(df["timestamp"], utc=True)
-            df = df.drop(columns=["timestamp"])
-        else:
-            df.index = pd.to_datetime(df.index, utc=True)
-        df = df.sort_index()
+        df = ensure_utc_index(df)
 
         ok, reason = ensure_not_stale(df, symbol, pd.Timestamp.now(tz=UTC))
         if not ok:
@@ -370,8 +381,7 @@ def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
             fetch_mode = fetch_cfg.get("mode", "csv_only")
             if fetch_mode not in ("none", "csv_only"):
                 df, _ = read_or_fetch_latest(cfg, symbol, csv_path, now_ts_in=None)
-                df.index = pd.to_datetime(df.index, utc=True)
-                df = df.sort_index()
+                df = ensure_utc_index(df)
                 ok, reason = ensure_not_stale(df, symbol, pd.Timestamp.now(tz=UTC))
 
         if not ok:
@@ -563,10 +573,11 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         print("[DIAG] dumped logs/diag/realtime_nan_snapshot.json")
 
     formatted_lines = [format_signal_summary(results[sym]) for sym in results]
-    logger.info("[NOTIFY] ⏱️ 多幣別即時訊號")
+    title = f"⏱️ 多幣別即時訊號 (build={_BUILD})"
+    logger.info(f"[NOTIFY] {title}")
     for line in formatted_lines:
         print(line)
-    notify("⏱️ 多幣別即時訊號\n" + "\n".join(formatted_lines), cfg.get("notify", {}).get("telegram"))
+    notify(title + "\n" + "\n".join(formatted_lines), cfg.get("notify", {}).get("telegram"))
 
     payload = {
         sym: {
