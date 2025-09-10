@@ -23,6 +23,17 @@ runtime:
 realtime:
   allow_stale_one_bar: true   # 沒有 live_fetch 時，落後一根先跑，不要整輪報 stale_data
 
+trade:
+  # mode 可為 "signal_only" 或 "live"
+  mode: signal_only
+  # 若使用固定下單數量，搭配 min_notional 檢查：
+  fixed_qty: 0.0
+  # 可選：手動覆蓋各幣別最小名目（USDT）
+  min_notional:
+    BTCUSDT: 5.0
+    ETHUSDT: 5.0
+    BCHUSDT: 5.0
+
 # 供訓練腳本使用的輸入/輸出路徑
 io:
   csv_paths:
