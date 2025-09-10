@@ -40,7 +40,7 @@ if os.environ.get("DIAG_SELFTEST") == "1":
 
 from csp.strategy.model_hub import load_models
 from csp.utils.paths import resolve_resources_dir
-from csp.utils.timez import last_closed_15m, now_utc
+from csp.utils.timez import now_utc, UTC
 from csp.strategy.position_sizing import (
     blended_sizing, SizingInput, ExchangeRule, kelly_fraction
 )
@@ -55,6 +55,40 @@ from csp.utils.io import load_cfg
 from csp.data.public_klines import fetch_binance_klines_public
 
 
+def ensure_latest_closed_anchor(now_utc: "pd.Timestamp") -> "pd.Timestamp":
+    # 回傳「當前應該使用的 15m 收盤時間點」（不含尚未收盤的 bar）
+    floored = now_utc.floor("15min")
+    # 若剛好是整點（:00/:15/:30/:45），上一根才是最後已收盤
+    if now_utc == floored:
+        return floored - pd.Timedelta(minutes=15)
+    return floored
+
+
+def ensure_not_stale(df: "pd.DataFrame", symbol: str, now_utc: "pd.Timestamp") -> tuple[bool, str]:
+    """檢查 df 是否有覆蓋到最新已收盤 anchor，一旦落後就回傳 (False, reason)。"""
+    if df.empty:
+        return False, "empty_df"
+    # 假設 df 的索引是 tz-aware UTC 的 datetimeindex；若不是要先 to_datetime + tz_localize('UTC')
+    last_close = df.index.max()
+    anchor = ensure_latest_closed_anchor(now_utc)
+    diff_min = (anchor - last_close).total_seconds() / 60.0
+    if diff_min > 0:
+        return False, f"stale_data(anchor={anchor.isoformat()}, latest_close={last_close.isoformat()}, diff_min={diff_min:.2f})"
+    return True, ""
+
+
+def validate_numeric_features(feats: "pd.DataFrame", feature_cols: list[str]) -> None:
+    bad = []
+    for c in feature_cols:
+        if c not in feats.columns:
+            bad.append(f"{c} (missing)")
+        else:
+            if not pd.api.types.is_numeric_dtype(feats[c].dtype):
+                bad.append(f"{c} ({feats[c].dtype})")
+    if bad:
+        raise ValueError("Non-numeric or missing feature columns detected: " + ", ".join(bad))
+
+
 def sanitize_score(x):
     try:
         xf = float(x)
@@ -65,20 +99,18 @@ def sanitize_score(x):
         return 0.0
 
 TW = tz.gettz("Asia/Taipei")
-FRESH_MIN = 5.0  # 資料新鮮度門檻（分鐘）
 logger = logging.getLogger(__name__)
 
 
-def pick_latest_valid_row(features_df: pd.DataFrame, k: int = 3):
-    """從最後 k 根中，挑選第一個「無缺值」的列；若都不合格，回傳 None。"""
-    tail = features_df.tail(k)
-    na_counts = tail.isna().sum()
-    logging.info(f"[DIAG] tail_na_counts: {na_counts.to_dict()}")
-    for idx in tail.index[::-1]:
-        row = tail.loc[idx]
-        if not row.isna().any() and np.isfinite(row.to_numpy(dtype=float)).all():
-            return idx, row
-    return None, None
+def pick_latest_valid_row(df_feat: "pd.DataFrame", k: int = 3):
+    # 只選 numeric 欄位做有限值判斷
+    numeric_df = df_feat.select_dtypes(include=[np.number])
+    for idx in range(len(df_feat) - 1, -1, -1):
+        row_full = df_feat.iloc[idx]
+        row_num = numeric_df.iloc[idx]
+        if not row_num.isna().any() and np.isfinite(row_num.to_numpy(dtype=float)).all():
+            return idx, row_full
+    raise RuntimeError("No valid feature row found in last k bars")
 
 
 def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str = "csp/configs/strategy.yaml"):
@@ -108,9 +140,14 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
         atr_percentile_window=feat_params["atr_percentile_window"],
     )
 
+    feats = feats.reset_index()  # 這會把 timestamp 變成一個欄位
     feature_cols = feat_params.get("feature_columns") or list(feats.columns)
-    idx, row = pick_latest_valid_row(feats[feature_cols], k=3)
-    if row is None:
+    # 僅用於特徵的 DataFrame（避免 timestamp 等混進來）
+    X = feats[feature_cols].copy()
+    validate_numeric_features(X, feature_cols)
+    try:
+        idx, row = pick_latest_valid_row(X, k=3)
+    except RuntimeError:
         logging.warning(
             f"[WARN] no valid feature row for {symbol} (last 3 bars all contain NaN)."
         )
@@ -235,21 +272,31 @@ def read_or_fetch_latest(cfg, symbol: str, csv_path: str, now_ts_in=None):
 
 def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
     try:
-        df, latest_close = read_or_fetch_latest(cfg, symbol, csv_path, now_ts_in=None)
-        anchor = last_closed_15m(now_utc())
-        diff_min = (
-            (anchor - latest_close).total_seconds() / 60.0
-            if pd.notna(latest_close)
-            else float("inf")
-        )
-        if pd.isna(latest_close) or diff_min >= FRESH_MIN:
-            print(
-                f"[STALE] {symbol}: anchor={anchor.isoformat()} latest_close={latest_close.isoformat() if pd.notna(latest_close) else 'none'} diff_min={diff_min:.2f}"
-            )
-            return {"side": "NONE", "score": 0.0, "reason": "stale_data"}
+        df = pd.read_csv(csv_path)
+        if "timestamp" in df.columns:
+            df.index = pd.to_datetime(df["timestamp"], utc=True)
+            df = df.drop(columns=["timestamp"])
+        else:
+            df.index = pd.to_datetime(df.index, utc=True)
+        df = df.sort_index()
+
+        ok, reason = ensure_not_stale(df, symbol, pd.Timestamp.now(tz=UTC))
+        if not ok:
+            fetch_cfg = cfg.get("fetch", {}) or {}
+            fetch_mode = fetch_cfg.get("mode", "csv_only")
+            if fetch_mode not in ("none", "csv_only"):
+                df, _ = read_or_fetch_latest(cfg, symbol, csv_path, now_ts_in=None)
+                df.index = pd.to_datetime(df.index, utc=True)
+                df = df.sort_index()
+                ok, reason = ensure_not_stale(df, symbol, pd.Timestamp.now(tz=UTC))
+                if not ok:
+                    return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": reason}
+            else:
+                return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": reason}
+
         bundle = models.get(symbol)
         if not bundle:
-            return {"side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
+            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
         model = bundle.get("model") if isinstance(bundle, dict) else bundle
         scaler = bundle.get("scaler") if isinstance(bundle, dict) else None
         sig = predict_one(symbol, df, model, scaler, cfg_path="csp/configs/strategy.yaml")
