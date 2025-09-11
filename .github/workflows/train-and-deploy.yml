@@ -113,6 +113,8 @@ jobs:
           sudo -n cp "${DST}/systemd/trader-once.timer"   /etc/systemd/system/trader-once.timer
           sudo -n systemctl daemon-reload
           sudo -n systemctl enable --now trader-once.timer
+          # 確保任何 timer 變更都即時套用（冪等）
+          sudo -n systemctl restart trader-once.timer
           sudo -n systemctl stop trader-once.service || true
 
           echo "[DEPLOY] One-shot run"
@@ -121,6 +123,8 @@ jobs:
           echo "[DEPLOY] Status"
           sudo -n systemctl status trader-once.timer   --no-pager || true
           sudo -n systemctl status trader-once.service --no-pager || true
+          # 額外可觀察點：下一次觸發時間（便於在 CI log 中確認排程）
+          sudo -n systemctl list-timers --all | grep -i trader-once || true
 
           echo "== recent journal (last 200 lines, last 30 minutes) =="
           if ! sudo -n journalctl -u trader-once.service --since "-30 min" -o cat | tail -n 200 ; then
