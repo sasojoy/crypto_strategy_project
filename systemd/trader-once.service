@@ -9,6 +9,7 @@ WorkingDirectory=/opt/crypto_strategy_project
 Environment=VIRTUAL_ENV=/opt/crypto_strategy_project/.venv
 Environment=PATH=/opt/crypto_strategy_project/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/opt/crypto_strategy_project/.venv/bin/python -c "import json,sys,os; p=os.path.join('/opt/crypto_strategy_project','RELEASE.json'); print(open(p).read() if os.path.exists(p) else '{\"sha\":\"file\"}')"
 ExecStartPre=/opt/crypto_strategy_project/.venv/bin/python -c "import numpy, pandas"
 ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py --cfg /opt/crypto_strategy_project/csp/configs/strategy.yaml --delay-sec 15 --once
 Restart=no

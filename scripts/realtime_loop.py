@@ -7,6 +7,7 @@ import os
 import sys
 import math
 import traceback
+import socket
 
 import numpy as np
 import pandas as pd
@@ -573,7 +574,7 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         print("[DIAG] dumped logs/diag/realtime_nan_snapshot.json")
 
     formatted_lines = [format_signal_summary(results[sym]) for sym in results]
-    title = f"⏱️ 多幣別即時訊號 (build={_BUILD})"
+    title = f"⏱️ 多幣別即時訊號 (build={_BUILD}, host={socket.gethostname()})"
     logger.info(f"[NOTIFY] {title}")
     for line in formatted_lines:
         print(line)
