@@ -106,9 +106,9 @@ jobs:
             echo "[DEPLOY] Provision env for systemd (/etc/crypto_strategy_project.env)"
             if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
               sudo -n bash -lc 'umask 077; cat > /etc/crypto_strategy_project.env <<EOF
-TELEGRAM_BOT_TOKEN='"$TELEGRAM_BOT_TOKEN"'
-TELEGRAM_CHAT_ID='"$TELEGRAM_CHAT_ID"'
-EOF'
+              TELEGRAM_BOT_TOKEN='"$TELEGRAM_BOT_TOKEN"'
+              TELEGRAM_CHAT_ID='"$TELEGRAM_CHAT_ID"'
+              EOF'
               echo "[DEPLOY] Wrote /etc/crypto_strategy_project.env"
             else
               echo "[DEPLOY] TELEGRAM_* secrets missing; skipping env file"
