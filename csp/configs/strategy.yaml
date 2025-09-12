@@ -18,7 +18,7 @@ fetch:
 runtime:
   require_models: true
   notify:
-    telegram: false
+    telegram: true
 
 realtime:
   allow_stale_one_bar: true   # 沒有 live_fetch 時，落後一根先跑，不要整輪報 stale_data
