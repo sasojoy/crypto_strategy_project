@@ -1,11 +1,15 @@
 [Unit]
 Description=Crypto Strategy Realtime Once (venv)
-After=network-online.target
 Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/crypto_strategy_project
+# 可選：若你的 daemon 以非 root 執行，請改成對應帳號
+#User=ubuntu
+# 從檔案注入 Telegram 等機密（不存在也不致命）
+EnvironmentFile=-/etc/crypto_strategy_project.env
 Environment=VIRTUAL_ENV=/opt/crypto_strategy_project/.venv
 Environment=PATH=/opt/crypto_strategy_project/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 Environment=PYTHONUNBUFFERED=1
