@@ -7,8 +7,10 @@ After=network-online.target
 Type=oneshot
 WorkingDirectory=/opt/crypto_strategy_project
 EnvironmentFile=-/etc/crypto_strategy_project.env
+Environment=PYTHONUNBUFFERED=1
 ExecStartPre=/opt/crypto_strategy_project/.venv/bin/python -c "import json,sys,os; p=os.path.join('/opt/crypto_strategy_project','RELEASE.json'); print(open(p).read() if os.path.exists(p) else '{\"sha\":\"file\"}')"
 ExecStartPre=/opt/crypto_strategy_project/.venv/bin/python -c "import numpy, pandas"
+ExecStartPre=/bin/bash -lc 'echo "[ENVCHK] TELEGRAM_BOT_TOKEN len=${#TELEGRAM_BOT_TOKEN:-0} CHAT_ID len=${#TELEGRAM_CHAT_ID:-0}"'
 ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py --cfg /opt/crypto_strategy_project/csp/configs/strategy.yaml --delay-sec 15 --once
 User=root
 Group=root

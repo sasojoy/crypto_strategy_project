@@ -91,10 +91,14 @@ jobs:
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
+          # 這裡不直接 echo；交由 ssh 前綴帶到遠端
         run: |
           set -euo pipefail
-          # 把 Secrets 綁在 ssh 前綴，讓「遠端 shell」拿得到
-          ssh -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" TELEGRAM_BOT_TOKEN='${{ secrets.TELEGRAM_BOT_TOKEN }}' TELEGRAM_CHAT_ID='${{ secrets.TELEGRAM_CHAT_ID }}' bash -s <<'REMOTE'
+          # 把 secrets 綁到遠端 shell 環境，避免在 CI log 洩漏
+          ssh -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            TELEGRAM_BOT_TOKEN='${{ secrets.TELEGRAM_BOT_TOKEN }}' \
+            TELEGRAM_CHAT_ID='${{ secrets.TELEGRAM_CHAT_ID }}' \
+            bash -s <<'REMOTE'
           set -euo pipefail
 
           SRC="/home/$USER/repo_tmp"
@@ -105,9 +109,11 @@ jobs:
 
           echo "[DEPLOY] Provision env for systemd (/etc/crypto_strategy_project.env)"
           sudo -n install -m 600 -o root -g root /dev/null /etc/crypto_strategy_project.env
-          # 用 printf + tee，避免 heredoc 展開/縮排陷阱
-          printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n' "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | sudo -n tee /etc/crypto_strategy_project.env >/dev/null
-          echo "[DEPLOY] Wrote /etc/crypto_strategy_project.env"
+          # 用 printf + tee（避免 heredoc 展開/縮排/引號坑）
+          printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n' \
+            "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | sudo -n tee /etc/crypto_strategy_project.env >/dev/null
+          # 驗證（不印值，只印存在與長度）
+          sudo -n awk -F= '/^TELEGRAM_(BOT_TOKEN|CHAT_ID)=/ {printf("[CHECK] %s present len=%d\n",$1,length($2))}' /etc/crypto_strategy_project.env
 
           echo "[DEPLOY] Ensure venv"
           if [ ! -x "${DST}/.venv/bin/python" ]; then
