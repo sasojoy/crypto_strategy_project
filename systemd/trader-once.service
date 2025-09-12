@@ -6,17 +6,13 @@ After=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/crypto_strategy_project
-# 可選：若你的 daemon 以非 root 執行，請改成對應帳號
-#User=ubuntu
-# 從檔案注入 Telegram 等機密（不存在也不致命）
 EnvironmentFile=-/etc/crypto_strategy_project.env
-Environment=VIRTUAL_ENV=/opt/crypto_strategy_project/.venv
-Environment=PATH=/opt/crypto_strategy_project/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
-Environment=PYTHONUNBUFFERED=1
 ExecStartPre=/opt/crypto_strategy_project/.venv/bin/python -c "import json,sys,os; p=os.path.join('/opt/crypto_strategy_project','RELEASE.json'); print(open(p).read() if os.path.exists(p) else '{\"sha\":\"file\"}')"
 ExecStartPre=/opt/crypto_strategy_project/.venv/bin/python -c "import numpy, pandas"
 ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py --cfg /opt/crypto_strategy_project/csp/configs/strategy.yaml --delay-sec 15 --once
-Restart=no
+User=root
+Group=root
 
 [Install]
 WantedBy=multi-user.target
+
