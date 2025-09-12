@@ -87,10 +87,12 @@ jobs:
           RSYNC_FLAGS="-avz --delete --exclude .git --exclude .github"
           rsync $RSYNC_FLAGS ./ "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/repo_tmp/"
 
-      - name: Install to /opt + systemd reload + run-once (on VM)
+      - name: Deploy to VM
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           set -euo pipefail
           ssh -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}" 'bash -s' <<'REMOTE'
@@ -113,24 +115,33 @@ jobs:
           sudo -n cp "${DST}/systemd/trader-once.timer"   /etc/systemd/system/trader-once.timer
           sudo -n systemctl daemon-reload
           sudo -n systemctl enable --now trader-once.timer
-          # 確保任何 timer 變更都即時套用（冪等）
+
+          echo "[DEPLOY] Prepare notify env (Telegram)"
+          sudo -n install -d -m 0755 /etc/crypto_strategy_project
+          if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
+            sudo -n bash -lc 'cat > /etc/crypto_strategy_project/notify.env <<EOF
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+EOF'
+            sudo -n chmod 0640 /etc/crypto_strategy_project/notify.env
+            sudo -n chown root:root /etc/crypto_strategy_project/notify.env
+            echo "[DEPLOY] Wrote /etc/crypto_strategy_project/notify.env"
+          else
+            echo "[DEPLOY] TELEGRAM_* secrets missing – skip notify.env"
+          fi
+
+          echo "[DEPLOY] Restart timer & run once"
           sudo -n systemctl restart trader-once.timer
           sudo -n systemctl stop trader-once.service || true
-
-          echo "[DEPLOY] One-shot run"
           sudo -n systemctl start trader-once.service
 
           echo "[DEPLOY] Status"
           sudo -n systemctl status trader-once.timer   --no-pager || true
           sudo -n systemctl status trader-once.service --no-pager || true
-          # 額外可觀察點：下一次觸發時間（便於在 CI log 中確認排程）
           sudo -n systemctl list-timers --all | grep -i trader-once || true
 
           echo "== recent journal (last 200 lines, last 30 minutes) =="
           if ! sudo -n journalctl -u trader-once.service --since "-30 min" -o cat | tail -n 200 ; then
             sudo -n journalctl -u trader-once.service -n 200 -o cat || true
           fi
-
-          echo "== models on VM =="
-          sudo -n bash -lc "find ${DST}/models -maxdepth 2 -type f | sort || true"
           REMOTE
