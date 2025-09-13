@@ -35,3 +35,19 @@ def telegram_send(text: str) -> bool:
     except requests.RequestException as e:
         log.warning("notify: telegram exception=%s msg=%s", type(e).__name__, e)
         return False
+
+
+def format_multi_signals(build: str, host: str, items: list[dict]) -> str:
+    """
+    items: [{"symbol":"BTCUSDT","side":"LONG|SHORT|NONE","score":0.957,"reason":"-","chosen_h":None,"proba":None}, ...]
+    """
+    lines = ["⏱️ 多幣別即時訊號 (build=%s, host=%s)" % (build, host)]
+    for it in items:
+        sym = it.get("symbol", "?")
+        side = it.get("side", "?")
+        score = it.get("score", 0.0)
+        reason = it.get("reason", "-")
+        chosen_h = it.get("chosen_h", "-")
+        proba = it.get("proba", "-")
+        lines.append(f"{sym}: {side} | score={score:.3f} | chosen_h={chosen_h} | proba={proba} | reason={reason}")
+    return "\n".join(lines)
