@@ -116,13 +116,18 @@ jobs:
 
           echo "[DEPLOY] Provision env for systemd (/etc/crypto_strategy_project.env)"
           sudo -n install -m 600 -o root -g root /dev/null /etc/crypto_strategy_project.env
-          printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n' \
+          printf "TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n" \
             "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | sudo -n tee /etc/crypto_strategy_project.env >/dev/null
           sudo -n awk -F= '/^TELEGRAM_(BOT_TOKEN|CHAT_ID)=/ {printf("[CHECK] %s present len=%d\n",$1,length($2))}' /etc/crypto_strategy_project.env
+          # 鎖權限，避免非 root 讀取
+          sudo -n chown root:root /etc/crypto_strategy_project.env
+          sudo -n chmod 600 /etc/crypto_strategy_project.env
 
-          # 若 env 檔寫錯或為空，提早結束（讓你在 CI log 就能看到）
-          if ! grep -q '^TELEGRAM_BOT_TOKEN=' /etc/crypto_strategy_project.env || ! grep -q '^TELEGRAM_CHAT_ID=' /etc/crypto_strategy_project.env; then
-            echo "::error::missing TELEGRAM env in /etc/crypto_strategy_project.env"; exit 1
+          # 若 env 檔寫錯或為空，提早結束（用 sudo 檢查，避免 Permission denied）
+          if ! sudo -n bash -lc "grep -q '^TELEGRAM_BOT_TOKEN=' /etc/crypto_strategy_project.env && \
+                                 grep -q '^TELEGRAM_CHAT_ID='   /etc/crypto_strategy_project.env"; then
+            echo "::error::missing TELEGRAM env in /etc/crypto_strategy_project.env"
+            exit 1
           fi
 
           echo "[DEPLOY] Install systemd units"
