@@ -12,7 +12,7 @@ StandardOutput=journal
 StandardError=journal
 ExecStartPre=/opt/crypto_strategy_project/.venv/bin/python -c "import json,sys,os; p=os.path.join('/opt/crypto_strategy_project','RELEASE.json'); print(open(p).read() if os.path.exists(p) else '{\"sha\":\"file\"}')"
 ExecStartPre=/opt/crypto_strategy_project/.venv/bin/python -c "import numpy, pandas"
-# 用單引號把要交給 bash -lc 的指令整段包起來；前綴「-」忽略失敗（純診斷用）
+# 純診斷用；用單引號把 -lc 的整段包起來，並用「-」忽略失敗
 ExecStartPre=-/bin/bash -lc 'echo "[ENVCHK] TELEGRAM_BOT_TOKEN len=${#TELEGRAM_BOT_TOKEN:-0} CHAT_ID len=${#TELEGRAM_CHAT_ID:-0}"'
 ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py \
   --cfg /opt/crypto_strategy_project/csp/configs/strategy.yaml --delay-sec 15 --once
