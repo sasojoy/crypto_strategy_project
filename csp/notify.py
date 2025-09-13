@@ -1,53 +1,73 @@
 import os
-import requests
 import logging
+import requests
 
+TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
 log = logging.getLogger("notify")
 
-def telegram_enabled() -> bool:
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
-    return bool(token and chat_id)
 
-def telegram_send(text: str) -> bool:
+def _fmt(val, fn=str, dash="-"):
+    try:
+        return fn(val) if val is not None else dash
+    except Exception:
+        return dash
+
+
+def _fmt_pct(x):
+    return f"{float(x):.2%}"
+
+
+def _fmt_score(x):
+    return f"{float(x):.3f}"
+
+
+def _fmt_price(x):
+    return f"{float(x):,.2f}"
+
+
+def render_multi_signals(signals: dict, build: str = "-", host: str = "-") -> str:
     """
-    Send message to Telegram. Never raise; log and return False on failure.
+    signals: {
+      "BTCUSDT": {
+         "side": "LONG", "score": 0.9, "price": 114273.61,
+         "chosen_h": 16, "chosen_t": 0.0012,
+         "prob_up_max": 0.53, "prob_down_max": 0.12,
+         "reason": "-"
+      }, ...
+    }
     """
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+    lines = [f"⏱️ 多幣別即時訊號 (build={build}, host={host})"]
+    for sym in sorted(signals.keys()):
+        s = signals[sym] or {}
+        lines.append(
+            f"{sym}: {_fmt(s.get('side'))}"
+            f" | score={_fmt(s.get('score'), _fmt_score)}"
+            f" | h={_fmt(s.get('chosen_h'))}"
+            f" | pt={_fmt(s.get('chosen_t'), _fmt_pct)}"
+            f" | ↑={_fmt(s.get('prob_up_max'), _fmt_pct)} ↓={_fmt(s.get('prob_down_max'), _fmt_pct)}"
+            f" | price={_fmt(s.get('price'), _fmt_price)}"
+            f" | reason={_fmt(s.get('reason'))}"
+        )
+    return "\n".join(lines)
+
+
+def notify(text_or_payload, build: str = "-", host: str = "-"):
+    """
+    支援：
+      - 傳入字串：直接送
+      - 傳入 dict（multi-symbol payload）：會自動格式化為多行訊息
+    """
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
         log.info("notify: telegram disabled or no config")
         return False
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text}
-    try:
-        r = requests.post(url, json=payload, timeout=10)
-        ok = False
-        resp = None
-        try:
-            resp = r.json()
-            ok = bool(resp.get("ok"))
-        except Exception:
-            resp = {"text": r.text[:200]}
-        if not ok:
-            log.warning("notify: telegram send failed status=%s resp=%s", r.status_code, resp)
-        return ok
-    except requests.RequestException as e:
-        log.warning("notify: telegram exception=%s msg=%s", type(e).__name__, e)
-        return False
+    if isinstance(text_or_payload, dict):
+        text = render_multi_signals(text_or_payload, build, host)
+    else:
+        text = str(text_or_payload)
+    r = requests.post(TELEGRAM_API.format(token=token), json={"chat_id": chat_id, "text": text})
+    if not r.ok:
+        log.warning("notify: telegram response not ok: %s %s", r.status_code, r.text)
+    return r.ok
 
-
-def format_multi_signals(build: str, host: str, items: list[dict]) -> str:
-    """
-    items: [{"symbol":"BTCUSDT","side":"LONG|SHORT|NONE","score":0.957,"reason":"-","chosen_h":None,"proba":None}, ...]
-    """
-    lines = ["⏱️ 多幣別即時訊號 (build=%s, host=%s)" % (build, host)]
-    for it in items:
-        sym = it.get("symbol", "?")
-        side = it.get("side", "?")
-        score = it.get("score", 0.0)
-        reason = it.get("reason", "-")
-        chosen_h = it.get("chosen_h", "-")
-        proba = it.get("proba", "-")
-        lines.append(f"{sym}: {side} | score={score:.3f} | chosen_h={chosen_h} | proba={proba} | reason={reason}")
-    return "\n".join(lines)
