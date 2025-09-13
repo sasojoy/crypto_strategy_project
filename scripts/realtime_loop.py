@@ -22,7 +22,12 @@ from typing import List, Tuple, Dict, Any
 from pathlib import Path
 import hashlib, inspect
 import csp
-from csp.notify import telegram_enabled, telegram_send, format_multi_signals
+from csp import notify as tg_notify
+from csp.utils.notifier import (
+    notify_signal,
+    notify_trade_open,
+    notify_guard,
+)
 
 try:
     # 供 min_notional 檢查（若你之後移檔，這裡記得同步 import 路徑）
@@ -70,12 +75,6 @@ from csp.utils.paths import resolve_resources_dir
 from csp.utils.timez import now_utc, UTC, ensure_utc_index
 from csp.strategy.position_sizing import (
     blended_sizing, SizingInput, ExchangeRule, kelly_fraction
-)
-from csp.utils.notifier import (
-    notify,
-    notify_signal,
-    notify_trade_open,
-    notify_guard,
 )
 from csp.runtime.exit_watchdog import check_exit_once
 from csp.utils.io import load_cfg
@@ -170,12 +169,6 @@ def sanitize_score(x):
 TW = tz.gettz("Asia/Taipei")
 logger = logging.getLogger(__name__)
 
-def safe_notify(text: str):
-    try:
-        if telegram_enabled():
-            telegram_send(text)
-    except Exception as e:
-        logger.warning("notify: swallowed exception=%s msg=%s", type(e).__name__, e)
 
 
 
@@ -440,9 +433,15 @@ def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
             "side": side,
             "score": score,
             "price": float(df["close"].iloc[-1]) if not df.empty else None,
+            "chosen_h": sig.get("chosen_h"),
+            "chosen_t": sig.get("chosen_t"),
+            "prob_up_max": sig.get("prob_up_max"),
+            "prob_down_max": sig.get("prob_down_max"),
         }
         if side == "NONE":
             result["reason"] = sig.get("reason", "below_threshold")
+        else:
+            result["reason"] = sig.get("reason", "-")
         if sig.get("_execution"):
             result["_execution"] = sig["_execution"]
         return result
@@ -469,8 +468,8 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     host = socket.gethostname()
     try:
-        if cfg.get("runtime", {}).get("notify", {}).get("telegram", False) and telegram_enabled():
-            telegram_send(f"🟢 Realtime start (build={_BUILD}, host={host})")
+        if cfg.get("runtime", {}).get("notify", {}).get("telegram", False):
+            tg_notify.notify(f"🟢 Realtime start (build={_BUILD}, host={host})")
         else:
             logger.info("notify: telegram disabled by cfg or env")
     except Exception as e:
@@ -589,43 +588,40 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             json.dump(snap, f, ensure_ascii=False, indent=2)
         print("[DIAG] dumped logs/diag/realtime_nan_snapshot.json")
 
-    formatted_lines = [format_signal_summary(results[sym]) for sym in results]
-    title = f"⏱️ 多幣別即時訊號 (build={_BUILD}, host={host})"
-    logger.info(f"[NOTIFY] {title}")
-    for line in formatted_lines:
-        print(line)
-    notify(title + "\n" + "\n".join(formatted_lines), cfg.get("notify", {}).get("telegram"))
-
-    try:
-        if cfg.get("runtime", {}).get("notify", {}).get("telegram", False) and telegram_enabled():
-            items = [
-                {
-                    "symbol": sym,
-                    "side": d.get("side", "NONE"),
-                    "score": sanitize_score(d.get("score")),
-                    "reason": d.get("reason"),
-                    "chosen_h": d.get("chosen_h"),
-                    "proba": d.get("proba"),
-                }
-                for sym, d in results.items()
-            ]
-            text = format_multi_signals(_BUILD, host, items)
-            telegram_send(text)
-        else:
-            logger.info("notify: telegram disabled by cfg or env")
-    except Exception as e:
-        logger.warning("notify: multi-signal swallow %s %s", type(e).__name__, e)
-
-    payload = {
-        sym: {
+    multi = {}
+    for sym, d in results.items():
+        multi[sym] = {
             "symbol": sym,
-            "side": d.get("side", "NONE"),
+            "side": d.get("side"),
             "score": sanitize_score(d.get("score")),
-            "reason": d.get("reason"),
+            "reason": d.get("reason", "-"),
+            "price": d.get("price"),
+            "chosen_h": d.get("chosen_h"),
+            "chosen_t": d.get("chosen_t"),
+            "prob_up_max": d.get("prob_up_max"),
+            "prob_down_max": d.get("prob_down_max"),
         }
-        for sym, d in results.items()
-    }
-    print(json.dumps(payload, ensure_ascii=False, separators=(",", ": ")))
+
+    print(f"[NOTIFY] ⏱️ 多幣別即時訊號 (build={_BUILD}, host={host})")
+    for sym in results:
+        s = multi[sym]
+        print(
+            f"{sym}: {s.get('side','-')}"
+            f" | score={s.get('score',0):.3f}"
+            f" | chosen_h={s.get('chosen_h')}"
+            f" | pt={s.get('chosen_t'):+.2% if s.get('chosen_t') is not None else '-'}"
+            f" | ↑={s.get('prob_up_max',0):.2%}"
+            f" | ↓={s.get('prob_down_max',0):.2%}"
+            f" | price={s.get('price'):,}"
+            f" | reason={s.get('reason','-')}"
+        )
+
+    if cfg.get("runtime", {}).get("notify", {}).get("telegram", False):
+        tg_notify.notify(multi, build=_BUILD, host=host)
+    else:
+        logger.info("notify: telegram disabled by cfg or env")
+
+    print(json.dumps(multi, ensure_ascii=False, separators=(",", ": ")))
     now_ts = datetime.now(tz=TW)
     for r in results.values():
         price = r.get("price")
