@@ -22,6 +22,7 @@ from typing import List, Tuple, Dict, Any
 from pathlib import Path
 import hashlib, inspect
 import csp
+from csp.notify import telegram_enabled, telegram_send
 
 try:
     # 供 min_notional 檢查（若你之後移檔，這裡記得同步 import 路徑）
@@ -168,6 +169,13 @@ def sanitize_score(x):
 
 TW = tz.gettz("Asia/Taipei")
 logger = logging.getLogger(__name__)
+
+def safe_notify(text: str):
+    try:
+        if telegram_enabled():
+            telegram_send(text)
+    except Exception as e:
+        logger.warning("notify: swallowed exception=%s msg=%s", type(e).__name__, e)
 
 
 
