@@ -605,15 +605,19 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     print(f"[NOTIFY] ⏱️ 多幣別即時訊號 (build={_BUILD}, host={host})")
     for sym in results:
         s = multi[sym]
+        def S(key, fmt=None, dash="-"):
+            v = s.get(key)
+            if v is None:
+                return dash
+            return format(v, fmt) if fmt else str(v)
         print(
             f"{sym}: {s.get('side','-')}"
-            f" | score={s.get('score',0):.3f}"
-            f" | chosen_h={s.get('chosen_h')}"
-            f" | pt={s.get('chosen_t'):+.2% if s.get('chosen_t') is not None else '-'}"
-            f" | ↑={s.get('prob_up_max',0):.2%}"
-            f" | ↓={s.get('prob_down_max',0):.2%}"
-            f" | price={s.get('price'):,}"
-            f" | reason={s.get('reason','-')}"
+            f" | score={S('score','.3f')}"
+            f" | h={S('chosen_h')}"
+            f" | pt={S('chosen_t','+.2%')}"
+            f" | ↑={S('prob_up_max','.2%')} ↓={S('prob_down_max','.2%')}"
+            f" | price={S('price',',.2f')}"
+            f" | reason={S('reason')}"
         )
 
     if cfg.get("runtime", {}).get("notify", {}).get("telegram", False):
