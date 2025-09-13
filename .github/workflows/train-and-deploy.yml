@@ -120,12 +120,17 @@ jobs:
             "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | sudo -n tee /etc/crypto_strategy_project.env >/dev/null
           sudo -n awk -F= '/^TELEGRAM_(BOT_TOKEN|CHAT_ID)=/ {printf("[CHECK] %s present len=%d\n",$1,length($2))}' /etc/crypto_strategy_project.env
 
+          # 若 env 檔寫錯或為空，提早結束（讓你在 CI log 就能看到）
+          if ! grep -q '^TELEGRAM_BOT_TOKEN=' /etc/crypto_strategy_project.env || ! grep -q '^TELEGRAM_CHAT_ID=' /etc/crypto_strategy_project.env; then
+            echo "::error::missing TELEGRAM env in /etc/crypto_strategy_project.env"; exit 1
+          fi
+
           echo "[DEPLOY] Install systemd units"
           sudo -n cp "${DST}/systemd/trader-once.service" /etc/systemd/system/trader-once.service
           sudo -n cp "${DST}/systemd/trader-once.timer"   /etc/systemd/system/trader-once.timer
           sudo -n mkdir -p /etc/systemd/system/trader-once.service.d
           printf '%s\n%s\n%s\n' '[Service]' \
-            'EnvironmentFile=-/etc/crypto_strategy_project.env' \
+            'EnvironmentFile=/etc/crypto_strategy_project.env' \
             'Environment=PYTHONUNBUFFERED=1' \
             | sudo -n tee /etc/systemd/system/trader-once.service.d/override.conf >/dev/null
 
@@ -138,7 +143,7 @@ jobs:
             echo "::warning::trader-once.service failed to start, dumping logs"
             sudo -n systemctl status trader-once.service --no-pager || true
             sudo -n journalctl -xeu trader-once.service --no-pager -n 200 || true
-            # 不讓 CI 因通知/環境問題中斷：繼續往下執行
+            # 不阻斷 deploy：繼續
           fi
 
           echo "[SMOKE] Telegram one-shot (does not fail build)"

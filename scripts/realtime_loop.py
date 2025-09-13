@@ -22,7 +22,7 @@ from typing import List, Tuple, Dict, Any
 from pathlib import Path
 import hashlib, inspect
 import csp
-from csp.notify import telegram_enabled, telegram_send
+from csp.notify import telegram_enabled, telegram_send, format_multi_signals
 
 try:
     # 供 min_notional 檢查（若你之後移檔，這裡記得同步 import 路徑）
@@ -467,6 +467,14 @@ def next_quarter_with_delay(now: datetime, delay_sec: int = 15) -> datetime:
 def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     cfg = load_cfg(cfg)
     assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
+    host = socket.gethostname()
+    try:
+        if cfg.get("runtime", {}).get("notify", {}).get("telegram", False) and telegram_enabled():
+            telegram_send(f"🟢 Realtime start (build={_BUILD}, host={host})")
+        else:
+            logger.info("notify: telegram disabled by cfg or env")
+    except Exception as e:
+        logger.warning("notify: startup swallow %s %s", type(e).__name__, e)
     telegram_conf = cfg.get("notify", {}).get("telegram")
     symbols = cfg.get("symbols", [])
     models = load_models(cfg)
@@ -582,11 +590,31 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         print("[DIAG] dumped logs/diag/realtime_nan_snapshot.json")
 
     formatted_lines = [format_signal_summary(results[sym]) for sym in results]
-    title = f"⏱️ 多幣別即時訊號 (build={_BUILD}, host={socket.gethostname()})"
+    title = f"⏱️ 多幣別即時訊號 (build={_BUILD}, host={host})"
     logger.info(f"[NOTIFY] {title}")
     for line in formatted_lines:
         print(line)
     notify(title + "\n" + "\n".join(formatted_lines), cfg.get("notify", {}).get("telegram"))
+
+    try:
+        if cfg.get("runtime", {}).get("notify", {}).get("telegram", False) and telegram_enabled():
+            items = [
+                {
+                    "symbol": sym,
+                    "side": d.get("side", "NONE"),
+                    "score": sanitize_score(d.get("score")),
+                    "reason": d.get("reason"),
+                    "chosen_h": d.get("chosen_h"),
+                    "proba": d.get("proba"),
+                }
+                for sym, d in results.items()
+            ]
+            text = format_multi_signals(_BUILD, host, items)
+            telegram_send(text)
+        else:
+            logger.info("notify: telegram disabled by cfg or env")
+    except Exception as e:
+        logger.warning("notify: multi-signal swallow %s %s", type(e).__name__, e)
 
     payload = {
         sym: {
