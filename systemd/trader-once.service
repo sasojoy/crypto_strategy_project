@@ -6,15 +6,14 @@ After=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/crypto_strategy_project
-# 必載入（去掉前面的 -），載不到就讓服務失敗，避免靜默沒拿到 token
-EnvironmentFile=/etc/crypto_strategy_project.env
+EnvironmentFile=-/etc/crypto_strategy_project.env
 Environment=PYTHONUNBUFFERED=1
 StandardOutput=journal
 StandardError=journal
 ExecStartPre=/opt/crypto_strategy_project/.venv/bin/python -c "import json,sys,os; p=os.path.join('/opt/crypto_strategy_project','RELEASE.json'); print(open(p).read() if os.path.exists(p) else '{\"sha\":\"file\"}')"
 ExecStartPre=/opt/crypto_strategy_project/.venv/bin/python -c "import numpy, pandas"
 # 明確印出環境長度，方便在 journal 內檢查
-ExecStartPre=/bin/bash -lc 'echo "[ENVCHK] TELEGRAM_BOT_TOKEN len=${#TELEGRAM_BOT_TOKEN:-0} CHAT_ID len=${#TELEGRAM_CHAT_ID:-0}"'
+ExecStartPre=-/bin/bash -lc 'echo "[ENVCHK] TELEGRAM_BOT_TOKEN len=${#TELEGRAM_BOT_TOKEN:-0} CHAT_ID len=${#TELEGRAM_CHAT_ID:-0}"'
 ExecStart=/opt/crypto_strategy_project/.venv/bin/python /opt/crypto_strategy_project/scripts/realtime_loop.py \
   --cfg /opt/crypto_strategy_project/csp/configs/strategy.yaml --delay-sec 15 --once
 User=root
