@@ -133,11 +133,11 @@ jobs:
           echo "[DEPLOY] Install systemd units"
           sudo -n cp "${DST}/systemd/trader-once.service" /etc/systemd/system/trader-once.service
           sudo -n cp "${DST}/systemd/trader-once.timer"   /etc/systemd/system/trader-once.timer
-          sudo -n mkdir -p /etc/systemd/system/trader-once.service.d
-          printf '%s\n%s\n%s\n' '[Service]' \
-            'EnvironmentFile=/etc/crypto_strategy_project.env' \
-            'Environment=PYTHONUNBUFFERED=1' \
-            | sudo -n tee /etc/systemd/system/trader-once.service.d/override.conf >/dev/null
+          # 清掉舊的 drop-in（以前那個 ExecStartPre 有壞引號）
+          if [ -d /etc/systemd/system/trader-once.service.d ]; then
+            echo "[DEPLOY] Cleanup broken drop-in override"
+            sudo -n rm -f /etc/systemd/system/trader-once.service.d/override.conf || true
+          fi
 
           echo "[DEPLOY] Reload & (re)start timer/service"
           sudo -n systemctl daemon-reload
