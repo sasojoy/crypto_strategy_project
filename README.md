@@ -386,3 +386,154 @@ A：回測可另外加入基準輸出（未內建時可自行擴充 `--equity-be
 - [ ] `--fetch inc`/`--fetch full` 的補檔流程可正確更新資料，再進行日期切片。
 - [ ] 回測可輸出資金曲線 CSV 與 PNG，最後一筆與回測最終 equity 相符。
 - [ ] 即時訊息合併、中文摘要與其他原有功能不受影響。
+
+## CI：Train & Deploy（含非阻塞 Backtest 報表）
+
+本專案的 GitHub Actions workflow：**每次 push 到 `main`**（或手動觸發）會進行 **訓練 →（並行）回測 / 部署**。
+
+流程拓撲：
+
+```
+push → train ──→ deploy
+        │
+        └────→ backtest（不阻擋 deploy）
+```
+
+### jobs.train（訓練）
+- 多幣訓練指令：
+  ```bash
+  python scripts/train_multi.py \
+    --symbols "BTCUSDT,ETHUSDT,BCHUSDT" \
+    --out-dir models \
+    --cfg csp/configs/strategy.yaml
+  ```
+- 產物：`models/`（每幣一個子資料夾 + `manifest.json`），上傳 artifact：**`trained-models`**。
+- 備註：也可只帶 `--cfg`，由設定檔的 `io.csv_paths` 與 `io.models_dir` 驅動。
+
+### jobs.backtest（回測，**非阻塞**）
+- 依賴 `train`，下載 `trained-models` 到 `models/`，以**確保與部署同一版模型**。
+- 指令：
+  ```bash
+  python scripts/backtest_multi.py \
+    --cfg csp/configs/strategy.yaml \
+    --days 30 --fetch inc \
+    --save-summary --out-dir reports --format both
+  ```
+- 設定 `continue-on-error: true` 且上傳報表 `if: always()`，**即使回測失敗也不會卡住部署**。
+- 產物：`reports/` 上傳 artifact：**`backtest-reports`**（預設保存 7 天）。
+
+#### 下載回測報表
+1. GitHub → **Actions** → 找到對應的 **Train & Deploy** 執行紀錄  
+2. 在 **Artifacts** 區塊下載 **`backtest-reports`**（zip），內含 CSV/JSON 總結與各幣別回測結果。
+
+### jobs.deploy（部署）
+- 依賴 `train`（**不依賴 backtest**）
+- 步驟摘要：
+  - 下載 `trained-models` → 與程式碼一起 `rsync` 至 VM（`/opt/crypto_strategy_project`）
+  - 建立/覆寫 `/etc/crypto_strategy_project.env`（寫入 TELEGRAM secrets）
+  - 安裝 systemd 服務與排程：
+    - `trader-once.service`：單次執行驗證
+    - `trader-once.timer`：**每 15 分鐘 + 15 秒** 觸發
+  - 觸發一次 `service`（驗證本次 build 可跑）
+  - 送一則 Telegram **smoke** 訊息（只檢查 HTTP 狀態；不含敏感資訊）
+
+部署後檢查（在 VM 上）：
+```bash
+sudo systemctl status trader-once.timer --no-pager
+sudo systemctl status trader-once.service --no-pager
+sudo journalctl -u trader-once.service -n 200 -o cat
+sudo systemctl list-timers --all | grep -i trader-once
+```
+
+---
+
+## 本機等效指令
+
+### 訓練（多幣）
+```bash
+# 方式 A：完全走設定檔
+python scripts/train_multi.py --cfg csp/configs/strategy.yaml
+
+# 方式 B：顯式指定幣種與輸出
+python scripts/train_multi.py \
+  --symbols "BTCUSDT,ETHUSDT,BCHUSDT" \
+  --out-dir models \
+  --cfg csp/configs/strategy.yaml
+```
+
+### 回測（多幣）
+```bash
+python scripts/backtest_multi.py \
+  --cfg csp/configs/strategy.yaml \
+  --days 30 --fetch inc \
+  --save-summary --out-dir reports --format both
+```
+
+---
+
+## Secrets 與通知
+
+部署需要以下 GitHub Secrets（由 CI 傳到 VM 並寫入 `/etc/crypto_strategy_project.env`）：
+- `SSH_USER`、`SSH_HOST`、`SSH_KEY`：連線與同步程式碼
+- `TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID`：用於訊息通知
+
+在 `strategy.yaml` 中控制是否啟用 Telegram 通知：
+```yaml
+runtime:
+  notify:
+    telegram: true
+```
+
+若部署後 Telegram 沒收到通知，請檢查：
+1. `/etc/crypto_strategy_project.env` 權限與內容（root:root, 0600；應包含 `TELEGRAM_BOT_TOKEN=` 與 `TELEGRAM_CHAT_ID=`）。
+2. 服務日誌是否出現 `notify: telegram disabled or no config`（代表環境變數/設定未生效）。
+
+---
+
+## 訊號訊息格式（範例與欄位）
+
+```
+⏱️ 多幣別即時訊號 (build=<git_sha8>, host=<hostname>)
+BTCUSDT: LONG | score=0.83 | h=+4h | pt=+2.1% | ↑=0.61 ↓=0.23 | price=115,881.98 | reason=cross/ema
+ETHUSDT: NONE | score=0.49 | h=-    | pt=-     | ↑=-    ↓=-    | price=4,660.00   | reason=-
+BCHUSDT: SHORT| score=0.21 | h=+2h  | pt=-1.0% | ↑=0.18 ↓=0.55 | price=598.10     | reason=rsi-div
+```
+
+欄位說明：
+- `side`：建議方向（`LONG` / `SHORT` / `NONE`）
+- `score`：模型信心分數（0–1）
+- `h`：模型挑選的觀察/持有時間視窗（若無則 `-`）
+- `pt`：目標幅度估計（若無則 `-`）
+- `↑ / ↓`：上/下行機率估計（若無則 `-`）
+- `price`：訊號當下現價
+- `reason`：簡短解釋（資料不足則 `-`）
+
+> **進出場規則**以策略程式邏輯為準；`side=NONE` 表示不建議動作。  
+> 部署的 `trade.mode=signal_only` 僅發通知、不會自動下單。
+
+---
+
+## 常見問題（FAQ）
+
+**Q：每次上版都會重算模型與回測嗎？**  
+**A：會。** `train` job 每次 push 到 `main` 都會重訓並產出 `trained-models`。`backtest` 用同一套模型做 30 天回測，但為**非阻塞**，不影響部署。
+
+**Q：想調整回測天數或關閉回測？**  
+A：修改 `.github/workflows/train-deploy.yml` 的 `backtest` job 參數（如 `--days 30`），或暫時註解整個 `backtest` job。部署只依賴 `train`。
+
+**Q：部署後要看下一次排程什麼時候跑？**  
+A：`systemctl list-timers --all | grep -i trader-once` 可看到下一次觸發時間。
+
+**Q：看到 `notify: telegram disabled or no config`？**  
+A：表示程式沒拿到 `TELEGRAM_BOT_TOKEN/CHAT_ID` 或 `strategy.yaml` 關閉了 telegram。請依「Secrets 與通知」一節檢查。
+
+---
+
+## 工作流狀態徽章（可選）
+
+將 `<your_org_or_user>` 與 `<your_repo>` 換成實際路徑：
+
+```md
+![Train & Deploy](https://github.com/<your_org_or_user>/<your_repo>/actions/workflows/train-deploy.yml/badge.svg)
+```
+
