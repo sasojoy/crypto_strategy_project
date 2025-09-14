@@ -3,13 +3,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 import requests
+
+# --- make imports work when invoked as "python scripts/backtest_multi.py" ---
+import os, sys
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+# --------------------------------------------------------------------------
+
 from csp.utils.diag import log_diag
 
 # 依賴 backtest_v2 的核心邏輯
