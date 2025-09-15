@@ -77,13 +77,32 @@ def _infer_symbol_from_path(csv_path: str) -> Optional[str]:
     if "BCH" in name: return "BCHUSDT"
     return None
 
-def _compute_tp_sl(price: float, atr: float, side: str, atr_cfg: Dict[str, Any]):
-    if side == "long":
-        tp = price + atr * float(atr_cfg["long"]["tp_mult"])
-        sl = price - atr * float(atr_cfg["long"]["sl_mult"])
+def _compute_tp_sl(price: float, atr: float, side: str, atr_cfg: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+    """Compute take-profit / stop-loss levels from ATR config.
+
+    If configuration is missing or disabled, return ``(None, None)`` to signal
+    that no TP/SL should be applied.
+    """
+    if not isinstance(atr_cfg, dict) or not atr_cfg.get("enabled", False):
+        return None, None
+
+    side_norm = (side or "").upper()
+    long_cfg = atr_cfg.get("long", {}) or {}
+    short_cfg = atr_cfg.get("short", {}) or {}
+
+    if side_norm == "LONG":
+        tp_mult = float(long_cfg.get("tp_mult", 0.0) or 0.0)
+        sl_mult = float(long_cfg.get("sl_mult", 0.0) or 0.0)
+        tp = price + atr * tp_mult
+        sl = price - atr * sl_mult
+    elif side_norm == "SHORT":
+        tp_mult = float(short_cfg.get("tp_mult", 0.0) or 0.0)
+        sl_mult = float(short_cfg.get("sl_mult", 0.0) or 0.0)
+        tp = price - atr * tp_mult
+        sl = price + atr * sl_mult
     else:
-        tp = price - atr * float(atr_cfg["short"]["tp_mult"])
-        sl = price + atr * float(atr_cfg["short"]["sl_mult"])
+        return None, None
+
     return float(tp), float(sl)
 
 def _decide_side(proba_up: float, long_thr: float, short_thr: float) -> Optional[str]:
@@ -101,14 +120,23 @@ def _zone_from_atr_discount(side: str, price: float, atr: float, x_long: float, 
         z_low, z_high = price, price + atr * x_short
     return float(min(z_low, z_high)), float(max(z_low, z_high))
 
-def _apply_exit(bar: pd.Series, side: str, tp: float, sl: float) -> Optional[str]:
+def _apply_exit(bar: pd.Series, side: str, tp: Optional[float], sl: Optional[float]) -> Optional[str]:
+    if side is None:
+        return None
+
     low, high = float(bar["low"]), float(bar["high"])
-    if side == "long":
-        if low <= sl: return "sl"
-        if high >= tp: return "tp"
-    else:
-        if high >= sl: return "sl"
-        if low  <= tp: return "tp"
+    side_norm = str(side).lower()
+
+    if side_norm == "long":
+        if sl is not None and low <= sl:
+            return "sl"
+        if tp is not None and high >= tp:
+            return "tp"
+    elif side_norm == "short":
+        if sl is not None and high >= sl:
+            return "sl"
+        if tp is not None and low <= tp:
+            return "tp"
     return None
 
 def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Optional[str] = None,
@@ -117,13 +145,14 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
     assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     sym = symbol or _infer_symbol_from_path(csv_path)
     feat_params = get_symbol_features(cfg, sym)
-    long_thr  = float(cfg["execution"]["long_prob_threshold"])
-    short_thr = float(cfg["execution"]["short_prob_threshold"])
-    atr_cfg   = cfg["execution"]["atr_tp_sl"]
-    max_hold_minutes = int(cfg["execution"].get("max_holding_minutes", 240))
+    exec_cfg = cfg.get("execution", {}) or {}
+    long_thr  = float(exec_cfg.get("long_prob_threshold", 0.7))
+    short_thr = float(exec_cfg.get("short_prob_threshold", 0.7))
+    atr_cfg   = exec_cfg.get("atr_tp_sl", {}) or {}
+    max_hold_minutes = int(exec_cfg.get("max_holding_minutes", 240))
     max_hold_bars = max(1, max_hold_minutes // 15)
 
-    ez = cfg["execution"].get("entry_zone", {}) or {}
+    ez = exec_cfg.get("entry_zone", {}) or {}
     entry_cfg = EntryZoneCfg(
         enabled=bool(ez.get("enabled", False)),
         method=str(ez.get("method", "atr_discount")),
@@ -226,6 +255,7 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
     state = "flat"; pos_side = None
     entry_price = tp = sl = None
     entry_time = None
+    entry_atr = None
     bars_held = 0
 
     i = 0; n = len(feats)
@@ -242,6 +272,7 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
                 if cooldown_bars > 0 and last_exit_index is not None and (i - last_exit_index) < cooldown_bars:
                     i += 1; continue
                 pos_side = side; entry_price = price
+                entry_atr = atr_h4
                 tp, sl = _compute_tp_sl(entry_price, atr_h4, pos_side, atr_cfg)
                 entry_time = ts; state = "holding"; bars_held = 0
                 i += 1; continue
@@ -281,17 +312,20 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
                 trades.append({
                     "entry_time": str(entry_time), "exit_time": str(ts),
                     "side": pos_side, "entry_price": float(entry_price), "exit_price": float(exit_price),
-                    "tp": float(tp), "sl": float(sl), "bars_held": int(bars_held),
+                    "tp": float(tp) if tp is not None else 0.0,
+                    "sl": float(sl) if sl is not None else 0.0,
+                    "bars_held": int(bars_held),
                     "pnl": float(pnl), "return": float(pnl / entry_price), "exit_reason": reason,
-                    "atr": float(entry_atr)
+                    "atr": float(entry_atr) if entry_atr is not None else 0.0
                 })
                 last_exit_index = i
                 state = "flat"; pos_side = None
-                entry_price = tp = sl = None; entry_time = None; bars_held = 0
+                entry_price = tp = sl = None; entry_time = None; entry_atr = None; bars_held = 0
             i += 1; continue
 
     trades_df = pd.DataFrame(trades)
     if trades_df.empty:
+        equity_curve = pd.DataFrame()
         metrics = {"交易筆數": 0, "勝率": 0.0, "總收益": 0.0, "獲利因子": 0.0, "最大回撤": 0.0, "平均持倉分鐘": 0.0}
         return {"trades": trades_df, "metrics": metrics, "equity_curve": equity_curve}
 
