@@ -103,7 +103,7 @@ def update_csv_with_latest(
     symbol: str,
     csv_path: str,
     interval: str = "15m",
-    now_utc_ts: Optional[pd.Timestamp] = None,
+    now_ts_override: Optional[pd.Timestamp] = None,
 ) -> pd.DataFrame:
     """Update local CSV with latest closed klines from Binance.
 
@@ -124,7 +124,7 @@ def update_csv_with_latest(
 
     interval_td = pd.to_timedelta(interval)
     # 若呼叫端沒提供時間，取目前 UTC；避免名稱遮蔽工具函式
-    now_ts = _now_utc() if now_utc_ts is None else safe_ts_to_utc(now_utc_ts)
+    now_ts = _now_utc() if now_ts_override is None else safe_ts_to_utc(now_ts_override)
     last_closed = floor_utc(now_ts, interval)
 
     last_ts = df.index[-1] if not df.empty else None
