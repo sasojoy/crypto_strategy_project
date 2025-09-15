@@ -1,6 +1,39 @@
 import pandas as pd
 
-from .timez import safe_ts_to_utc, now_utc, UTC
+from csp.utils.time import safe_ts_to_utc, now_utc
+from .timez import UTC
+
+
+def _to_pandas_freq(freq_or_interval: str) -> str:
+    """Normalize common interval strings to pandas frequency codes.
+
+    Exchanges often use shorthand like ``"15m"`` or ``"1h"`` to denote time
+    intervals.  Pandas expects explicit frequency strings such as ``"15min"`` or
+    ``"1H"``.  This helper converts the common abbreviations into the formats
+    pandas understands and normalises minute aliases.
+    """
+
+    s = str(freq_or_interval).strip()
+    if not s:
+        return s
+    sl = s.lower()
+    try:
+        if sl.endswith("m") and not sl.endswith("min"):
+            n = int(sl[:-1] or "1")
+            # Use ``min`` to avoid ``m`` being interpreted as month-end
+            return f"{n}min"
+        if sl.endswith("h"):
+            n = int(sl[:-1] or "1")
+            return f"{n}H"
+        if sl.endswith("d"):
+            n = int(sl[:-1] or "1")
+            return f"{n}D"
+    except ValueError:
+        # Fall back to original string if parsing the integer fails
+        pass
+
+    # If already a valid frequency, normalise minute alias and upper-case
+    return s.replace("min", "T").upper() if sl.endswith("min") else s.upper()
 
 def safe_index_to_utc(idx):
     """Return a UTC-aware DatetimeIndex from ``idx``."""
@@ -45,8 +78,13 @@ def normalize_df_to_utc(df):
         df["timestamp"] = df.index
     return df.sort_index()
 
-def floor_utc(ts, freq="15min"):
-    return safe_ts_to_utc(ts).floor(freq)
+def floor_utc(ts, freq_or_interval="15min"):
+    return safe_ts_to_utc(ts).floor(_to_pandas_freq(freq_or_interval))
 
-def ceil_utc(ts, freq="15min"):
-    return safe_ts_to_utc(ts).ceil(freq)
+
+def ceil_utc(ts, freq_or_interval="15min"):
+    return safe_ts_to_utc(ts).ceil(_to_pandas_freq(freq_or_interval))
+
+
+def round_utc(ts, freq_or_interval="15min"):
+    return safe_ts_to_utc(ts).round(_to_pandas_freq(freq_or_interval))
