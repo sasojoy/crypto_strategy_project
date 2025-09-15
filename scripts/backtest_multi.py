@@ -125,7 +125,14 @@ def main():
     ap.add_argument("--cfg", required=True, help="path to strategy.yaml")
     ap.add_argument("--days", type=int, default=30, help="回測天數（會切資料區間）")
     ap.add_argument("--validate", choices=["before", "off"], default="before", help="是否在回測前驗證並補齊資料")
-    ap.add_argument("--fetch-policy", choices=["auto", "inc", "full"], default="auto", help="資料抓取策略")
+    ap.add_argument(
+        "--fetch",
+        "--fetch-policy",
+        dest="fetch_policy",
+        choices=["auto", "inc", "full", "none"],
+        default="auto",
+        help="資料抓取策略 (auto/inc/full/none)",
+    )
     ap.add_argument("--save-summary", action="store_true", help="啟用報表輸出")
     ap.add_argument("--out-dir", default="reports", help="輸出目錄（預設 reports）")
     ap.add_argument("--format", choices=["csv", "json", "both"], default="both", help="輸出格式（csv, json, both）")
@@ -135,6 +142,18 @@ def main():
     args = ap.parse_args()
 
     cfg = load_cfg(args.cfg)
+    csv_map = cfg.get("io", {}).get("csv_paths", {})
+    print("[DIAG] CSV freshness:")
+    for sym, p in csv_map.items():
+        if os.path.exists(p):
+            try:
+                df = pd.read_csv(p, parse_dates=["timestamp"]).set_index("timestamp")
+                last_ts = df.index.max()
+                print(f"  {sym}: last_ts={last_ts} rows={len(df)} file={p}")
+            except Exception as e:
+                print(f"  {sym}: failed to read {p}: {e}")
+        else:
+            print(f"  {sym}: MISSING {p}")
     symbols: List[str] = args.symbols or cfg.get("symbols", [])
     if not symbols:
         print("cfg.symbols 為空，請在 strategy.yaml 設定幣別")

@@ -12,6 +12,35 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # === Pull latest CSVs from PROD VM ===
+      - name: Start SSH agent (for pulling latest CSVs)
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Pull latest CSVs from VM (prod source of truth)
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p resources
+          rsync -avz --delete "${SSH_USER}@${SSH_HOST}:/opt/crypto_strategy_project/resources/" "resources/"
+          echo "[CI] pulled resources:"
+          ls -l resources | sed 's/^/  /'
+          echo "[CI] tail of CSVs:"
+          shopt -s nullglob
+          for f in resources/*_15m.csv; do
+            echo "== $f =="
+            tail -n 3 "$f" || true
+            echo
+          done
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -50,38 +79,14 @@ jobs:
           name: trained-models
           path: models/
 
-  backtest:
-    # 不阻擋 deploy：此 job 與 deploy 並行，但都只依賴 train
-    needs: [train]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Download trained models
-        uses: actions/download-artifact@v4
-        with:
-          name: trained-models
-          path: models/
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      - name: Backtest 30d (incremental fetch)
-        # 回測失敗也不會阻擋本 job 後續步驟（上傳報表）
-        continue-on-error: true
+      # === Backtest on the pulled freshest CSVs ===
+      - name: Backtest (fresh CSVs from VM; no network fetch)
         run: |
           set -euo pipefail
           python scripts/backtest_multi.py \
             --cfg csp/configs/strategy.yaml \
-            --days 30 --fetch inc \
+            --days 30 \
+            --fetch none \
             --save-summary --out-dir reports --format both
           echo "[CI] reports tree:"
           find reports -type f | sort || true
@@ -92,7 +97,7 @@ jobs:
         with:
           name: backtest-reports
           path: reports/
-          if-no-files-found: ignore
+          if-no-files-found: warn
           retention-days: 7
 
   deploy:
