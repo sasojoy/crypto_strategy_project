@@ -56,3 +56,32 @@ resources_dir: resources
 logging:
   level: INFO
   diag: true
+
+# === 開始：回測/執行必備的設定（供 backtest_v2.py 使用）===
+execution:
+  # 分類器輸出的做多/做空「機率」門檻
+  long_prob_threshold: 0.70
+  short_prob_threshold: 0.70
+  # （可選）ATR 型的 TP/SL 規則，用在回測/說明用
+  atr_tp_sl:
+    enabled: true
+    atr_period: 14
+    tp_mult: 2.0
+    sl_mult: 1.0
+  # （可選）進場區間限制（z-score 帶）
+  entry_zone:
+    enabled: false
+    length: 20
+    zscore_max: 1.5
+
+backtest:
+  maker_fee: 0.0002
+  taker_fee: 0.0004
+  max_position_hours: 12
+  sizeUsd: 100.0
+  # 與 trade.min_notional 對齊，防止名目過小
+  min_notional:
+    BTCUSDT: 5.0
+    ETHUSDT: 5.0
+    BCHUSDT: 5.0
+# === 結束：回測/執行必備的設定 ===
