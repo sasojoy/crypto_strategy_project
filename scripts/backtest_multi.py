@@ -25,12 +25,9 @@ from csp.metrics.report import summarize
 from csp.utils.io import load_cfg
 from csp.utils.tz_safe import (
     normalize_df_to_utc,
-    safe_ts_to_utc,
     now_utc,
-    floor_utc,
 )
 from csp.utils.validate_data import ensure_data_ready
-from csp.data.fetcher import fetch_inc, fetch_full
 
 BINANCE_BASE = "https://api.binance.com"
 
@@ -123,11 +120,6 @@ def append_missing_15m(csv_path: str, symbol: str, end_utc: datetime) -> None:
         df_all = pd.concat([df_old, df_new], ignore_index=True).drop_duplicates(subset=["timestamp"]).sort_values("timestamp")
         write_local_csv(csv_path, df_all)
 
-def slice_by_days(csv_path: str, days: int, end_utc: datetime) -> Tuple[pd.Timestamp, pd.Timestamp]:
-    end_ts = pd.Timestamp(end_utc)
-    start_ts = end_ts - pd.Timedelta(days=days)
-    return (safe_ts_to_utc(start_ts), safe_ts_to_utc(end_ts))
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cfg", required=True, help="path to strategy.yaml")
@@ -152,31 +144,45 @@ def main():
     run_id = now_utc().strftime("%Y%m%d_%H%M%S")
     out_dir = base_out_dir / run_id if args.save_summary else base_out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
-    end_utc_dt = now_utc()
 
-    # 1) 資料驗證及補齊（如開啟）
-    if args.validate == "before":
-        for sym in symbols:
-            csv_path = cfg["io"]["csv_paths"][sym]
-            ensure_data_ready(sym, csv_path, fetch_policy=args.fetch_policy, do_validate=True)
-    else:
-        for sym in symbols:
-            csv_path = cfg["io"]["csv_paths"][sym]
-            if args.fetch_policy == "full":
-                fetch_full(sym, csv_path)
-            else:
-                fetch_inc(sym, csv_path)
+    # 先用現在時間定粗略視窗；每個 symbol 會再依 CSV 可用範圍微調
+    end_ts_global = now_utc()
+    start_ts_global = end_ts_global - pd.Timedelta(days=args.days)
+    print(
+        f"[WINDOW] (global) start={start_ts_global}  end={end_ts_global}  days={args.days}"
+    )
 
-    # 2) 依 days 產生時間窗
-    start_ts, end_ts = slice_by_days("dummy.csv", args.days, end_utc_dt)
-    print(f"[WINDOW] start={start_ts}  end={end_ts}  days={args.days}")
-
-    # 3) 執行回測
+    # 執行回測
     summary_all: Dict[str, dict] = {}
     for sym in symbols:
         csv_path = cfg["io"]["csv_paths"][sym]
+        ensure_data_ready(sym, csv_path, fetch_policy=args.fetch_policy, do_validate=True)
+
+        # 讀 CSV，抓可用範圍（即使抓不到網路也可離線回測）
+        df = pd.read_csv(csv_path)
+        if "timestamp" not in df.columns:
+            raise RuntimeError(f"{sym}: CSV 缺少 timestamp 欄位: {csv_path}")
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+        min_ts, max_ts = df["timestamp"].min(), df["timestamp"].max()
+
+        # 視窗對齊檔案可用範圍：end ≤ max_ts；start = max(end-天數, min_ts)
+        end_ts = min(end_ts_global, max_ts)
+        start_ts = max(end_ts - pd.Timedelta(days=args.days), min_ts)
+        if start_ts >= end_ts:
+            print(
+                f"[SKIP] {sym} window empty after clamp: file_range=[{min_ts}, {max_ts}] "
+                f"want=[{start_ts}, {end_ts}]"
+            )
+            summary_all[sym] = {}
+            continue
+        print(
+            f"[WINDOW] ({sym}) file=[{min_ts}, {max_ts}]  run=[{start_ts}, {end_ts}]"
+        )
+
         print(f"[RUN] {sym} days={args.days} csv={csv_path}")
-        res = run_backtest_for_symbol(csv_path, args.cfg, symbol=sym, start_ts=start_ts, end_ts=end_ts)
+        res = run_backtest_for_symbol(
+            csv_path, args.cfg, symbol=sym, start_ts=start_ts, end_ts=end_ts
+        )
 
         trades_df = res.get("trades", pd.DataFrame())
         eq_df = res.get("equity_curve", pd.DataFrame())
