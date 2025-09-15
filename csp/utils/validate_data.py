@@ -47,9 +47,11 @@ def ensure_data_ready(symbol: str, csv_path: str, fetch_policy: str = "auto", do
     csv_path : str
         Path to local CSV file.
     fetch_policy : str
-        "auto" | "inc" | "full". When "auto", valid CSV triggers incremental fetch,
+        "auto" | "inc" | "full" | "none". When "auto", valid CSV triggers incremental fetch,
         otherwise a full refetch. "inc"/"full" force respective behavior when
-        validation succeeds. Validation failure always triggers full refetch.
+        validation succeeds. "none" skips any network fetch and requires the local
+        CSV to already be valid. Validation failure always triggers full refetch
+        unless fetch_policy is "none", in which case it aborts.
     do_validate : bool
         If False, skip validation and just perform fetch according to policy.
     """
@@ -57,6 +59,15 @@ def ensure_data_ready(symbol: str, csv_path: str, fetch_policy: str = "auto", do
         ok, reason = validate_csv(csv_path)
     else:
         ok, reason = True, "skipped"
+
+    if fetch_policy == "none":
+        if not ok:
+            print(
+                f"[FATAL] {symbol} invalid csv ({reason}) but fetch_policy=none -> abort"
+            )
+            sys.exit(2)
+        print(f"[VALID] {symbol} ok (fetch_policy=none -> skip fetch)")
+        return {"ok": True, "reason": reason, "fetch": "none"}
 
     if not ok:
         print(f"[REPAIR] {symbol} invalid csv ({reason}) -> FULL refetch")
