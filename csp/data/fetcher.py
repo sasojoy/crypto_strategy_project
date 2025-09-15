@@ -12,7 +12,7 @@ from csp.utils.framefix import safe_reset_index
 from csp.utils.tz_safe import (
     normalize_df_to_utc,
     safe_ts_to_utc,
-    now_utc,
+    now_utc as _now_utc,
     floor_utc,
 )
 
@@ -94,7 +94,7 @@ def fetch_klines(
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
-    cutoff = floor_utc(now_utc(), interval)
+    cutoff = floor_utc(_now_utc(), interval)
     df = df.loc[df.index <= cutoff]
     return df
 
@@ -103,7 +103,7 @@ def update_csv_with_latest(
     symbol: str,
     csv_path: str,
     interval: str = "15m",
-    now_utc: Optional[pd.Timestamp] = None,
+    now_utc_ts: Optional[pd.Timestamp] = None,
 ) -> pd.DataFrame:
     """Update local CSV with latest closed klines from Binance.
 
@@ -123,7 +123,8 @@ def update_csv_with_latest(
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
     interval_td = pd.to_timedelta(interval)
-    now_ts = now_utc() if now_utc is None else safe_ts_to_utc(now_utc)
+    # 若呼叫端沒提供時間，取目前 UTC；避免名稱遮蔽工具函式
+    now_ts = _now_utc() if now_utc_ts is None else safe_ts_to_utc(now_utc_ts)
     last_closed = floor_utc(now_ts, interval)
 
     last_ts = df.index[-1] if not df.empty else None
@@ -185,7 +186,7 @@ def fetch_full(symbol: str, csv_path: str) -> dict:
     """
     days = int(os.getenv("DAYS", 30))
     interval = "15m"
-    now_ts = floor_utc(now_utc(), interval)
+    now_ts = floor_utc(_now_utc(), interval)
     start_dt = floor_utc(now_ts - pd.Timedelta(days=days), interval)
     start_ts = int(start_dt.timestamp() * 1000)
     end_ts = int(now_ts.timestamp() * 1000)
