@@ -12,35 +12,6 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # === Pull latest CSVs from PROD VM ===
-      - name: Start SSH agent (for pulling latest CSVs)
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_KEY }}
-
-      - name: Add host to known_hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
-
-      - name: Pull latest CSVs from VM (prod source of truth)
-        env:
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-        run: |
-          set -euo pipefail
-          mkdir -p resources
-          rsync -avz --delete "${SSH_USER}@${SSH_HOST}:/opt/crypto_strategy_project/resources/" "resources/"
-          echo "[CI] pulled resources:"
-          ls -l resources | sed 's/^/  /'
-          echo "[CI] tail of CSVs:"
-          shopt -s nullglob
-          for f in resources/*_15m.csv; do
-            echo "== $f =="
-            tail -n 3 "$f" || true
-            echo
-          done
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -58,17 +29,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # 讓 'csp' 成為可匯入套件（I/O 仍在 repo）
+          pip install -e . || export PYTHONPATH=$PWD
 
       - name: Train models (BTCUSDT/ETHUSDT/BCHUSDT)
         env:
           CSP_TRAIN_SYMBOLS: "BTCUSDT,ETHUSDT,BCHUSDT"
           CSP_TRAIN_OUTDIR: "models"
+          CSP_OPTIMIZE: "false"
+          CSP_OPT_N_TRIALS: "60"
+          CSP_OPT_TIMEOUT_MIN: "25"
         run: |
           set -euo pipefail
           python scripts/train_multi.py \
             --symbols "$CSP_TRAIN_SYMBOLS" \
             --out-dir "$CSP_TRAIN_OUTDIR" \
-            --cfg csp/configs/strategy.yaml
+            --cfg csp/configs/strategy.yaml \
+            $([ "${CSP_OPTIMIZE}" = "true" ] && echo --optimize || true)
           echo "[CI] models tree:"
           find models -maxdepth 2 -type f | sort
           test -s models/manifest.json
@@ -79,30 +56,45 @@ jobs:
           name: trained-models
           path: models/
 
-      # === Backtest on the pulled freshest CSVs ===
-      - name: Backtest (fresh CSVs from VM; no network fetch)
+  backtest:
+    runs-on: ubuntu-latest
+    needs: [train]
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e . || export PYTHONPATH=$PWD
+
+      - name: Download trained models
+        uses: actions/download-artifact@v4
+        with:
+          name: trained-models
+          path: models/
+
+      - name: Backtest (always update to latest via --fetch inc)
         run: |
           set -euo pipefail
           python scripts/backtest_multi.py \
             --cfg csp/configs/strategy.yaml \
             --days 30 \
-            --fetch none \
+            --fetch inc \
             --save-summary --out-dir reports --format both
           echo "[CI] reports tree:"
           find reports -type f | sort || true
 
-      - name: Upload backtest reports
-        if: always()
+      - name: Upload reports artifact
         uses: actions/upload-artifact@v4
         with:
           name: backtest-reports
           path: reports/
-          if-no-files-found: warn
-          retention-days: 7
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [train]
+    needs: [backtest]
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -144,7 +136,6 @@ jobs:
           GIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          # 把 secrets 帶進遠端 shell 環境；在遠端展開與寫檔，避免 heredoc 引號陷阱
           ssh -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
             TELEGRAM_BOT_TOKEN='${{ secrets.TELEGRAM_BOT_TOKEN }}' \
             TELEGRAM_CHAT_ID='${{ secrets.TELEGRAM_CHAT_ID }}' \
@@ -169,11 +160,9 @@ jobs:
           printf "TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n" \
             "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | sudo -n tee /etc/crypto_strategy_project.env >/dev/null
           sudo -n awk -F= '/^TELEGRAM_(BOT_TOKEN|CHAT_ID)=/ {printf("[CHECK] %s present len=%d\n",$1,length($2))}' /etc/crypto_strategy_project.env
-          # 鎖權限，避免非 root 讀取
           sudo -n chown root:root /etc/crypto_strategy_project.env
           sudo -n chmod 600 /etc/crypto_strategy_project.env
 
-          # 若 env 檔寫錯或為空，提早結束（用 sudo 檢查，避免 Permission denied）
           if ! sudo -n bash -lc "grep -q '^TELEGRAM_BOT_TOKEN=' /etc/crypto_strategy_project.env && \
                                  grep -q '^TELEGRAM_CHAT_ID='   /etc/crypto_strategy_project.env"; then
             echo "::error::missing TELEGRAM env in /etc/crypto_strategy_project.env"
@@ -183,7 +172,6 @@ jobs:
           echo "[DEPLOY] Install systemd units"
           sudo -n cp "${DST}/systemd/trader-once.service" /etc/systemd/system/trader-once.service
           sudo -n cp "${DST}/systemd/trader-once.timer"   /etc/systemd/system/trader-once.timer
-          # 清掉舊的 drop-in（以前那個 ExecStartPre 有壞引號）
           if [ -d /etc/systemd/system/trader-once.service.d ]; then
             echo "[DEPLOY] Cleanup broken drop-in override"
             sudo -n rm -f /etc/systemd/system/trader-once.service.d/override.conf || true
@@ -198,16 +186,10 @@ jobs:
             echo "::warning::trader-once.service failed to start, dumping logs"
             sudo -n systemctl status trader-once.service --no-pager || true
             sudo -n journalctl -xeu trader-once.service --no-pager -n 200 || true
-            # 不阻斷 deploy：繼續
+            exit 1
           fi
 
-          echo "[SMOKE] Telegram one-shot (does not fail build)"
-          # 直接在 VM 上做一次最小測試：只回報狀態碼與錯誤文字，避免洩漏 token
-          sudo -n env TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" TELEGRAM_CHAT_ID="$TELEGRAM_CHAT_ID" \
-            "${DST}/.venv/bin/python" "${DST}/scripts/smoke_telegram.py" "✅ Deploy OK build=${GIT_SHA:0:8} host=$(hostname)" || true
-
-          echo "[DEPLOY] Status"
-          sudo -n systemctl status trader-once.timer   --no-pager || true
+          echo "[DEPLOY] systemctl status"
+          sudo -n systemctl status trader-once.timer --no-pager
           sudo -n systemctl status trader-once.service --no-pager || true
-          sudo -n systemctl list-timers --all | grep -i trader-once || true
           REMOTE

@@ -1,26 +1,43 @@
 import pandas as pd
 
-from csp.utils.time import safe_ts_to_utc, now_utc
 from .timez import UTC
 
 
-def _to_pandas_freq(freq_or_interval: str) -> str:
-    """Normalize common interval strings to pandas frequency codes.
+def now_utc() -> pd.Timestamp:
+    """Return the current UTC timestamp."""
 
-    Exchanges often use shorthand like ``"15m"`` or ``"1h"`` to denote time
-    intervals.  Pandas expects explicit frequency strings such as ``"15min"`` or
-    ``"1H"``.  This helper converts the common abbreviations into the formats
-    pandas understands and normalises minute aliases.
-    """
+    return pd.Timestamp.now(tz=UTC)
 
-    s = str(freq_or_interval).strip()
+
+def safe_ts_to_utc(ts) -> pd.Timestamp:
+    """Convert ``ts`` to a timezone-aware UTC ``Timestamp``."""
+
+    if ts is None:
+        return now_utc()
+
+    if isinstance(ts, pd.Timestamp):
+        if pd.isna(ts):
+            return now_utc()
+        t = ts
+    else:
+        if pd.isna(ts):
+            return now_utc()
+        t = pd.Timestamp(ts)
+    if getattr(t, "tzinfo", None) is None:
+        return t.tz_localize(UTC)
+    return t.tz_convert(UTC)
+
+
+def interval_to_pandas_freq(interval: str) -> str:
+    """Normalise common interval strings (e.g. ``"15m"``) to pandas freq."""
+
+    s = str(interval).strip()
     if not s:
         return s
     sl = s.lower()
     try:
         if sl.endswith("m") and not sl.endswith("min"):
             n = int(sl[:-1] or "1")
-            # Use ``min`` to avoid ``m`` being interpreted as month-end
             return f"{n}min"
         if sl.endswith("h"):
             n = int(sl[:-1] or "1")
@@ -29,19 +46,24 @@ def _to_pandas_freq(freq_or_interval: str) -> str:
             n = int(sl[:-1] or "1")
             return f"{n}D"
     except ValueError:
-        # Fall back to original string if parsing the integer fails
-        pass
+        return s
 
-    # If already a valid frequency, normalise minute alias and upper-case
-    return s.replace("min", "T").upper() if sl.endswith("min") else s.upper()
+    if sl.endswith("min"):
+        head = sl[:-3] or "1"
+        try:
+            return f"{int(head)}min"
+        except ValueError:
+            return s
+    return s
+
 
 def safe_index_to_utc(idx):
-    """Return a UTC-aware DatetimeIndex from ``idx``."""
+    """Return a UTC-aware ``DatetimeIndex`` from ``idx``."""
+
     if isinstance(idx, pd.DatetimeIndex):
         if idx.tz is None:
             return idx.tz_localize(UTC)
         return idx.tz_convert(UTC)
-    # ``idx`` might be array-like or Series
     idx = pd.to_datetime(idx, errors="raise")
     if isinstance(idx, pd.Series):
         idx = pd.DatetimeIndex(idx)
@@ -49,20 +71,17 @@ def safe_index_to_utc(idx):
         return idx.tz_localize(UTC)
     return idx.tz_convert(UTC)
 
+
 def safe_series_to_utc(s):
-    """Return a UTC-aware Series of datetimes."""
-    # s may be datetime64[ns], object, etc.
+    """Return a UTC-aware ``Series`` of datetimes."""
+
     s = pd.to_datetime(s, utc=True, errors="raise")
     return s.dt.tz_convert(UTC)
 
-def normalize_df_to_utc(df):
-    """Normalize ``df`` so its index is UTC-aware.
 
-    If a ``timestamp`` column exists, it will be converted to UTC and used as
-    the index.  Otherwise, an existing DatetimeIndex (or one that can be parsed
-    from the current index) will be converted.  A mirror ``timestamp`` column is
-    guaranteed to exist.
-    """
+def normalize_df_to_utc(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure ``df`` has a UTC ``DatetimeIndex`` and mirror ``timestamp`` column."""
+
     if "timestamp" in df.columns:
         df["timestamp"] = df["timestamp"].apply(safe_ts_to_utc)
         df = df.set_index("timestamp", drop=True)
@@ -78,13 +97,14 @@ def normalize_df_to_utc(df):
         df["timestamp"] = df.index
     return df.sort_index()
 
+
 def floor_utc(ts, freq_or_interval="15min"):
-    return safe_ts_to_utc(ts).floor(_to_pandas_freq(freq_or_interval))
+    return safe_ts_to_utc(ts).floor(interval_to_pandas_freq(freq_or_interval))
 
 
 def ceil_utc(ts, freq_or_interval="15min"):
-    return safe_ts_to_utc(ts).ceil(_to_pandas_freq(freq_or_interval))
+    return safe_ts_to_utc(ts).ceil(interval_to_pandas_freq(freq_or_interval))
 
 
 def round_utc(ts, freq_or_interval="15min"):
-    return safe_ts_to_utc(ts).round(_to_pandas_freq(freq_or_interval))
+    return safe_ts_to_utc(ts).round(interval_to_pandas_freq(freq_or_interval))

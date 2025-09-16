@@ -83,12 +83,21 @@ def _compute_tp_sl(price: float, atr: float, side: str, atr_cfg: Dict[str, Any])
     If configuration is missing or disabled, return ``(None, None)`` to signal
     that no TP/SL should be applied.
     """
+
     if not isinstance(atr_cfg, dict) or not atr_cfg.get("enabled", False):
         return None, None
 
     side_norm = (side or "").upper()
-    long_cfg = atr_cfg.get("long", {}) or {}
-    short_cfg = atr_cfg.get("short", {}) or {}
+    long_cfg = atr_cfg.get("long") or {}
+    short_cfg = atr_cfg.get("short") or {}
+
+    # Backward compatibility: flat config with tp_mult/sl_mult at top-level
+    if not long_cfg and not short_cfg and ("tp_mult" in atr_cfg or "sl_mult" in atr_cfg):
+        shared = {
+            "tp_mult": float(atr_cfg.get("tp_mult", 2.0)),
+            "sl_mult": float(atr_cfg.get("sl_mult", 1.0)),
+        }
+        long_cfg = short_cfg = shared
 
     if side_norm == "LONG":
         tp_mult = float(long_cfg.get("tp_mult", 0.0) or 0.0)
@@ -148,7 +157,12 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
     exec_cfg = cfg.get("execution", {}) or {}
     long_thr  = float(exec_cfg.get("long_prob_threshold", 0.7))
     short_thr = float(exec_cfg.get("short_prob_threshold", 0.7))
-    atr_cfg   = exec_cfg.get("atr_tp_sl", {}) or {}
+    risk_cfg = cfg.get("risk", {}) or {}
+    atr_cfg = risk_cfg.get("atr_tp_sl")
+    if not isinstance(atr_cfg, dict):
+        atr_cfg = exec_cfg.get("atr_tp_sl")
+    if not isinstance(atr_cfg, dict):
+        atr_cfg = {"enabled": False}
     max_hold_minutes = int(exec_cfg.get("max_holding_minutes", 240))
     max_hold_bars = max(1, max_hold_minutes // 15)
 
@@ -194,9 +208,10 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
     df15 = load_15m_csv(csv_path)
     # Normalize df15 to UTC DatetimeIndex
     df15 = normalize_df_to_utc(df15)
-    # Ensure start_ts (and end_ts if exists) are UTC-aware
-    start_ts = safe_ts_to_utc(start_ts)
-    if 'end_ts' in locals():
+    # Ensure start_ts/end_ts are UTC-aware if provided
+    if start_ts is not None:
+        start_ts = safe_ts_to_utc(start_ts)
+    if end_ts is not None:
         end_ts = safe_ts_to_utc(end_ts)
 
     # DIAG
@@ -209,7 +224,7 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
 
     if start_ts is not None:
         df15 = df15[df15.index >= start_ts]
-    if 'end_ts' in locals() and end_ts is not None:
+    if end_ts is not None:
         df15 = df15[df15.index <= end_ts]
 
     # Keep a mirror 'timestamp' column for legacy code paths in this module

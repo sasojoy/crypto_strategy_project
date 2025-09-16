@@ -33,7 +33,8 @@ def _suggest_params(trial: optuna.Trial) -> Dict:
 
 def optimize_symbol(cfg_path: str, symbol: str,
                     start_ts: pd.Timestamp, end_ts: pd.Timestamp,
-                    n_trials: int = 20, out_dir: Path | None = None) -> optuna.Study:
+                    n_trials: int = 20, out_dir: Path | None = None,
+                    timeout: int | None = None) -> optuna.Study:
     """Run Optuna optimization for a single symbol."""
     cfg = yaml.safe_load(open(cfg_path, "r", encoding="utf-8"))
     base_feature = get_symbol_features(cfg, symbol)
@@ -48,7 +49,7 @@ def optimize_symbol(cfg_path: str, symbol: str,
         return float(metric)
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=n_trials)
+    study.optimize(objective, n_trials=n_trials, timeout=timeout)
 
     if out_dir is not None:
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -69,10 +70,11 @@ def optimize_symbol(cfg_path: str, symbol: str,
 
 def optimize_symbols(cfg_path: str, symbols: List[str],
                      start_ts: pd.Timestamp, end_ts: pd.Timestamp,
-                     n_trials: int = 20, out_dir: Path | None = None) -> Dict[str, optuna.Study]:
+                     n_trials: int = 20, out_dir: Path | None = None,
+                     timeout: int | None = None) -> Dict[str, optuna.Study]:
     results: Dict[str, optuna.Study] = {}
     for sym in symbols:
-        study = optimize_symbol(cfg_path, sym, start_ts, end_ts, n_trials, out_dir)
+        study = optimize_symbol(cfg_path, sym, start_ts, end_ts, n_trials, out_dir, timeout)
         results[sym] = study
     return results
 

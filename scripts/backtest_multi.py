@@ -26,6 +26,7 @@ from csp.utils.io import load_cfg
 from csp.utils.tz_safe import (
     normalize_df_to_utc,
     now_utc,
+    floor_utc,
 )
 from csp.utils.validate_data import ensure_data_ready
 
@@ -129,9 +130,9 @@ def main():
         "--fetch",
         "--fetch-policy",
         dest="fetch_policy",
-        choices=["auto", "inc", "full", "none"],
-        default="auto",
-        help="資料抓取策略 (auto/inc/full/none)",
+        choices=["inc", "full", "none"],
+        default="inc",
+        help="資料抓取策略 inc/full/none（預設 inc 補缺口）",
     )
     ap.add_argument("--save-summary", action="store_true", help="啟用報表輸出")
     ap.add_argument("--out-dir", default="reports", help="輸出目錄（預設 reports）")
@@ -165,7 +166,8 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # 先用現在時間定粗略視窗；每個 symbol 會再依 CSV 可用範圍微調
-    end_ts_global = now_utc()
+    interval = cfg.get("fetch", {}).get("interval", "15m")
+    end_ts_global = floor_utc(now_utc(), interval)
     start_ts_global = end_ts_global - pd.Timedelta(days=args.days)
     print(
         f"[WINDOW] (global) start={start_ts_global}  end={end_ts_global}  days={args.days}"
@@ -183,6 +185,7 @@ def main():
             raise RuntimeError(f"{sym}: CSV 缺少 timestamp 欄位: {csv_path}")
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
         min_ts, max_ts = df["timestamp"].min(), df["timestamp"].max()
+        print(f"[DIAG] CSV freshness: {sym} last_ts={max_ts} rows={len(df)} file={csv_path}")
 
         # 視窗對齊檔案可用範圍：end ≤ max_ts；start = max(end-天數, min_ts)
         end_ts = min(end_ts_global, max_ts)
