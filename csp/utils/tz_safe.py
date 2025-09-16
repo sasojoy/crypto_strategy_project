@@ -3,6 +3,24 @@ import pandas as pd
 from .timez import UTC
 
 
+_FREQ_MAP = {
+    "1m": "1T",
+    "1min": "1T",
+    "3m": "3T",
+    "3min": "3T",
+    "5m": "5T",
+    "5min": "5T",
+    "15m": "15T",
+    "15min": "15T",
+    "30m": "30T",
+    "30min": "30T",
+    "60m": "60T",
+    "60min": "60T",
+    "1h": "1H",
+    "4h": "4H",
+}
+
+
 def now_utc() -> pd.Timestamp:
     """Return the current UTC timestamp."""
 
@@ -99,12 +117,21 @@ def normalize_df_to_utc(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def floor_utc(ts, freq_or_interval="15min"):
-    return safe_ts_to_utc(ts).floor(interval_to_pandas_freq(freq_or_interval))
+    freq = interval_to_pandas_freq(freq_or_interval)
+    freq = _FREQ_MAP.get(freq, freq)
+    freq = _FREQ_MAP.get(freq_or_interval, freq)
+    return safe_ts_to_utc(ts).floor(freq)
 
 
 def ceil_utc(ts, freq_or_interval="15min"):
-    return safe_ts_to_utc(ts).ceil(interval_to_pandas_freq(freq_or_interval))
+    freq = interval_to_pandas_freq(freq_or_interval)
+    freq = _FREQ_MAP.get(freq, freq)
+    freq = _FREQ_MAP.get(freq_or_interval, freq)
+    return safe_ts_to_utc(ts).ceil(freq)
 
 
 def round_utc(ts, freq_or_interval="15min"):
-    return safe_ts_to_utc(ts).round(interval_to_pandas_freq(freq_or_interval))
+    freq = interval_to_pandas_freq(freq_or_interval)
+    freq = _FREQ_MAP.get(freq, freq)
+    freq = _FREQ_MAP.get(freq_or_interval, freq)
+    return safe_ts_to_utc(ts).round(freq)

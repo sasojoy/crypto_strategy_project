@@ -3,9 +3,9 @@ Description=Run trader-once every 15 minutes + 15 seconds
 
 [Timer]
 OnCalendar=*:00/15:00
-AccuracySec=15s
+AccuracySec=1s
 Persistent=true
-Unit=trader-once.service
+RandomizedDelaySec=15
 
 [Install]
 WantedBy=timers.target

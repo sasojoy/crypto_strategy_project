@@ -2,39 +2,34 @@ symbols:
   - BTCUSDT
   - ETHUSDT
   - BCHUSDT
-# 自動抓取最新 K 線資料的設定
+
 fetch:
-  mode: public_binance       # csv_only / none / public_binance
+  mode: public_binance
   source: binance_public
   base_url: "https://api.binance.com"
-  interval: "15m"
-  batch_limit: 500   # 每次抓取蠟燭數（Binance 上限 1000；500 足夠且較穩定）
+  interval: "15m"            # 由程式正規化為 15T
+  batch_limit: 500
   max_retries: 3
   retry_sleep_sec: 1.0
-  max_backfill_minutes: 360  # 一次最多補這麼多分鐘的缺口
-  writeback_csv: true        # 抓到新 K 線就寫回 CSV
+  max_backfill_minutes: 360
+  writeback_csv: true
 
-# 執行時相關參數
 runtime:
   require_models: true
   notify:
     telegram: true
 
 realtime:
-  allow_stale_one_bar: true   # 沒有 live_fetch 時，落後一根先跑，不要整輪報 stale_data
+  allow_stale_one_bar: true
 
 trade:
-  # mode 可為 "signal_only" 或 "live"
   mode: signal_only
-  # 若使用固定下單數量，搭配 min_notional 檢查：
   fixed_qty: 0.0
-  # 可選：手動覆蓋各幣別最小名目（USDT）
   min_notional:
     BTCUSDT: 5.0
     ETHUSDT: 5.0
     BCHUSDT: 5.0
 
-# 供訓練腳本使用的輸入/輸出路徑
 io:
   csv_paths:
     BTCUSDT: resources/btc_15m.csv
@@ -42,46 +37,30 @@ io:
     BCHUSDT: resources/bch_15m.csv
   models_dir: models
 
-# 模型相關設定
 models:
   use_manifest: true
   manifest_path: models/manifest.json
   globs:
     - "models/*/model.pkl"
 
-# 資源檔案所在資料夾
 resources_dir: resources
 
-# 日誌設定
+execution:
+  long_prob_threshold: 0.70
+  short_prob_threshold: 0.70
+  max_holding_minutes: 240
+  atr:
+    enabled: false
+    h4_col: "atr_h4"
+    long:  { tp_mult: 1.5, sl_mult: 1.0 }
+    short: { tp_mult: 1.5, sl_mult: 1.0 }
+
+backtest:
+  initial_capital: 10000
+  risk_per_trade: 0.007
+  fee_rate: 0.0004
+  slippage: 0.0002
+
 logging:
   level: INFO
   diag: true
-
-# === 開始：回測/執行必備的設定（供 backtest_v2.py 使用）===
-execution:
-  # 分類器輸出的做多/做空「機率」門檻
-  long_prob_threshold: 0.70
-  short_prob_threshold: 0.70
-  # （可選）ATR 型的 TP/SL 規則，用在回測/說明用
-  atr_tp_sl:
-    enabled: true
-    atr_period: 14
-    tp_mult: 2.0
-    sl_mult: 1.0
-  # （可選）進場區間限制（z-score 帶）
-  entry_zone:
-    enabled: false
-    length: 20
-    zscore_max: 1.5
-
-backtest:
-  maker_fee: 0.0002
-  taker_fee: 0.0004
-  max_position_hours: 12
-  sizeUsd: 100.0
-  # 與 trade.min_notional 對齊，防止名目過小
-  min_notional:
-    BTCUSDT: 5.0
-    ETHUSDT: 5.0
-    BCHUSDT: 5.0
-# === 結束：回測/執行必備的設定 ===
