@@ -78,41 +78,28 @@ def _infer_symbol_from_path(csv_path: str) -> Optional[str]:
     return None
 
 def _compute_tp_sl(price: float, atr: float, side: str, atr_cfg: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
-    """Compute take-profit / stop-loss levels from ATR config.
+    """Return TP/SL levels based on ATR configuration.
 
-    If configuration is missing or disabled, return ``(None, None)`` to signal
-    that no TP/SL should be applied.
+    When ATR-based risk management is disabled or misconfigured, ``(None, None)``
+    is returned so callers can skip applying TP/SL. Defaults follow the shared
+    strategy profile (TP=1.5×ATR, SL=1.0×ATR).
     """
 
-    if not isinstance(atr_cfg, dict) or not atr_cfg.get("enabled", False):
+    if not atr_cfg or not isinstance(atr_cfg, dict) or not atr_cfg.get("enabled"):
         return None, None
 
     side_norm = (side or "").upper()
-    long_cfg = atr_cfg.get("long") or {}
-    short_cfg = atr_cfg.get("short") or {}
-
-    # Backward compatibility: flat config with tp_mult/sl_mult at top-level
-    if not long_cfg and not short_cfg and ("tp_mult" in atr_cfg or "sl_mult" in atr_cfg):
-        shared = {
-            "tp_mult": float(atr_cfg.get("tp_mult", 2.0)),
-            "sl_mult": float(atr_cfg.get("sl_mult", 1.0)),
-        }
-        long_cfg = short_cfg = shared
-
     if side_norm == "LONG":
-        tp_mult = float(long_cfg.get("tp_mult", 0.0) or 0.0)
-        sl_mult = float(long_cfg.get("sl_mult", 0.0) or 0.0)
-        tp = price + atr * tp_mult
-        sl = price - atr * sl_mult
-    elif side_norm == "SHORT":
-        tp_mult = float(short_cfg.get("tp_mult", 0.0) or 0.0)
-        sl_mult = float(short_cfg.get("sl_mult", 0.0) or 0.0)
-        tp = price - atr * tp_mult
-        sl = price + atr * sl_mult
-    else:
-        return None, None
-
-    return float(tp), float(sl)
+        long_cfg = atr_cfg.get("long") or {}
+        tp = price + atr * float(long_cfg.get("tp_mult", 1.5))
+        sl = price - atr * float(long_cfg.get("sl_mult", 1.0))
+        return float(tp), float(sl)
+    if side_norm == "SHORT":
+        short_cfg = atr_cfg.get("short") or {}
+        tp = price - atr * float(short_cfg.get("tp_mult", 1.5))
+        sl = price + atr * float(short_cfg.get("sl_mult", 1.0))
+        return float(tp), float(sl)
+    return None, None
 
 def _decide_side(proba_up: float, long_thr: float, short_thr: float) -> Optional[str]:
     if proba_up >= long_thr: return "long"
@@ -154,19 +141,21 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
     assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
     sym = symbol or _infer_symbol_from_path(csv_path)
     feat_params = get_symbol_features(cfg, sym)
-    exec_cfg = cfg.get("execution", {}) or {}
-    long_thr  = float(exec_cfg.get("long_prob_threshold", 0.7))
-    short_thr = float(exec_cfg.get("short_prob_threshold", 0.7))
+    exe = dict(cfg.get("execution", {}) or {})
+    long_thr = float(exe.get("long_prob_threshold", 0.70))
+    short_thr = float(exe.get("short_prob_threshold", 0.70))
     risk_cfg = cfg.get("risk", {}) or {}
-    atr_cfg = risk_cfg.get("atr_tp_sl")
+    atr_cfg = exe.get("atr")
     if not isinstance(atr_cfg, dict):
-        atr_cfg = exec_cfg.get("atr_tp_sl")
+        atr_cfg = exe.get("atr_tp_sl")
+    if not isinstance(atr_cfg, dict):
+        atr_cfg = risk_cfg.get("atr_tp_sl")
     if not isinstance(atr_cfg, dict):
         atr_cfg = {"enabled": False}
-    max_hold_minutes = int(exec_cfg.get("max_holding_minutes", 240))
+    max_hold_minutes = int(exe.get("max_holding_minutes", 240))
     max_hold_bars = max(1, max_hold_minutes // 15)
 
-    ez = exec_cfg.get("entry_zone", {}) or {}
+    ez = exe.get("entry_zone", {}) or {}
     entry_cfg = EntryZoneCfg(
         enabled=bool(ez.get("enabled", False)),
         method=str(ez.get("method", "atr_discount")),
@@ -184,13 +173,13 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
             "symbol": sym,
             "long_prob_threshold": long_thr,
             "short_prob_threshold": short_thr,
-            "max_holding_minutes": int(cfg.get("execution", {}).get("max_holding_minutes", 240)),
+            "max_holding_minutes": max_hold_minutes,
             "entry_zone": {
-                "enabled": bool(cfg.get("execution", {}).get("entry_zone", {}).get("enabled", False)),
-                "method": str(cfg.get("execution", {}).get("entry_zone", {}).get("method", "atr_discount")),
-                "lookahead_bars": int(cfg.get("execution", {}).get("entry_zone", {}).get("lookahead_bars", 16)),
-                "long_x": float(cfg.get("execution", {}).get("entry_zone", {}).get("long_x", 0.5)),
-                "short_x": float(cfg.get("execution", {}).get("entry_zone", {}).get("short_x", 0.5)),
+                "enabled": bool(exe.get("entry_zone", {}).get("enabled", False)),
+                "method": str(exe.get("entry_zone", {}).get("method", "atr_discount")),
+                "lookahead_bars": int(exe.get("entry_zone", {}).get("lookahead_bars", 16)),
+                "long_x": float(exe.get("entry_zone", {}).get("long_x", 0.5)),
+                "short_x": float(exe.get("entry_zone", {}).get("short_x", 0.5)),
             },
             "entry_filter": {
                 "cooldown_bars": int(cfg.get("entry_filter", {}).get("cooldown_bars", 0)),

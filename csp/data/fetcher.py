@@ -59,11 +59,14 @@ def fetch_klines(
     for attempt in range(max_retries):
         try:
             resp = requests.get(url, params=params, timeout=10)
+            if resp.status_code == 451 and attempt < max_retries - 1:
+                time.sleep(2.0)
+                continue
             resp.raise_for_status()
             data = resp.json()
             break
-        except requests.HTTPError as http_err:
-            if attempt + 1 == max_retries or (http_err.response is not None and http_err.response.status_code == 451):
+        except requests.HTTPError:
+            if attempt + 1 == max_retries:
                 raise
             time.sleep(retry_delay)
         except Exception:
