@@ -127,6 +127,35 @@ python scripts\backtest_multi.py --cfg csp\configs\strategy.yaml --days 30 --fet
 - `--out-dir reports`：報表輸出目錄（預設 `reports`）。
 - `--format both`：報表格式，可選 `csv`、`json` 或 `both`。
 
+## 訓練（多幣）＋可選超參優化（A 方案）
+```bash
+# 基本訓練（不啟用優化）
+python scripts/train_multi.py --cfg csp/configs/strategy.yaml \
+  --symbols BTCUSDT,ETHUSDT,BCHUSDT --out-dir models
+
+# 啟用優化（開關不改演算法；內部重用現有 Optuna 流程）
+CSP_OPTIMIZE=true CSP_OPT_N_TRIALS=60 CSP_OPT_TIMEOUT_MIN=25 \
+python scripts/train_multi.py --cfg csp/configs/strategy.yaml \
+  --symbols BTCUSDT,ETHUSDT,BCHUSDT --out-dir models --optimize
+```
+
+回測（多幣）— 預設會補到最新收盤K
+
+```bash
+# 預設 --fetch inc（補缺口），確保回測用到最新資料（若遇 451 會跳過抓取但仍完成回測）
+python scripts/backtest_multi.py --cfg csp/configs/strategy.yaml \
+  --days 30 --fetch inc --save-summary --out-dir reports --format both
+```
+
+- 回測視窗上限會對齊最後一根收盤K（例如 15m 週期 → 對齊 :00, :15, :30, :45）。
+- 若 CSV 已是最新，增量抓取不會多做事；若 runner 被交易所封鎖 (HTTP 451)，會警告但不中斷。
+
+CI 流程（Train → Backtest → Deploy）
+
+- Train：可用 `CSP_OPTIMIZE=true` 開啟優化，否則只做基本訓練。
+- Backtest：固定 `--fetch inc`，永遠嘗試補到最新收盤K。
+- Deploy：沿用現行 SSH/systemd 流程；Telegram SMOKE 確認成功。
+
 ### 即時訊號
 ```cmd
 python scripts\realtime_multi.py --cfg csp\configs\strategy.yaml

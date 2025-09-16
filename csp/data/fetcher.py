@@ -12,8 +12,9 @@ from csp.utils.framefix import safe_reset_index
 from csp.utils.tz_safe import (
     normalize_df_to_utc,
     safe_ts_to_utc,
-    now_utc as _now_utc,
+    now_utc,
     floor_utc,
+    interval_to_pandas_freq,
 )
 
 
@@ -58,10 +59,13 @@ def fetch_klines(
     for attempt in range(max_retries):
         try:
             resp = requests.get(url, params=params, timeout=10)
-            if resp.status_code != 200:
-                raise RuntimeError(f"HTTP {resp.status_code}")
+            resp.raise_for_status()
             data = resp.json()
             break
+        except requests.HTTPError as http_err:
+            if attempt + 1 == max_retries or (http_err.response is not None and http_err.response.status_code == 451):
+                raise
+            time.sleep(retry_delay)
         except Exception:
             if attempt + 1 == max_retries:
                 raise
@@ -84,7 +88,7 @@ def fetch_klines(
         "ignore",
     ]
     df = pd.DataFrame(data, columns=cols)
-    interval_td = pd.to_timedelta(interval)
+    interval_td = pd.to_timedelta(interval_to_pandas_freq(interval))
     df["timestamp"] = pd.to_datetime(df["open_time"], unit="ms", utc=True) + interval_td
     for c in ["open", "high", "low", "close", "volume"]:
         df[c] = df[c].astype(float)
@@ -94,7 +98,7 @@ def fetch_klines(
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
-    cutoff = floor_utc(_now_utc(), interval)
+    cutoff = floor_utc(now_utc(), interval)
     df = df.loc[df.index <= cutoff]
     return df
 
@@ -102,8 +106,9 @@ def fetch_klines(
 def update_csv_with_latest(
     symbol: str,
     csv_path: str,
+    now_ts_hint: Optional[pd.Timestamp] = None,
     interval: str = "15m",
-    now_ts_override: Optional[pd.Timestamp] = None,
+    base_url: str = "https://api.binance.com",
 ) -> pd.DataFrame:
     """Update local CSV with latest closed klines from Binance.
 
@@ -122,9 +127,8 @@ def update_csv_with_latest(
     print(f"[DIAG] df.index.tz={df.index.tz}, head_ts={df.index[:3].tolist()}")
     assert str(df.index.tz) == "UTC", "[DIAG] index not UTC"
 
-    interval_td = pd.to_timedelta(interval)
-    # 若呼叫端沒提供時間，取目前 UTC；避免名稱遮蔽工具函式
-    now_ts = _now_utc() if now_ts_override is None else safe_ts_to_utc(now_ts_override)
+    interval_td = pd.to_timedelta(interval_to_pandas_freq(interval))
+    now_ts = safe_ts_to_utc(now_ts_hint) if now_ts_hint is not None else now_utc()
     last_closed = floor_utc(now_ts, interval)
 
     last_ts = df.index[-1] if not df.empty else None
@@ -140,9 +144,24 @@ def update_csv_with_latest(
     need = max(0, int((last_closed - start_dt) / interval_td))
     before_len = len(df)
     try:
-        new_df = fetch_klines(symbol, interval=interval, start_ts=start_ts, end_ts=end_ts)
-    except Exception as e:
-        print(f"[WARN] fetch failed for {symbol}: {e}")
+        new_df = fetch_klines(
+            symbol,
+            interval=interval,
+            start_ts=start_ts,
+            end_ts=end_ts,
+            base_url=base_url,
+        )
+    except requests.HTTPError as err:
+        status = getattr(err.response, "status_code", None)
+        if status == 451:
+            print(f"[WARN] fetch failed for {symbol}: HTTP 451 (region blocked) — skip update this run")
+            df.attrs["stale"] = True
+            return df
+        print(f"[WARN] fetch failed for {symbol}: {err}")
+        df.attrs["stale"] = True
+        return df
+    except Exception as exc:
+        print(f"[WARN] fetch failed for {symbol}: {exc}")
         df.attrs["stale"] = True
         return df
 
@@ -164,7 +183,7 @@ def update_csv_with_latest(
     return df
 
 
-def fetch_inc(symbol: str, csv_path: str) -> dict:
+def fetch_inc(symbol: str, csv_path: str, interval: str = "15m") -> dict:
     """
     讀 CSV 最後一根時間，向來源補齊至最新的「已收」一根，追加寫回。
     重用 update_csv_with_latest。
@@ -174,7 +193,7 @@ def fetch_inc(symbol: str, csv_path: str) -> dict:
         before = len(pd.read_csv(csv_path))
     except Exception:
         before = 0
-    df = update_csv_with_latest(symbol, csv_path)
+    df = update_csv_with_latest(symbol, csv_path, interval=interval)
     appended = len(df) - before
     last_ts = df["timestamp"].iloc[-1].isoformat() if len(df) else "none"
     return {"ok": True, "mode": "inc", "appended": int(appended), "last_ts": last_ts}
@@ -186,7 +205,7 @@ def fetch_full(symbol: str, csv_path: str) -> dict:
     """
     days = int(os.getenv("DAYS", 30))
     interval = "15m"
-    now_ts = floor_utc(_now_utc(), interval)
+    now_ts = floor_utc(now_utc(), interval)
     start_dt = floor_utc(now_ts - pd.Timedelta(days=days), interval)
     start_ts = int(start_dt.timestamp() * 1000)
     end_ts = int(now_ts.timestamp() * 1000)
