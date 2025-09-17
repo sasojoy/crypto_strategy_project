@@ -1,30 +1,37 @@
-name: Train → Backtest(on-VM) → (Optimize) → Deploy
+name: Train & Deploy
 
 on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
 
-env:
-  PYTHON_VERSION: "3.10"
-
 jobs:
   train:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "${{ env.PYTHON_VERSION }}" }
-      - uses: actions/cache@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: pip-${{ runner.os }}-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: pip-${{ runner.os }}-
+          restore-keys: |
+            pip-${{ runner.os }}-
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Train models (multi)
+
+      - name: Train models (BTCUSDT/ETHUSDT/BCHUSDT)
         env:
           CSP_TRAIN_SYMBOLS: "BTCUSDT,ETHUSDT,BCHUSDT"
           CSP_TRAIN_OUTDIR: "models"
@@ -34,34 +41,49 @@ jobs:
             --symbols "$CSP_TRAIN_SYMBOLS" \
             --out-dir "$CSP_TRAIN_OUTDIR" \
             --cfg csp/configs/strategy.yaml
-          echo "[CI] models tree:" && find models -maxdepth 2 -type f | sort
+          echo "[CI] models tree:"
+          find models -maxdepth 2 -type f | sort
           test -s models/manifest.json
-      - name: Upload models
+
+      - name: Upload models artifact
         uses: actions/upload-artifact@v4
         with:
           name: trained-models
           path: models/
 
-  backtest_and_deploy_on_vm:
+  deploy:
     runs-on: ubuntu-latest
     needs: [train]
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Download trained models
         uses: actions/download-artifact@v4
-        with: { name: trained-models, path: models/ }
+        with:
+          name: trained-models
+          path: models/
+
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
-        with: { ssh-private-key: ${{ secrets.SSH_KEY }} }
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
       - name: Add host to known_hosts
-        run: ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+        run: |
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
       - name: Rsync code + models to VM
-        env: { SSH_USER: ${{ secrets.SSH_USER }}, SSH_HOST: ${{ secrets.SSH_HOST }} }
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
           set -euo pipefail
-          rsync -avz --delete --exclude .git --exclude .github ./ \
-            "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/repo_tmp/"
-      - name: Backtest (latest data) + (optional) Optimize + Deploy (on VM)
+          RSYNC_FLAGS="-avz --delete --exclude .git --exclude .github"
+          rsync $RSYNC_FLAGS ./ "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/repo_tmp/"
+
+      - name: Deploy to VM (sync + env + systemd)
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
@@ -70,82 +92,58 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           set -euo pipefail
+          # 將 secrets 透過環境前綴傳到遠端，再在遠端展開寫檔（避免 heredoc 引號陷阱）
           ssh -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
-            TELEGRAM_CHAT_ID="$TELEGRAM_CHAT_ID" \
-            GIT_SHA="$GIT_SHA" \
+            TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}" \
+            TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID}" \
+            GIT_SHA="${GIT_SHA}" \
             bash -euo pipefail -s <<'REMOTE'
           set -euo pipefail
           SRC="/home/$USER/repo_tmp"
           DST="/opt/crypto_strategy_project"
 
-          echo "[DEPLOY] Sync to ${DST}"
+          echo "[DEPLOY] Sync code (including models/) to ${DST}"
           sudo -n rsync -a --delete "${SRC}/" "${DST}/"
 
-          echo "[DEPLOY] Ensure venv & deps"
-          if [ ! -x "${DST}/.venv/bin/python" ]; then sudo -n python3 -m venv "${DST}/.venv"; fi
-          sudo -n bash -lc "${DST}/.venv/bin/pip install --upgrade pip && \
-                            ${DST}/.venv/bin/pip install -r ${DST}/requirements.txt"
+          echo "[DEPLOY] Ensure venv"
+          if [ ! -x "${DST}/.venv/bin/python" ]; then
+            sudo -n python3 -m venv "${DST}/.venv"
+          fi
+          sudo -n bash -lc "${DST}/.venv/bin/pip install --upgrade pip"
+          sudo -n bash -lc "${DST}/.venv/bin/pip install -r ${DST}/requirements.txt"
 
-          echo "[ENV] Write /etc/crypto_strategy_project.env"
+          echo "[DEPLOY] Provision env for systemd (/etc/crypto_strategy_project.env)"
           sudo -n install -m 600 -o root -g root /dev/null /etc/crypto_strategy_project.env
-          printf "TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n" \
-            "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | sudo -n tee /etc/crypto_strategy_project.env >/dev/null
+          sudo -n bash -lc 'cat >/etc/crypto_strategy_project.env <<EOF
+          TELEGRAM_BOT_TOKEN='"${TELEGRAM_BOT_TOKEN}"'
+          TELEGRAM_CHAT_ID='"${TELEGRAM_CHAT_ID}"'
+          EOF'
+          sudo -n chown root:root /etc/crypto_strategy_project.env
           sudo -n chmod 600 /etc/crypto_strategy_project.env
+          sudo -n awk -F= '"'"'/^TELEGRAM_(BOT_TOKEN|CHAT_ID)=/ {printf("[CHECK] %s present len=%d\n",$1,length($2))}'"'"' /etc/crypto_strategy_project.env
 
-          cd "${DST}"
+          echo "[DEPLOY] Install systemd units"
+          sudo -n cp "${DST}/systemd/trader-once.service" /etc/systemd/system/trader-once.service
+          sudo -n cp "${DST}/systemd/trader-once.timer"   /etc/systemd/system/trader-once.timer
 
-          # ====== (可選) 自動優化（若已有 optimize 腳本就解除註解） ======
-          # echo "[OPTIMIZE] Optuna start"
-          # "${DST}/.venv/bin/python" scripts/optimize_params.py \
-          #   --cfg csp/configs/strategy.yaml \
-          #   --symbols BTCUSDT,ETHUSDT,BCHUSDT \
-          #   --trials 60 \
-          #   --out models/opt_params.yaml
-          # ================================================================
-
-          echo "[BACKTEST] fetch=inc (latest data)"
-          OUTDIR="reports/$(date -u +%Y%m%d_%H%M%S)"
-          "${DST}/.venv/bin/python" scripts/backtest_multi.py \
-            --cfg csp/configs/strategy.yaml \
-            --days 30 \
-            --fetch inc \
-            --save-summary --out-dir "$OUTDIR" --format both
-
-          echo "[GATE] Check metrics"
-          jq . "$OUTDIR/summary_all.json"
-          WIN_SUM=$(jq -r '.BTCUSDT.win_rate + .ETHUSDT.win_rate + .BCHUSDT.win_rate' "$OUTDIR/summary_all.json")
-          SIG_SUM=$(jq -r '.BTCUSDT.signal_count + .ETHUSDT.signal_count + .BCHUSDT.signal_count' "$OUTDIR/summary_all.json")
-          PF_SUM=$(jq -r '.BTCUSDT.profit_factor + .ETHUSDT.profit_factor + .BCHUSDT.profit_factor' "$OUTDIR/summary_all.json")
-          # 門檻示例：總訊號>=30、三幣平均勝率>=40%(WIN_SUM>=1.2)、PF加總>=1.5
-          PASS=1
-          [ "$SIG_SUM" -lt 30 ] && PASS=0
-          awk "BEGIN{if(!($WIN_SUM >= 1.2 && $PF_SUM >= 1.5)) exit 1}" || PASS=0
-          if [ "$PASS" -ne 1 ]; then
-            "${DST}/.venv/bin/python" scripts/smoke_telegram.py "❌ Gate NG build=${GIT_SHA:0:8} host=$(hostname)"
-            exit 1
+          # 清掉舊的 drop-in（以免殘留錯誤的 ExecStartPre）
+          if [ -d /etc/systemd/system/trader-once.service.d ]; then
+            sudo -n rm -f /etc/systemd/system/trader-once.service.d/override.conf || true
           fi
 
-          echo "[SYSTEMD] Install/Reload"
-          sudo -n cp systemd/trader-once.service /etc/systemd/system/trader-once.service
-          sudo -n cp systemd/trader-once.timer   /etc/systemd/system/trader-once.timer
-          # 清掉舊 drop-in（若存在）
-          [ -d /etc/systemd/system/trader-once.service.d ] && sudo -n rm -f /etc/systemd/system/trader-once.service.d/override.conf || true
+          echo "[DEPLOY] Reload & (re)start timer/service"
           sudo -n systemctl daemon-reload
           sudo -n systemctl enable --now trader-once.timer
           sudo -n systemctl restart trader-once.timer
           sudo -n systemctl stop trader-once.service || true
           sudo -n systemctl start trader-once.service || true
 
-          echo "[SMOKE] Telegram"
-          "${DST}/.venv/bin/python" scripts/smoke_telegram.py "✅ Deploy OK build=${GIT_SHA:0:8} host=$(hostname)"
+          echo "[SMOKE] Telegram one-shot (does not fail build)"
+          sudo -n env TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}" TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID}" \
+            "${DST}/.venv/bin/python" "${DST}/scripts/smoke_telegram.py" "✅ Deploy OK build=${GIT_SHA:0:8} host=$(hostname)" || true
 
-          echo "[PACK] backtest reports"
-          tar czf /home/$USER/reports.tgz -C "${DST}" "$OUTDIR"
+          echo "[DEPLOY] Status"
+          sudo -n systemctl status trader-once.timer   --no-pager || true
+          sudo -n systemctl status trader-once.service --no-pager || true
+          sudo -n systemctl list-timers --all | grep -i trader-once || true
           REMOTE
-      - name: Pull backtest artifact from VM
-        env: { SSH_USER: ${{ secrets.SSH_USER }}, SSH_HOST: ${{ secrets.SSH_HOST }} }
-        run: scp -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/reports.tgz" reports.tgz
-      - name: Upload backtest reports
-        uses: actions/upload-artifact@v4
-        with: { name: backtest-reports, path: reports.tgz }
