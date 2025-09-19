@@ -1,4 +1,4 @@
-name: Train → Backtest(on-VM) → (Optimize) → Deploy
+name: Train-Backtest-Deploy
 
 on:
   push:
@@ -12,18 +12,27 @@ jobs:
   train:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "${{ env.PYTHON_VERSION }}" }
-      - uses: actions/cache@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: pip-${{ runner.os }}-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: pip-${{ runner.os }}-
+          restore-keys: |
+            pip-${{ runner.os }}-
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
       - name: Train models (multi)
         env:
           CSP_TRAIN_SYMBOLS: "BTCUSDT,ETHUSDT,BCHUSDT"
@@ -36,6 +45,7 @@ jobs:
             --cfg csp/configs/strategy.yaml
           echo "[CI] models tree:" && find models -maxdepth 2 -type f | sort
           test -s models/manifest.json
+
       - name: Upload models
         uses: actions/upload-artifact@v4
         with:
@@ -46,21 +56,32 @@ jobs:
     runs-on: ubuntu-latest
     needs: [train]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Download trained models
         uses: actions/download-artifact@v4
-        with: { name: trained-models, path: models/ }
+        with:
+          name: trained-models
+          path: models/
+
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
-        with: { ssh-private-key: ${{ secrets.SSH_KEY }} }
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
       - name: Add host to known_hosts
         run: ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
       - name: Rsync code + models to VM
-        env: { SSH_USER: ${{ secrets.SSH_USER }}, SSH_HOST: ${{ secrets.SSH_HOST }} }
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
           set -euo pipefail
           rsync -avz --delete --exclude .git --exclude .github ./ \
             "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/repo_tmp/"
+
       - name: Backtest (latest data) + (optional) Optimize + Deploy (on VM)
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
@@ -95,14 +116,13 @@ jobs:
 
           cd "${DST}"
 
-          # ====== (可選) 自動優化（若已有 optimize 腳本就解除註解） ======
-          # echo "[OPTIMIZE] Optuna start"
+          # (Optional, A 方案預設關閉) 參數最佳化模板
+          # echo "[OPTIMIZE] Optuna"
           # "${DST}/.venv/bin/python" scripts/optimize_params.py \
           #   --cfg csp/configs/strategy.yaml \
           #   --symbols BTCUSDT,ETHUSDT,BCHUSDT \
           #   --trials 60 \
           #   --out models/opt_params.yaml
-          # ================================================================
 
           echo "[BACKTEST] fetch=inc (latest data)"
           OUTDIR="reports/$(date -u +%Y%m%d_%H%M%S)"
@@ -117,7 +137,6 @@ jobs:
           WIN_SUM=$(jq -r '.BTCUSDT.win_rate + .ETHUSDT.win_rate + .BCHUSDT.win_rate' "$OUTDIR/summary_all.json")
           SIG_SUM=$(jq -r '.BTCUSDT.signal_count + .ETHUSDT.signal_count + .BCHUSDT.signal_count' "$OUTDIR/summary_all.json")
           PF_SUM=$(jq -r '.BTCUSDT.profit_factor + .ETHUSDT.profit_factor + .BCHUSDT.profit_factor' "$OUTDIR/summary_all.json")
-          # 門檻示例：總訊號>=30、三幣平均勝率>=40%(WIN_SUM>=1.2)、PF加總>=1.5
           PASS=1
           [ "$SIG_SUM" -lt 30 ] && PASS=0
           awk "BEGIN{if(!($WIN_SUM >= 1.2 && $PF_SUM >= 1.5)) exit 1}" || PASS=0
@@ -129,7 +148,6 @@ jobs:
           echo "[SYSTEMD] Install/Reload"
           sudo -n cp systemd/trader-once.service /etc/systemd/system/trader-once.service
           sudo -n cp systemd/trader-once.timer   /etc/systemd/system/trader-once.timer
-          # 清掉舊 drop-in（若存在）
           [ -d /etc/systemd/system/trader-once.service.d ] && sudo -n rm -f /etc/systemd/system/trader-once.service.d/override.conf || true
           sudo -n systemctl daemon-reload
           sudo -n systemctl enable --now trader-once.timer
@@ -143,9 +161,15 @@ jobs:
           echo "[PACK] backtest reports"
           tar czf /home/$USER/reports.tgz -C "${DST}" "$OUTDIR"
           REMOTE
+
       - name: Pull backtest artifact from VM
-        env: { SSH_USER: ${{ secrets.SSH_USER }}, SSH_HOST: ${{ secrets.SSH_HOST }} }
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
         run: scp -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/reports.tgz" reports.tgz
+
       - name: Upload backtest reports
         uses: actions/upload-artifact@v4
-        with: { name: backtest-reports, path: reports.tgz }
+        with:
+          name: backtest-reports
+          path: reports.tgz
