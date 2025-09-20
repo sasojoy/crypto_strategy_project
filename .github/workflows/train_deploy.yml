@@ -165,27 +165,83 @@ jobs:
           exit 0
           REMOTE
 
-      - name: Pull backtest artifact from VM
+      - name: Pull backtest reports from VM
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
           set -euo pipefail
-          scp -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/reports.tgz" reports.tgz || true
-          scp -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/gate_status.txt" gate_status.txt
+          scp -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/reports.tgz" reports_vm.tgz
+          tar -xzf reports_vm.tgz
+          rm -f reports_vm.tgz
 
-      - name: Upload backtest reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: backtest-reports
-          path: reports.tgz
-
-      - name: Fail job if gate NG
+      - name: Locate latest report dir (supports 1- or 2-level timestamps)
+        shell: bash
         run: |
           set -euo pipefail
-          PASS=$(cat gate_status.txt | tr -d '\n' || echo 0)
-          echo "Gate PASS=${PASS}"
-          if [ "$PASS" != "1" ]; then
-            echo "::error::Backtest gate failed (see artifact backtest-reports)"
+          # 找最新的 summary_all.json（同時支援 reports/*/summary_all.json 與 reports/*/*/summary_all.json）
+          LATEST_JSON="$(ls -t reports/*/summary_all.json reports/*/*/summary_all.json 2>/dev/null | head -n1 || true)"
+          if [ -z "${LATEST_JSON}" ]; then
+            echo "::error::No summary_all.json found under reports/"
+            echo "TREE BELOW:"
+            find reports -type f | sort || true
             exit 1
           fi
+          REPORTS_DIR="$(dirname "${LATEST_JSON}")"
+          echo "REPORTS_DIR=${REPORTS_DIR}" >> "$GITHUB_ENV"
+          echo "[INFO] REPORTS_DIR=${REPORTS_DIR}"
+          echo "[INFO] Found summary: ${LATEST_JSON}"
+
+      - name: PACK backtest reports (tar.gz)
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${REPORTS_DIR:?REPORTS_DIR not set}"
+          TAR_NAME="reports_${GITHUB_RUN_ID}.tgz"
+          # 只打包「那個」最新報表資料夾，避免把舊資料一起塞進 artifact
+          tar -C "${REPORTS_DIR}" -czf "${TAR_NAME}" .
+          echo "[INFO] Packed ${TAR_NAME} from ${REPORTS_DIR}"
+          echo "PACK_TAR=${TAR_NAME}" >> "$GITHUB_ENV"
+
+      - name: GATE Check metrics with jq (fail softly or hard, 自行選一個)
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${REPORTS_DIR:?REPORTS_DIR not set}"
+          SUMMARY="${REPORTS_DIR}/summary_all.json"
+          if [ ! -s "${SUMMARY}" ]; then
+            echo "::error::summary_all.json not found at ${SUMMARY}"
+            exit 1
+          fi
+
+          echo "[INFO] SUMMARY: ${SUMMARY}"
+          # 範例 gate 規則（自行調整）：至少每個幣都有 > 50 策略訊號
+          BTC_SIG=$(jq -r '.BTCUSDT.signal_count // 0' "${SUMMARY}")
+          ETH_SIG=$(jq -r '.ETHUSDT.signal_count // 0' "${SUMMARY}")
+          BCH_SIG=$(jq -r '.BCHUSDT.signal_count // 0' "${SUMMARY}")
+          echo "[GATE] signal_count BTC=${BTC_SIG} ETH=${ETH_SIG} BCH=${BCH_SIG}"
+
+          MIN_SIG=50
+          if [ "${BTC_SIG}" -lt "${MIN_SIG}" ] || [ "${ETH_SIG}" -lt "${MIN_SIG}" ] || [ "${BCH_SIG}" -lt "${MIN_SIG}" ]; then
+            echo "::warning::Gate not satisfied (MIN_SIG=${MIN_SIG}). Decide if you want to fail or continue."
+            # 想要「不阻斷」就 exit 0；想要「阻斷」就 exit 1
+            # exit 0
+            exit 1
+          fi
+          echo "[GATE] Passed."
+
+      - name: Upload latest report dir (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-latest
+          path: ${{ env.REPORTS_DIR }}
+          if-no-files-found: warn
+
+      - name: Upload packed tar (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-tar
+          path: ${{ env.PACK_TAR }}
+          if-no-files-found: warn
