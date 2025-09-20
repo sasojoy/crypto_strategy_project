@@ -82,7 +82,8 @@ jobs:
           rsync -avz --delete --exclude .git --exclude .github ./ \
             "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/repo_tmp/"
 
-      - name: Backtest (latest data) + (optional) Optimize + Deploy (on VM)
+      - name: Backtest (latest data) + Deploy prep (on VM, never exit 1 here)
+        id: vm_run
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
@@ -99,6 +100,9 @@ jobs:
           set -euo pipefail
           SRC="/home/$USER/repo_tmp"
           DST="/opt/crypto_strategy_project"
+          OUTDIR="reports/$(date -u +%Y%m%d_%H%M%S)"
+          STATUS_FILE="/home/$USER/gate_status.txt"
+          ARTIFACT_TGZ="/home/$USER/reports.tgz"
 
           echo "[DEPLOY] Sync to ${DST}"
           sudo -n rsync -a --delete "${SRC}/" "${DST}/"
@@ -108,68 +112,80 @@ jobs:
           sudo -n bash -lc "${DST}/.venv/bin/pip install --upgrade pip && \
                             ${DST}/.venv/bin/pip install -r ${DST}/requirements.txt"
 
+          # jq 供 Gate 解析
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo -n apt-get update -y && sudo -n apt-get install -y jq
+          fi
+
           echo "[ENV] Write /etc/crypto_strategy_project.env"
           sudo -n install -m 600 -o root -g root /dev/null /etc/crypto_strategy_project.env
+          # 注意：此處勿 set -x 以防洩漏 token
           printf "TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n" \
             "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | sudo -n tee /etc/crypto_strategy_project.env >/dev/null
           sudo -n chmod 600 /etc/crypto_strategy_project.env
 
           cd "${DST}"
 
-          # (Optional, A 方案預設關閉) 參數最佳化模板
-          # echo "[OPTIMIZE] Optuna"
-          # "${DST}/.venv/bin/python" scripts/optimize_params.py \
-          #   --cfg csp/configs/strategy.yaml \
-          #   --symbols BTCUSDT,ETHUSDT,BCHUSDT \
-          #   --trials 60 \
-          #   --out models/opt_params.yaml
-
           echo "[BACKTEST] fetch=inc (latest data)"
-          OUTDIR="reports/$(date -u +%Y%m%d_%H%M%S)"
           "${DST}/.venv/bin/python" scripts/backtest_multi.py \
             --cfg csp/configs/strategy.yaml \
             --days 30 \
             --fetch inc \
             --save-summary --out-dir "$OUTDIR" --format both
 
+          echo "[PACK] backtest reports"
+          tar czf "$ARTIFACT_TGZ" -C "${DST}" "$OUTDIR" || true
+
           echo "[GATE] Check metrics"
-          jq . "$OUTDIR/summary_all.json"
           WIN_SUM=$(jq -r '.BTCUSDT.win_rate + .ETHUSDT.win_rate + .BCHUSDT.win_rate' "$OUTDIR/summary_all.json")
           SIG_SUM=$(jq -r '.BTCUSDT.signal_count + .ETHUSDT.signal_count + .BCHUSDT.signal_count' "$OUTDIR/summary_all.json")
           PF_SUM=$(jq -r '.BTCUSDT.profit_factor + .ETHUSDT.profit_factor + .BCHUSDT.profit_factor' "$OUTDIR/summary_all.json")
+
           PASS=1
           [ "$SIG_SUM" -lt 30 ] && PASS=0
           awk "BEGIN{if(!($WIN_SUM >= 1.2 && $PF_SUM >= 1.5)) exit 1}" || PASS=0
-          if [ "$PASS" -ne 1 ]; then
-            "${DST}/.venv/bin/python" scripts/smoke_telegram.py "❌ Gate NG build=${GIT_SHA:0:8} host=$(hostname)"
-            exit 1
+
+          echo "$PASS" > "$STATUS_FILE"
+
+          if [ "$PASS" -eq 1 ]; then
+            echo "[SYSTEMD] Install/Reload"
+            sudo -n cp systemd/trader-once.service /etc/systemd/system/trader-once.service
+            sudo -n cp systemd/trader-once.timer   /etc/systemd/system/trader-once.timer
+            [ -d /etc/systemd/system/trader-once.service.d ] && sudo -n rm -f /etc/systemd/system/trader-once.service.d/override.conf || true
+            sudo -n systemctl daemon-reload
+            sudo -n systemctl enable --now trader-once.timer
+            sudo -n systemctl restart trader-once.timer
+            sudo -n systemctl stop trader-once.service || true
+            sudo -n systemctl start trader-once.service || true
+            "${DST}/.venv/bin/python" scripts/smoke_telegram.py "✅ Deploy OK build=${GIT_SHA:0:8} host=$(hostname)" || true
+          else
+            "${DST}/.venv/bin/python" scripts/smoke_telegram.py "❌ Gate NG build=${GIT_SHA:0:8} host=$(hostname)" || true
           fi
-
-          echo "[SYSTEMD] Install/Reload"
-          sudo -n cp systemd/trader-once.service /etc/systemd/system/trader-once.service
-          sudo -n cp systemd/trader-once.timer   /etc/systemd/system/trader-once.timer
-          [ -d /etc/systemd/system/trader-once.service.d ] && sudo -n rm -f /etc/systemd/system/trader-once.service.d/override.conf || true
-          sudo -n systemctl daemon-reload
-          sudo -n systemctl enable --now trader-once.timer
-          sudo -n systemctl restart trader-once.timer
-          sudo -n systemctl stop trader-once.service || true
-          sudo -n systemctl start trader-once.service || true
-
-          echo "[SMOKE] Telegram"
-          "${DST}/.venv/bin/python" scripts/smoke_telegram.py "✅ Deploy OK build=${GIT_SHA:0:8} host=$(hostname)"
-
-          echo "[PACK] backtest reports"
-          tar czf /home/$USER/reports.tgz -C "${DST}" "$OUTDIR"
+          # 重點：這個 remote 腳本永遠 0 結束（不阻斷後續拉檔/上傳）
+          exit 0
           REMOTE
 
       - name: Pull backtest artifact from VM
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
-        run: scp -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/reports.tgz" reports.tgz
+        run: |
+          set -euo pipefail
+          scp -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/reports.tgz" reports.tgz || true
+          scp -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/gate_status.txt" gate_status.txt
 
       - name: Upload backtest reports
         uses: actions/upload-artifact@v4
         with:
           name: backtest-reports
           path: reports.tgz
+
+      - name: Fail job if gate NG
+        run: |
+          set -euo pipefail
+          PASS=$(cat gate_status.txt | tr -d '\n' || echo 0)
+          echo "Gate PASS=${PASS}"
+          if [ "$PASS" != "1" ]; then
+            echo "::error::Backtest gate failed (see artifact backtest-reports)"
+            exit 1
+          fi
