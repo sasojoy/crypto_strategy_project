@@ -82,140 +82,103 @@ jobs:
           rsync -avz --delete --exclude .git --exclude .github ./ \
             "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/repo_tmp/"
 
-      - name: Backtest (latest data) + Deploy prep (on VM, never exit 1 here)
-        id: vm_run
+      - name: Deploy & Backtest on VM (produce remote tar + marker)
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
-          GIT_SHA: ${{ github.sha }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_ID: ${{ github.run_id }}   # 用 run_id 當檔名後綴，Runner 與 VM 都看得到
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
-            TELEGRAM_CHAT_ID="$TELEGRAM_CHAT_ID" \
-            GIT_SHA="$GIT_SHA" \
+          ssh -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}" \
+            TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}" \
+            TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID}" \
+            RUN_ID="${RUN_ID}" \
             bash -euo pipefail -s <<'REMOTE'
           set -euo pipefail
-          SRC="/home/$USER/repo_tmp"
           DST="/opt/crypto_strategy_project"
-          OUTDIR="reports/$(date -u +%Y%m%d_%H%M%S)"
-          STATUS_FILE="/home/$USER/gate_status.txt"
-          ARTIFACT_TGZ="/home/$USER/reports.tgz"
 
           echo "[DEPLOY] Sync to ${DST}"
-          sudo -n rsync -a --delete "${SRC}/" "${DST}/"
+          sudo -n rsync -a --delete "/home/$USER/repo_tmp/" "${DST}/"
 
           echo "[DEPLOY] Ensure venv & deps"
-          if [ ! -x "${DST}/.venv/bin/python" ]; then sudo -n python3 -m venv "${DST}/.venv"; fi
-          sudo -n bash -lc "${DST}/.venv/bin/pip install --upgrade pip && \
-                            ${DST}/.venv/bin/pip install -r ${DST}/requirements.txt"
-
-          # jq 供 Gate 解析
-          if ! command -v jq >/dev/null 2>&1; then
-            sudo -n apt-get update -y && sudo -n apt-get install -y jq
+          if [ ! -x "${DST}/.venv/bin/python" ]; then
+            sudo -n python3 -m venv "${DST}/.venv"
           fi
+          sudo -n bash -lc "${DST}/.venv/bin/pip install --upgrade pip && \
+                            [ -f ${DST}/requirements.txt ] && ${DST}/.venv/bin/pip install -r ${DST}/requirements.txt || true"
 
           echo "[ENV] Write /etc/crypto_strategy_project.env"
           sudo -n install -m 600 -o root -g root /dev/null /etc/crypto_strategy_project.env
-          # 注意：此處勿 set -x 以防洩漏 token
           printf "TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n" \
-            "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | sudo -n tee /etc/crypto_strategy_project.env >/dev/null
+            "${TELEGRAM_BOT_TOKEN:-}" "${TELEGRAM_CHAT_ID:-}" | sudo -n tee /etc/crypto_strategy_project.env >/dev/null
           sudo -n chmod 600 /etc/crypto_strategy_project.env
 
-          cd "${DST}"
-
           echo "[BACKTEST] fetch=inc (latest data)"
-          "${DST}/.venv/bin/python" scripts/backtest_multi.py \
-            --cfg csp/configs/strategy.yaml \
+          sudo -n "${DST}/.venv/bin/python" "${DST}/scripts/backtest_multi.py" \
+            --cfg "${DST}/csp/configs/strategy.yaml" \
             --days 30 \
             --fetch inc \
-            --save-summary --out-dir "$OUTDIR" --format both
+            --save-summary --out-dir "${DST}/reports" --format both
 
-          echo "[PACK] backtest reports"
-          tar czf "$ARTIFACT_TGZ" -C "${DST}" "$OUTDIR" || true
-
-          echo "[GATE] Check metrics"
-          WIN_SUM=$(jq -r '.BTCUSDT.win_rate + .ETHUSDT.win_rate + .BCHUSDT.win_rate' "$OUTDIR/summary_all.json")
-          SIG_SUM=$(jq -r '.BTCUSDT.signal_count + .ETHUSDT.signal_count + .BCHUSDT.signal_count' "$OUTDIR/summary_all.json")
-          PF_SUM=$(jq -r '.BTCUSDT.profit_factor + .ETHUSDT.profit_factor + .BCHUSDT.profit_factor' "$OUTDIR/summary_all.json")
-
-          PASS=1
-          [ "$SIG_SUM" -lt 30 ] && PASS=0
-          awk "BEGIN{if(!($WIN_SUM >= 1.2 && $PF_SUM >= 1.5)) exit 1}" || PASS=0
-
-          echo "$PASS" > "$STATUS_FILE"
-
-          if [ "$PASS" -eq 1 ]; then
-            echo "[SYSTEMD] Install/Reload"
-            sudo -n cp systemd/trader-once.service /etc/systemd/system/trader-once.service
-            sudo -n cp systemd/trader-once.timer   /etc/systemd/system/trader-once.timer
-            [ -d /etc/systemd/system/trader-once.service.d ] && sudo -n rm -f /etc/systemd/system/trader-once.service.d/override.conf || true
-            sudo -n systemctl daemon-reload
-            sudo -n systemctl enable --now trader-once.timer
-            sudo -n systemctl restart trader-once.timer
-            sudo -n systemctl stop trader-once.service || true
-            sudo -n systemctl start trader-once.service || true
-            "${DST}/.venv/bin/python" scripts/smoke_telegram.py "✅ Deploy OK build=${GIT_SHA:0:8} host=$(hostname)" || true
-          else
-            "${DST}/.venv/bin/python" scripts/smoke_telegram.py "❌ Gate NG build=${GIT_SHA:0:8} host=$(hostname)" || true
-          fi
-          # 重點：這個 remote 腳本永遠 0 結束（不阻斷後續拉檔/上傳）
-          exit 0
-          REMOTE
-
-      - name: Pull backtest reports from VM
-        env:
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-        run: |
-          set -euo pipefail
-          scp -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/reports.tgz" reports_vm.tgz
-          tar -xzf reports_vm.tgz
-          rm -f reports_vm.tgz
-
-      - name: Locate latest report dir (supports 1- or 2-level timestamps)
-        shell: bash
-        run: |
-          set -euo pipefail
-          # 找最新的 summary_all.json（同時支援 reports/*/summary_all.json 與 reports/*/*/summary_all.json）
-          LATEST_JSON="$(ls -t reports/*/summary_all.json reports/*/*/summary_all.json 2>/dev/null | head -n1 || true)"
+          echo "[LOCATE] Find newest summary_all.json (supports 1- or 2-level ts)"
+          LATEST_JSON=$(ls -t "${DST}/reports"/*/summary_all.json "${DST}/reports"/*/*/summary_all.json 2>/dev/null | head -n1 || true)
           if [ -z "${LATEST_JSON}" ]; then
-            echo "::error::No summary_all.json found under reports/"
-            echo "TREE BELOW:"
-            find reports -type f | sort || true
+            echo "::error::No summary_all.json under ${DST}/reports"
+            find "${DST}/reports" -type f | sort | tail -n 200 || true
             exit 1
           fi
           REPORTS_DIR="$(dirname "${LATEST_JSON}")"
-          echo "REPORTS_DIR=${REPORTS_DIR}" >> "$GITHUB_ENV"
           echo "[INFO] REPORTS_DIR=${REPORTS_DIR}"
-          echo "[INFO] Found summary: ${LATEST_JSON}"
 
-      - name: PACK backtest reports (tar.gz)
-        shell: bash
+          # 打包最新報表到 /tmp，並寫 marker
+          REMOTE_TAR="/tmp/csp_reports_${RUN_ID}.tgz"
+          REMOTE_MARKER="/tmp/csp_reports_dir_${RUN_ID}.txt"
+          echo "[PACK] ${REPORTS_DIR} -> ${REMOTE_TAR}"
+          sudo -n tar -C "${REPORTS_DIR}" -czf "${REMOTE_TAR}" .
+          echo "${REPORTS_DIR}" | sudo -n tee "${REMOTE_MARKER}" >/dev/null
+
+          # 顯示檔案存在以利除錯
+          ls -l "${REMOTE_TAR}" "${REMOTE_MARKER}"
+
+          # 不要在 VM 端做 jq Gate；改到 Runner 端做（因為 artifact 也在 Runner 上傳）
+          REMOTE
+
+      - name: Pull reports from VM to runner
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          : "${REPORTS_DIR:?REPORTS_DIR not set}"
-          TAR_NAME="reports_${GITHUB_RUN_ID}.tgz"
-          # 只打包「那個」最新報表資料夾，避免把舊資料一起塞進 artifact
-          tar -C "${REPORTS_DIR}" -czf "${TAR_NAME}" .
-          echo "[INFO] Packed ${TAR_NAME} from ${REPORTS_DIR}"
-          echo "PACK_TAR=${TAR_NAME}" >> "$GITHUB_ENV"
+          REMOTE_TAR="/tmp/csp_reports_${RUN_ID}.tgz"
+          REMOTE_MARKER="/tmp/csp_reports_dir_${RUN_ID}.txt"
 
-      - name: GATE Check metrics with jq (fail softly or hard, 自行選一個)
-        shell: bash
+          echo "[PULL] scp remote tar & marker"
+          scp "${SSH_USER}@${SSH_HOST}:${REMOTE_TAR}" "./reports_ci.tgz"
+          scp "${SSH_USER}@${SSH_HOST}:${REMOTE_MARKER}" "./reports_dir.txt"
+
+          echo "[EXTRACT] to ./reports_latest"
+          rm -rf reports_latest
+          mkdir -p reports_latest
+          tar -xzf reports_ci.tgz -C reports_latest
+
+          echo "REPORTS_DIR=reports_latest" >> "$GITHUB_ENV"
+
+      - name: Gate metrics (local on runner, using jq)
         run: |
           set -euo pipefail
           : "${REPORTS_DIR:?REPORTS_DIR not set}"
           SUMMARY="${REPORTS_DIR}/summary_all.json"
           if [ ! -s "${SUMMARY}" ]; then
             echo "::error::summary_all.json not found at ${SUMMARY}"
+            echo "TREE BELOW:"
+            find "${REPORTS_DIR}" -type f | sort || true
             exit 1
           fi
 
-          echo "[INFO] SUMMARY: ${SUMMARY}"
-          # 範例 gate 規則（自行調整）：至少每個幣都有 > 50 策略訊號
+          echo "[INFO] Using ${SUMMARY}"
           BTC_SIG=$(jq -r '.BTCUSDT.signal_count // 0' "${SUMMARY}")
           ETH_SIG=$(jq -r '.ETHUSDT.signal_count // 0' "${SUMMARY}")
           BCH_SIG=$(jq -r '.BCHUSDT.signal_count // 0' "${SUMMARY}")
@@ -223,14 +186,13 @@ jobs:
 
           MIN_SIG=50
           if [ "${BTC_SIG}" -lt "${MIN_SIG}" ] || [ "${ETH_SIG}" -lt "${MIN_SIG}" ] || [ "${BCH_SIG}" -lt "${MIN_SIG}" ]; then
-            echo "::warning::Gate not satisfied (MIN_SIG=${MIN_SIG}). Decide if you want to fail or continue."
-            # 想要「不阻斷」就 exit 0；想要「阻斷」就 exit 1
-            # exit 0
+            echo "::warning::Gate not satisfied (MIN_SIG=${MIN_SIG}). Decide policy."
+            # 想嚴格卡關就 exit 1；若只提醒不擋版，就用 exit 0
             exit 1
           fi
           echo "[GATE] Passed."
 
-      - name: Upload latest report dir (always)
+      - name: Upload latest report dir
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -238,10 +200,10 @@ jobs:
           path: ${{ env.REPORTS_DIR }}
           if-no-files-found: warn
 
-      - name: Upload packed tar (always)
+      - name: Upload packed tar
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: reports-tar
-          path: ${{ env.PACK_TAR }}
+          path: reports_ci.tgz
           if-no-files-found: warn
