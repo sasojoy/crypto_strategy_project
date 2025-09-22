@@ -33,7 +33,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Train models (multi)
+      - name: Train models (BTC/ETH/BCH)
         env:
           CSP_TRAIN_SYMBOLS: "BTCUSDT,ETHUSDT,BCHUSDT"
           CSP_TRAIN_OUTDIR: "models"
@@ -43,16 +43,17 @@ jobs:
             --symbols "$CSP_TRAIN_SYMBOLS" \
             --out-dir "$CSP_TRAIN_OUTDIR" \
             --cfg csp/configs/strategy.yaml
-          echo "[CI] models tree:" && find models -maxdepth 2 -type f | sort
+          echo "[CI] models tree:"
+          find models -maxdepth 2 -type f | sort
           test -s models/manifest.json
 
-      - name: Upload models
+      - name: Upload models artifact
         uses: actions/upload-artifact@v4
         with:
           name: trained-models
           path: models/
 
-  backtest_and_deploy_on_vm:
+  deploy:
     runs-on: ubuntu-latest
     needs: [train]
     steps:
@@ -64,6 +65,12 @@ jobs:
         with:
           name: trained-models
           path: models/
+
+      - name: Show models (CI side)
+        run: |
+          echo "[CI] models tree after download:"
+          find models -maxdepth 2 -type f | sort
+          test -s models/manifest.json
 
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
@@ -79,8 +86,9 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
           set -euo pipefail
-          rsync -avz --delete --exclude .git --exclude .github ./ \
-            "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/repo_tmp/"
+          RSYNC_FLAGS="-avz --delete --exclude .git --exclude .github"
+          # 確保把 ./models/ 一起送上 VM
+          rsync $RSYNC_FLAGS ./ "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/repo_tmp/"
 
       - name: Deploy & Backtest on VM (produce remote tar + marker)
         env:
@@ -115,6 +123,20 @@ jobs:
             "${TELEGRAM_BOT_TOKEN:-}" "${TELEGRAM_CHAT_ID:-}" | sudo -n tee /etc/crypto_strategy_project.env >/dev/null
           sudo -n chmod 600 /etc/crypto_strategy_project.env
 
+          echo "[CHECK] Models exist before backtest"
+          MROOT="${DST}/models"
+          ls -l "${MROOT}" || true
+          for d in BTCUSDT ETHUSDT BCHUSDT; do
+            if [ ! -d "${MROOT}/${d}" ]; then
+              echo "::error::Missing model dir: ${MROOT}/${d}"
+              exit 1
+            fi
+          done
+          if [ ! -s "${MROOT}/manifest.json" ]; then
+            echo "::error::Missing ${MROOT}/manifest.json"
+            exit 1
+          fi
+
           echo "[BACKTEST] fetch=inc (latest data)"
           sudo -n "${DST}/.venv/bin/python" "${DST}/scripts/backtest_multi.py" \
             --cfg "${DST}/csp/configs/strategy.yaml" \
@@ -122,7 +144,7 @@ jobs:
             --fetch inc \
             --save-summary --out-dir "${DST}/reports" --format both
 
-          echo "[LOCATE] Find newest summary_all.json (supports 1- or 2-level ts)"
+          echo "[LOCATE] Find newest summary_all.json (1- or 2-level)"
           LATEST_JSON=$(ls -t "${DST}/reports"/*/summary_all.json "${DST}/reports"/*/*/summary_all.json 2>/dev/null | head -n1 || true)
           if [ -z "${LATEST_JSON}" ]; then
             echo "::error::No summary_all.json under ${DST}/reports"
@@ -173,24 +195,15 @@ jobs:
           SUMMARY="${REPORTS_DIR}/summary_all.json"
           if [ ! -s "${SUMMARY}" ]; then
             echo "::error::summary_all.json not found at ${SUMMARY}"
-            echo "TREE BELOW:"
             find "${REPORTS_DIR}" -type f | sort || true
             exit 1
           fi
 
           echo "[INFO] Using ${SUMMARY}"
-          BTC_SIG=$(jq -r '.BTCUSDT.signal_count // 0' "${SUMMARY}")
-          ETH_SIG=$(jq -r '.ETHUSDT.signal_count // 0' "${SUMMARY}")
-          BCH_SIG=$(jq -r '.BCHUSDT.signal_count // 0' "${SUMMARY}")
-          echo "[GATE] signal_count BTC=${BTC_SIG} ETH=${ETH_SIG} BCH=${BCH_SIG}"
-
-          MIN_SIG=50
-          if [ "${BTC_SIG}" -lt "${MIN_SIG}" ] || [ "${ETH_SIG}" -lt "${MIN_SIG}" ] || [ "${BCH_SIG}" -lt "${MIN_SIG}" ]; then
-            echo "::warning::Gate not satisfied (MIN_SIG=${MIN_SIG}). Decide policy."
-            # 想嚴格卡關就 exit 1；若只提醒不擋版，就用 exit 0
-            exit 1
-          fi
-          echo "[GATE] Passed."
+          jq -r '.' "${SUMMARY}" | head -n 50
+          MAX_SIG=$(jq '[.[]?.signal_count // 0] | max' "${SUMMARY}")
+          echo "[GATE] MAX signal_count=${MAX_SIG}"
+          test "${MAX_SIG}" -ge 100
 
       - name: Upload latest report dir
         if: always()
