@@ -32,7 +32,12 @@ class EntryZoneCfg:
     short_x: float = 0.5
 
 def _load_model_bundle(cfg: Dict[str, Any], symbol: str):
-    mdir = Path(cfg["io"]["models_dir"]) / symbol
+    project_root = Path(__file__).resolve().parents[2]
+    raw_models_dir = (cfg.get("io", {}) or {}).get("models_dir", "models")
+    base_dir = Path(raw_models_dir)
+    if not base_dir.is_absolute():
+        base_dir = (project_root / base_dir).resolve()
+    mdir = base_dir / symbol
     if not mdir.exists():
         raise FileNotFoundError(f"Model directory not found for {symbol}: {mdir}")
 
