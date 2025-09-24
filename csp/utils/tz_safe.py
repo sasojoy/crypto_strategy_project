@@ -120,6 +120,9 @@ def floor_utc(ts, freq_or_interval="15min"):
     freq = interval_to_pandas_freq(freq_or_interval)
     freq = _FREQ_MAP.get(freq, freq)
     freq = _FREQ_MAP.get(freq_or_interval, freq)
+    # pandas >= 2.3: 'T' 已棄用，請改用 'min'
+    if freq == "T":
+        freq = "min"
     return safe_ts_to_utc(ts).floor(freq)
 
 

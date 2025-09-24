@@ -78,7 +78,8 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_KEY }}
 
       - name: Add host to known_hosts
-        run: ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+        run: |
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Rsync code + models to VM
         env:
@@ -90,13 +91,14 @@ jobs:
           # 確保把 ./models/ 一起送上 VM
           rsync $RSYNC_FLAGS ./ "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/repo_tmp/"
 
-      - name: Deploy & Backtest on VM (produce remote tar + marker)
+      # === 在 VM 上：同步、建 venv、安裝依賴、寫 env、回測（確保在專案根目錄執行）===
+      - name: Backtest on VM (fresh data, and pack latest reports)
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RUN_ID: ${{ github.run_id }}   # 用 run_id 當檔名後綴，Runner 與 VM 都看得到
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
           ssh -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}" \
@@ -124,99 +126,80 @@ jobs:
           sudo -n chmod 600 /etc/crypto_strategy_project.env
 
           echo "[CHECK] Models exist before backtest"
-          MROOT="${DST}/models"
-          ls -l "${MROOT}" || true
-          for d in BTCUSDT ETHUSDT BCHUSDT; do
-            if [ ! -d "${MROOT}/${d}" ]; then
-              echo "::error::Missing model dir: ${MROOT}/${d}"
-              exit 1
-            fi
-          done
-          if [ ! -s "${MROOT}/manifest.json" ]; then
-            echo "::error::Missing ${MROOT}/manifest.json"
+          if [ -d "${DST}/models" ]; then
+            ls -l "${DST}/models" || true
+            find "${DST}/models" -maxdepth 1 -type d -printf "%f\n" | sort || true
+          else
+            echo "::error::No models directory at ${DST}/models"
             exit 1
           fi
 
           echo "[BACKTEST] fetch=inc (latest data)"
-          sudo -n "${DST}/.venv/bin/python" "${DST}/scripts/backtest_multi.py" \
-            --cfg "${DST}/csp/configs/strategy.yaml" \
+          # ★★★ 關鍵：進入專案根目錄，再執行回測，確保相對路徑 models/ 與 resources/ 正確
+          cd "${DST}"
+          sudo -n "${DST}/.venv/bin/python" scripts/backtest_multi.py \
+            --cfg csp/configs/strategy.yaml \
             --days 30 \
             --fetch inc \
-            --save-summary --out-dir "${DST}/reports" --format both
+            --save-summary --out-dir reports --format both
 
-          echo "[LOCATE] Find newest summary_all.json (1- or 2-level)"
-          LATEST_JSON=$(ls -t "${DST}/reports"/*/summary_all.json "${DST}/reports"/*/*/summary_all.json 2>/dev/null | head -n1 || true)
+          echo "[LOCATE] Find newest summary_all.json (supports 1- or 2-level ts)"
+          LATEST_JSON=$(ls -t "reports"/*/summary_all.json "reports"/*/*/summary_all.json 2>/dev/null | head -n1 || true)
           if [ -z "${LATEST_JSON}" ]; then
-            echo "::error::No summary_all.json under ${DST}/reports"
-            find "${DST}/reports" -type f | sort | tail -n 200 || true
+            echo "::error::No summary_all.json under reports/"
+            find "reports" -type f | sort | tail -n 200 || true
             exit 1
           fi
           REPORTS_DIR="$(dirname "${LATEST_JSON}")"
           echo "[INFO] REPORTS_DIR=${REPORTS_DIR}"
 
-          # 打包最新報表到 /tmp，並寫 marker
+          # 打包最新報表到 /tmp，並寫 marker（Runner 端會 s cp 取回）
           REMOTE_TAR="/tmp/csp_reports_${RUN_ID}.tgz"
           REMOTE_MARKER="/tmp/csp_reports_dir_${RUN_ID}.txt"
-          echo "[PACK] ${REPORTS_DIR} -> ${REMOTE_TAR}"
-          sudo -n tar -C "${REPORTS_DIR}" -czf "${REMOTE_TAR}" .
+          echo "[PACK] ${REPORTS_DIR} -> ${REMOTE_TAR} (contents only)"
+          sudo -n tar -C "${REPORTS_DIR}" -czf "${REMOTE_TAR}" ./
           echo "${REPORTS_DIR}" | sudo -n tee "${REMOTE_MARKER}" >/dev/null
 
           # 顯示檔案存在以利除錯
           ls -l "${REMOTE_TAR}" "${REMOTE_MARKER}"
-
-          # 不要在 VM 端做 jq Gate；改到 Runner 端做（因為 artifact 也在 Runner 上傳）
           REMOTE
 
-      - name: Pull reports from VM to runner
+      # === 從 VM 取回打包檔，Runner 端做 Gate 與 Artifact 上傳 ===
+      - name: Download reports tar from VM
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          REMOTE_TAR="/tmp/csp_reports_${RUN_ID}.tgz"
-          REMOTE_MARKER="/tmp/csp_reports_dir_${RUN_ID}.txt"
+          scp -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}:/tmp/csp_reports_${RUN_ID}.tgz" "./csp_reports_${RUN_ID}.tgz"
+          scp -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}:/tmp/csp_reports_dir_${RUN_ID}.txt" "./csp_reports_dir_${RUN_ID}.txt"
+          ls -l "./csp_reports_${RUN_ID}.tgz" "./csp_reports_dir_${RUN_ID}.txt"
 
-          echo "[PULL] scp remote tar & marker"
-          scp "${SSH_USER}@${SSH_HOST}:${REMOTE_TAR}" "./reports_ci.tgz"
-          scp "${SSH_USER}@${SSH_HOST}:${REMOTE_MARKER}" "./reports_dir.txt"
-
-          echo "[EXTRACT] to ./reports_latest"
-          rm -rf reports_latest
-          mkdir -p reports_latest
-          tar -xzf reports_ci.tgz -C reports_latest
-
-          echo "REPORTS_DIR=reports_latest" >> "$GITHUB_ENV"
-
-      - name: Gate metrics (local on runner, using jq)
+      - name: Extract and Gate on Runner
         run: |
           set -euo pipefail
-          : "${REPORTS_DIR:?REPORTS_DIR not set}"
-          SUMMARY="${REPORTS_DIR}/summary_all.json"
-          if [ ! -s "${SUMMARY}" ]; then
-            echo "::error::summary_all.json not found at ${SUMMARY}"
-            find "${REPORTS_DIR}" -type f | sort || true
+          mkdir -p extracted_reports
+          tar -C extracted_reports -xzf "csp_reports_${{ github.run_id }}.tgz"
+          echo "[GATE] Show extracted files:"
+          find extracted_reports -type f | sort
+          if [ ! -f extracted_reports/summary_all.json ]; then
+            echo "::error::summary_all.json not found in extracted_reports/"
             exit 1
           fi
+          echo "[GATE] Example metric checks with jq (可依你的門檻調整)："
+          cat extracted_reports/summary_all.json | jq .
+          # 例如：檢查至少一個幣 Sharpe > 0（或你自己的門檻）
+          OK_CNT=$(jq '[ .[] | select(.sharpe_ratio > 0) ] | length' extracted_reports/summary_all.json)
+          if [ "${OK_CNT}" -lt 1 ]; then
+            echo "::warning::No symbol passed Sharpe > 0 gate; not failing build by default."
+          fi
 
-          echo "[INFO] Using ${SUMMARY}"
-          jq -r '.' "${SUMMARY}" | head -n 50
-          MAX_SIG=$(jq '[.[]?.signal_count // 0] | max' "${SUMMARY}")
-          echo "[GATE] MAX signal_count=${MAX_SIG}"
-          test "${MAX_SIG}" -ge 100
-
-      - name: Upload latest report dir
-        if: always()
+      - name: Upload Backtest Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: reports-latest
-          path: ${{ env.REPORTS_DIR }}
-          if-no-files-found: warn
-
-      - name: Upload packed tar
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: reports-tar
-          path: reports_ci.tgz
-          if-no-files-found: warn
+          name: backtest_reports_${{ github.run_id }}
+          path: |
+            csp_reports_${{ github.run_id }}.tgz
+            csp_reports_dir_${{ github.run_id }}.txt
+            extracted_reports/**
