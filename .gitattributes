@@ -1,0 +1,6 @@
+*.pkl -diff
+*.joblib -diff
+*.bin -diff
+*.zip -diff
+models/** -diff
+artifacts/** -diff
