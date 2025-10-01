@@ -1,12 +1,18 @@
 resources/*.json
 resources/*.yaml
+
+# Model artifacts
 models/**
+!models/.gitkeep
+
 artifacts/**
+!artifacts/.gitkeep
+
+# Binary artifacts
 *.pkl
 *.joblib
 *.bin
 *.zip
-!models/.gitkeep
-!artifacts/.gitkeep
+
 __pycache__/
 *.pyc
