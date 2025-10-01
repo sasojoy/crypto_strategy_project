@@ -1,5 +1,12 @@
 resources/*.json
 resources/*.yaml
-
+models/**
+artifacts/**
+*.pkl
+*.joblib
+*.bin
+*.zip
+!models/.gitkeep
+!artifacts/.gitkeep
 __pycache__/
 *.pyc
