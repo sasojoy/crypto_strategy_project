@@ -27,6 +27,18 @@ python scripts/backtest_multi.py \
 - 回測報告會打包成 Artifact；若績效門檻未達成則停止部署並透過 Telegram 通知失敗。
 - 部署成功後，`trader-once.timer` 會每 15 分鐘觸發一次；系統服務使用 `/etc/crypto_strategy_project.env` 提供 Telegram 憑證。
 
+## 模型自動化 CI（B 方案）
+
+- **流程概覽**：GitHub Actions 觸發 `model-ci` workflow 後，`scripts/ci_orchestrator.py` 會先以 `scripts/train_h16_wf.py` 進行時間序交叉驗證訓練，再呼叫 `scripts/threshold_report.py` 回測門檻表現；若主要指標（預設 `roc_auc`）未達標，會自動展開小型參數搜尋（歷程紀錄於 `logs/ci_run.json`），最後依狀態透過 Telegram 通知。
+- **觸發方式**：支援 push（`main`、`work`、`ci/**`）、Pull Request、排程（週一 03:00 UTC）以及 workflow_dispatch 手動觸發。
+- **GitHub Secrets**：必須在專案設定中加入 `TELEGRAM_BOT_TOKEN` 以及 `TELEGRAM_CHAT_ID` 才能接收通知；若未設定將僅在 CI console 顯示結果。
+- **產出物**：
+  - `logs/ci_run.json`：詳細記錄各次訓練、回測、門檻掃描與參數搜尋狀態，供失敗時貼給 ChatGPT 進行問題排查。
+  - `logs/threshold_report.json`：最佳門檻的覆蓋率、Precision/F1 與平均報酬。
+  - `models/ci/**`：保存校正後的模型與 metadata（`model.joblib`、`metadata.json`、`thresholds.json`）。
+  - `artifacts/ci/best_run.json`：最佳嘗試的摘要，方便下載檢視。
+- **失敗排查**：若門檻未達標，workflow 仍會完成並將 `logs/ci_run.json` 上傳成 Artifact，請將該檔案貼給 ChatGPT 或研發群組討論後續調整策略/資料品質。
+
 ## 故障排除
 
 - **HTTP 451**：已將回測移至 VM；若仍遇到請檢查 VM 網路與 `fetch.base_url` 設定。

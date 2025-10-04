@@ -1,0 +1,75 @@
+name: Model CI
+
+on:
+  push:
+    branches:
+      - main
+      - work
+      - "ci/**"
+  pull_request:
+    paths:
+      - '.github/workflows/model-ci.yml'
+      - 'scripts/**'
+      - 'resources/**'
+      - 'csp/**'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  auto-train-backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install xgboost scikit-learn joblib pandas numpy requests
+
+      - name: Run CI orchestrator
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python scripts/ci_orchestrator.py \
+            --csv resources/btc_15m.csv \
+            --feature-func csp.features.h16.build_features_15m_4h \
+            --models-dir models/ci \
+            --artifacts-dir artifacts/ci \
+            --target-metric roc_auc \
+            --target-value 0.55 \
+            --output logs/ci_run.json \
+            --notify on_fail
+
+      - name: Upload CI logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-ci-logs
+          path: |
+            logs/ci_run.json
+            logs/threshold_report.json
+          if-no-files-found: warn
+
+      - name: Upload trained models
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-ci-models
+          path: models/ci
+          if-no-files-found: warn
+
+      - name: Upload CI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-ci-artifacts
+          path: artifacts/ci
+          if-no-files-found: warn
