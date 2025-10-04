@@ -32,6 +32,7 @@ python scripts/backtest_multi.py \
 - **流程概覽**：GitHub Actions 觸發 `model-ci` workflow 後，`scripts/ci_orchestrator.py` 會先以 `scripts/train_h16_wf.py` 進行時間序交叉驗證訓練，再呼叫 `scripts/threshold_report.py` 回測門檻表現；若主要指標（預設 `roc_auc`）未達標，會自動展開小型參數搜尋（歷程紀錄於 `logs/ci_run.json`），最後依狀態透過 Telegram 通知。
 - **觸發方式**：支援 push（`main`、`work`、`ci/**`）、Pull Request、排程（週一 03:00 UTC）以及 workflow_dispatch 手動觸發。
 - **GitHub Secrets**：必須在專案設定中加入 `TELEGRAM_BOT_TOKEN` 以及 `TELEGRAM_CHAT_ID` 才能接收通知；若未設定將僅在 CI console 顯示結果。
+- **環境需求**：請確保保留 `scripts/__init__.py`（供 `python -m scripts.ci_orchestrator` 匯入）並安裝 `requests` 套件；CI 成功或失敗都會透過 Telegram 推播結果。
 - **產出物**：
   - `logs/ci_run.json`：詳細記錄各次訓練、回測、門檻掃描與參數搜尋狀態，供失敗時貼給 ChatGPT 進行問題排查。
   - `logs/threshold_report.json`：最佳門檻的覆蓋率、Precision/F1 與平均報酬。
