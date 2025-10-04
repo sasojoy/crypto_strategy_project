@@ -41,7 +41,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python scripts/ci_orchestrator.py \
+          python -m scripts.ci_orchestrator \
             --csv resources/btc_15m.csv \
             --feature-func csp.features.h16.build_features_15m_4h \
             --models-dir models/ci \

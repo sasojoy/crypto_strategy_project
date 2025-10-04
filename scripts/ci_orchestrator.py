@@ -14,7 +14,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from scripts.notify_telegram import send_telegram_message
+try:
+    from scripts.notify_telegram import send_telegram_message
+except Exception:  # noqa: BLE001
+    import sys
+
+    sys.path.append(os.path.dirname(__file__))
+    from notify_telegram import send_telegram_message  # type: ignore[import-not-found]
 from scripts.train_h16_wf import (
     TrainingDataset,
     prepare_training_dataset,
@@ -209,7 +215,7 @@ def main() -> None:
     if token and chat_id and _should_notify(args.notify, ci_log["success"]):
         message = _compose_message(ci_log["success"], args.target_metric, args.target_value, best_run, logs_path)
         try:
-            send_telegram_message(token, chat_id, message)
+            send_telegram_message(message, token=token, chat_id=chat_id)
         except Exception:  # noqa: BLE001
             # We do not want notification failures to fail the CI job.
             print("Failed to send Telegram notification:")
