@@ -64,10 +64,8 @@ def summarize(equity_curve: pd.DataFrame, trades: pd.DataFrame, bar_seconds: int
 
     # --- Annualized return ---
     if start_time is not None and end_time is not None and end_time > start_time:
-        duration_seconds = (end_time - start_time).total_seconds()
-        years = duration_seconds / (365.25 * 24 * 3600)
-        if years > 0:
-            metrics["annual_return"] = float((1 + total_return) ** (1 / years) - 1)
+        n_days = max((end_time - start_time).total_seconds() / 86400.0, 1e-9)
+        metrics["annual_return"] = float((1.0 + total_return) ** (365.0 / n_days) - 1.0)
 
     # --- Max drawdown ---
     if not eq_df.empty and "equity_after" in eq_df.columns:

@@ -17,7 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional
 try:
     from scripts.notify_telegram import send_telegram_message
 except Exception:  # noqa: BLE001
-    import sys
+    import os, sys
 
     sys.path.append(os.path.dirname(__file__))
     from notify_telegram import send_telegram_message  # type: ignore[import-not-found]
@@ -193,11 +193,24 @@ def main() -> None:
         }
 
     if best_run:
-        ci_log["best"] = best_run
+        threshold_summary = best_run.get("threshold_summary") or {}
+        best_threshold = threshold_summary.get("best", {})
+        ci_log["best_run"] = best_run
+        ci_log["best"] = {
+            "threshold": best_threshold.get("threshold"),
+            "coverage": best_threshold.get("coverage"),
+            "precision": best_threshold.get("precision"),
+            "win_rate": best_threshold.get("win_rate"),
+            "total_return": best_threshold.get("total_return"),
+            "attempt": best_run,
+        }
         ci_log["success"] = bool(best_run.get("metric_value") and best_run["metric_value"] >= args.target_value)
     else:
-        ci_log["best"] = None
+        ci_log["best_run"] = None
+        ci_log["best"] = {}
         ci_log["success"] = False
+
+    ci_log["hit_target"] = ci_log["success"]
 
     with logs_path.open("w", encoding="utf-8") as fh:
         json.dump(ci_log, fh, indent=2)
@@ -210,12 +223,10 @@ def main() -> None:
         with artifact_best_path.open("w", encoding="utf-8") as fh:
             json.dump(best_run, fh, indent=2)
 
-    token = args.telegram_token or os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = args.telegram_chat_id or os.environ.get("TELEGRAM_CHAT_ID")
-    if token and chat_id and _should_notify(args.notify, ci_log["success"]):
+    if _should_notify(args.notify, ci_log["success"]):
         message = _compose_message(ci_log["success"], args.target_metric, args.target_value, best_run, logs_path)
         try:
-            send_telegram_message(message, token=token, chat_id=chat_id)
+            send_telegram_message(message, token=args.telegram_token, chat_id=args.telegram_chat_id)
         except Exception:  # noqa: BLE001
             # We do not want notification failures to fail the CI job.
             print("Failed to send Telegram notification:")

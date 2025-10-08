@@ -427,11 +427,15 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
     trades_df["risk_pct"] = risk_pct_list
 
     final_equity = equity
-    total_return_pct = (final_equity / initial_capital - 1.0) * 100.0
+    total_return = (final_equity / initial_capital - 1.0) if initial_capital != 0 else 0.0
 
     eq_series = pd.Series(eq_curve, dtype=float)
-    peak = eq_series.cummax()
-    mdd = float(((peak - eq_series) / peak.replace(0, np.nan)).max()) * 100.0 if not eq_series.empty else 0.0
+    if not eq_series.empty:
+        running_max = eq_series.cummax().replace(0, np.nan)
+        drawdown = eq_series / running_max - 1.0
+        max_drawdown = float(abs(drawdown.min())) if not drawdown.empty else 0.0
+    else:
+        max_drawdown = 0.0
 
     wins = [p for p in pnl_list if p > 0]
     losses = [p for p in pnl_list if p <= 0]
@@ -472,9 +476,9 @@ def run_backtest_for_symbol(csv_path: str, cfg: Dict[str, Any] | str, symbol: Op
         "勝率": float(len(wins) / len(trades_df)) if len(trades_df) else 0.0,
         "起始資金": float(initial_capital),
         "最終淨值": float(final_equity),
-        "總報酬率%": float(total_return_pct),
+        "總報酬率": float(total_return),
         "獲利因子": float(profit_factor),
-        "最大回撤%": float(mdd),
+        "最大回撤": float(max_drawdown),
         "平均持倉分鐘": float(avg_holding_minutes),
         "avg_qty": float(avg_qty),
         "median_qty": float(median_qty),

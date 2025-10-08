@@ -73,3 +73,11 @@ jobs:
           name: model-ci-artifacts
           path: artifacts/ci
           if-no-files-found: warn
+
+      - name: Telegram notify (always)
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python -m scripts.ci_notify_from_log
