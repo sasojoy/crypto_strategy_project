@@ -28,6 +28,7 @@ from csp.utils.notifier import (
     notify_trade_open,
     notify_guard,
 )
+from csp.utils.bar_time import align_15m
 
 try:
     # 供 min_notional 檢查（若你之後移檔，這裡記得同步 import 路徑）
@@ -168,6 +169,26 @@ def sanitize_score(x):
 
 TW = tz.gettz("Asia/Taipei")
 logger = logging.getLogger(__name__)
+
+
+STATE_FILE = Path("/tmp/realtime_state.json")
+
+
+def _load_dispatch_state() -> Dict[str, Any]:
+    if not STATE_FILE.exists():
+        return {}
+    try:
+        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("[WARN] failed to read state file %s: %s", STATE_FILE, exc)
+        return {}
+
+
+def _save_dispatch_state(state: Dict[str, Any]) -> None:
+    try:
+        STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as exc:
+        logger.warning("[WARN] failed to write state file %s: %s", STATE_FILE, exc)
 
 
 
@@ -372,35 +393,113 @@ def read_or_fetch_latest(cfg, symbol: str, csv_path: str, now_ts_in=None):
 
     return df, latest_close
 
-def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
+def process_symbol(
+    symbol: str,
+    cfg: dict,
+    models: dict,
+    csv_path: str,
+    *,
+    prev_open_ts: pd.Timestamp,
+    bar_open_ts: pd.Timestamp,
+):
     try:
         df = pd.read_csv(csv_path)
         df = ensure_utc_index(df)
 
-        ok, reason = ensure_not_stale(df, symbol, pd.Timestamp.now(tz=UTC))
+        ok, reason = ensure_not_stale(df, symbol, bar_open_ts)
         if not ok:
             fetch_cfg = cfg.get("fetch", {}) or {}
             fetch_mode = fetch_cfg.get("mode", "csv_only")
             if fetch_mode not in ("none", "csv_only"):
-                df, _ = read_or_fetch_latest(cfg, symbol, csv_path, now_ts_in=None)
+                df, _ = read_or_fetch_latest(
+                    cfg, symbol, csv_path, now_ts_in=bar_open_ts
+                )
                 df = ensure_utc_index(df)
-                ok, reason = ensure_not_stale(df, symbol, pd.Timestamp.now(tz=UTC))
+                ok, reason = ensure_not_stale(df, symbol, bar_open_ts)
 
         if not ok:
             allow_one = cfg.get("realtime", {}).get("allow_stale_one_bar", True)
             if allow_one and "diff_min=15.00" in reason:
                 logger.info(
-                    f"[WARN] {symbol} {reason} — allow_stale_one_bar=True, proceed with last_close"
+                    "%s %s — allow_stale_one_bar=True, proceed with last_close",
+                    symbol,
+                    reason,
                 )
             else:
                 return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": reason}
 
+        if prev_open_ts not in df.index:
+            return {
+                "symbol": symbol,
+                "side": "NONE",
+                "score": 0.0,
+                "reason": "missing_prev_bar",
+            }
+
+        df_hist = df[df.index <= prev_open_ts].copy()
+        if df_hist.empty:
+            return {
+                "symbol": symbol,
+                "side": "NONE",
+                "score": 0.0,
+                "reason": "insufficient_history",
+            }
+
+        try:
+            prev_close_px = float(df_hist.loc[prev_open_ts, "close"])
+        except Exception:
+            prev_close_px = float(df_hist.iloc[-1]["close"]) if not df_hist.empty else None
+
+        curr_open_px: float | None
+        price_source = "bar_open"
+        if bar_open_ts in df.index:
+            curr_row = df.loc[bar_open_ts]
+            if isinstance(curr_row, pd.DataFrame):
+                curr_row = curr_row.iloc[-1]
+            curr_open_px = float(curr_row["open"])
+        else:
+            fallback_px = float(df.iloc[-1]["close"]) if not df.empty else None
+            curr_open_px = fallback_px
+            price_source = "fallback_last_close"
+            if fallback_px is not None:
+                logger.warning(
+                    "%s missing bar %s open — fallback last close=%.4f",
+                    symbol,
+                    bar_open_ts.isoformat(),
+                    fallback_px,
+                )
+            else:
+                logger.warning(
+                    "%s missing bar %s open — no fallback price available",
+                    symbol,
+                    bar_open_ts.isoformat(),
+                )
+
+        if curr_open_px is None:
+            return {
+                "symbol": symbol,
+                "side": "NONE",
+                "score": 0.0,
+                "reason": "no_price_available",
+            }
+
         bundle = models.get(symbol)
         if not bundle:
-            return {"symbol": symbol, "side": "NONE", "score": 0.0, "reason": "no_models_loaded"}
+            return {
+                "symbol": symbol,
+                "side": "NONE",
+                "score": 0.0,
+                "reason": "no_models_loaded",
+            }
         model = bundle.get("model") if isinstance(bundle, dict) else bundle
         scaler = bundle.get("scaler") if isinstance(bundle, dict) else None
-        sig = predict_one(symbol, df, model, scaler, cfg_path="csp/configs/strategy.yaml")
+        sig = predict_one(
+            symbol,
+            df_hist,
+            model,
+            scaler,
+            cfg_path="csp/configs/strategy.yaml",
+        )
         # ---- Trade guard ----
         trade_cfg = cfg.get("trade", {}) if 'cfg' in locals() else {}
         trade_mode = (trade_cfg.get("mode") or "signal_only").lower()
@@ -432,11 +531,15 @@ def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
             "symbol": symbol,
             "side": side,
             "score": score,
-            "price": float(df["close"].iloc[-1]) if not df.empty else None,
+            "price": curr_open_px,
             "chosen_h": sig.get("chosen_h"),
             "chosen_t": sig.get("chosen_t"),
             "prob_up_max": sig.get("prob_up_max"),
             "prob_down_max": sig.get("prob_down_max"),
+            "prev_close": prev_close_px,
+            "price_source": price_source,
+            "bar_open_ts": bar_open_ts,
+            "prev_open_ts": prev_open_ts,
         }
         if side == "NONE":
             result["reason"] = sig.get("reason", "below_threshold")
@@ -454,7 +557,7 @@ def process_symbol(symbol: str, cfg: dict, models: dict, csv_path: str):
         }
 
 
-def next_quarter_with_delay(now: datetime, delay_sec: int = 15) -> datetime:
+def next_quarter_with_delay(now: datetime, delay_sec: int = 5) -> datetime:
     base = now.replace(second=0, microsecond=0)
     minute = (base.minute // 15) * 15
     slot = base.replace(minute=minute)
@@ -466,6 +569,39 @@ def next_quarter_with_delay(now: datetime, delay_sec: int = 15) -> datetime:
 def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     cfg = load_cfg(cfg)
     assert isinstance(cfg, dict), f"cfg must be dict, got {type(cfg)}"
+
+    delay = 5 if delay_sec is None else int(delay_sec)
+    if delay > 0:
+        time.sleep(delay)
+    now_utc_dt = datetime.now(timezone.utc)
+    prev_open_dt, bar_open_dt = align_15m(now_utc=now_utc_dt, delay_sec=delay)
+    prev_open_ts = pd.Timestamp(prev_open_dt)
+    bar_open_ts = pd.Timestamp(bar_open_dt)
+    logger.debug(
+        "align_15m now=%s prev_open=%s bar_open=%s delay=%s",
+        now_utc_dt.isoformat(),
+        prev_open_dt.isoformat(),
+        bar_open_dt.isoformat(),
+        delay,
+    )
+
+    state = _load_dispatch_state()
+    last_bar_open_raw = state.get("last_bar_open")
+    last_bar_open_ts = None
+    if last_bar_open_raw:
+        try:
+            last_bar_open_ts = pd.Timestamp(last_bar_open_raw)
+        except Exception:
+            logger.warning("[WARN] invalid last_bar_open in state: %s", last_bar_open_raw)
+
+    if last_bar_open_ts is not None and last_bar_open_ts == bar_open_ts:
+        logger.info(
+            "skip dispatch: bar_open=%s already processed (state=%s)",
+            bar_open_dt.isoformat(),
+            STATE_FILE,
+        )
+        return {}
+
     host = socket.gethostname()
     try:
         if cfg.get("runtime", {}).get("notify", {}).get("telegram", False):
@@ -490,7 +626,14 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         csv_path = csv1 if os.path.exists(csv1) else csv2
         print(f"[REALTIME] {sym} <- {csv_path}")
         try:
-            res = process_symbol(sym, cfg, models, csv_path)
+            res = process_symbol(
+                sym,
+                cfg,
+                models,
+                csv_path,
+                prev_open_ts=prev_open_ts,
+                bar_open_ts=bar_open_ts,
+            )
         except Exception as e:
             log_trace("LOOP_EXCEPTION", e)
             res = {
@@ -498,6 +641,16 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
                 "score": 0.0,
                 "reason": f"LOOP_EXCEPTION:{type(e).__name__}",
             }
+        logger.debug(
+            "dispatch_ctx symbol=%s now=%s prev_open=%s bar_open=%s prev_close=%s curr_open=%s src=%s",
+            sym,
+            now_utc_dt.isoformat(),
+            prev_open_dt.isoformat(),
+            bar_open_dt.isoformat(),
+            res.get("prev_close"),
+            res.get("price"),
+            res.get("price_source", "-"),
+        )
         sig = res if res.get("side") in ("LONG", "SHORT") else None
         if res.get("price") is not None and sig:
             notify_signal(sym, sig, float(res.get("price")), telegram_conf)
@@ -596,6 +749,8 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             "score": sanitize_score(d.get("score")),
             "reason": d.get("reason", "-"),
             "price": d.get("price"),
+            "prev_close": d.get("prev_close"),
+            "price_source": d.get("price_source"),
             "chosen_h": d.get("chosen_h"),
             "chosen_t": d.get("chosen_t"),
             "prob_up_max": d.get("prob_up_max"),
@@ -616,7 +771,7 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             f" | h={S('chosen_h')}"
             f" | pt={S('chosen_t','+.2%')}"
             f" | ↑={S('prob_up_max','.2%')} ↓={S('prob_down_max','.2%')}"
-            f" | price={S('price',',.2f')}"
+            f" | price={S('price',',.2f')} ({s.get('price_source','-')})"
             f" | reason={S('reason')}"
         )
 
@@ -626,6 +781,14 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
         logger.info("notify: telegram disabled by cfg or env")
 
     print(json.dumps(multi, ensure_ascii=False, separators=(",", ": ")))
+    state.update(
+        {
+            "last_bar_open": bar_open_dt.isoformat(),
+            "last_prev_open": prev_open_dt.isoformat(),
+            "last_dispatch_at": now_utc_dt.isoformat(),
+        }
+    )
+    _save_dispatch_state(state)
     now_ts = datetime.now(tz=TW)
     for r in results.values():
         price = r.get("price")
@@ -640,7 +803,7 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
 def main():
     ap = argparse.ArgumentParser(description="Run realtime every 15m + delay seconds (with live Binance fetch).")
     ap.add_argument("--cfg", default="csp/configs/strategy.yaml")
-    ap.add_argument("--delay-sec", type=int, default=15)
+    ap.add_argument("--delay-sec", type=int, default=5)
     ap.add_argument(
         "--once",
         action="store_true",
@@ -651,7 +814,7 @@ def main():
     cfg = load_cfg(args.cfg)
     if args.once:
         try:
-            run_once(cfg)
+            run_once(cfg, delay_sec=args.delay_sec)
         except Exception as e:
             log_trace("LOOP_EXCEPTION", e)
         sys.exit(0)
@@ -664,7 +827,7 @@ def main():
             print(f"[LOOP] 現在 {now.strftime('%F %T%z')}，等到 {target.strftime('%F %T%z')} 再跑（{int(wait)} 秒）")
             time.sleep(wait)
         try:
-            run_once(cfg)
+            run_once(cfg, delay_sec=0)
         except Exception as e:
             log_trace("LOOP_EXCEPTION", e)
 
