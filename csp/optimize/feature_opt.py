@@ -44,7 +44,7 @@ def optimize_symbol(cfg_path: str, symbol: str,
         # merge with base feature params (e.g., ema_windows)
         merged = {**base_feature, **params}
         res = walk_forward_evaluate(cfg_path, symbol, start_ts, end_ts, merged)
-        metric = res.get("metrics", {}).get("總報酬率%", 0.0)
+        metric = res.get("metrics", {}).get("總報酬率", 0.0)
         trial.set_user_attr("metrics", res.get("metrics", {}))
         return float(metric)
 

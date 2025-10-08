@@ -185,18 +185,25 @@ def scan_thresholds(
             precision = recall = f1 = 0.0
             avg_return = float("nan")
             median_return = float("nan")
+            win_rate = 0.0
+            total_return = 0.0
         else:
             preds = mask.astype(int)
             precision = precision_score(labels_arr, preds, zero_division=0)
             recall = recall_score(labels_arr, preds, zero_division=0)
             f1 = f1_score(labels_arr, preds, zero_division=0)
             sub_returns = returns_arr[mask]
-            avg_return = float(np.nanmean(sub_returns)) if np.isfinite(sub_returns).any() else float("nan")
-            median_return = (
-                float(np.nanmedian(sub_returns))
-                if np.isfinite(sub_returns).any()
-                else float("nan")
-            )
+            valid_returns = sub_returns[np.isfinite(sub_returns)]
+            if valid_returns.size:
+                avg_return = float(np.nanmean(valid_returns))
+                median_return = float(np.nanmedian(valid_returns))
+                win_rate = float(np.mean(valid_returns > 0))
+                total_return = float(np.prod(1.0 + valid_returns) - 1.0)
+            else:
+                avg_return = float("nan")
+                median_return = float("nan")
+                win_rate = 0.0
+                total_return = 0.0
         rows.append(
             {
                 "threshold": float(thr),
@@ -207,6 +214,8 @@ def scan_thresholds(
                 "f1": float(f1),
                 "avg_return": avg_return,
                 "median_return": median_return,
+                "win_rate": float(win_rate),
+                "total_return": float(total_return),
             }
         )
 

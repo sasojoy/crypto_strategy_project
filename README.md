@@ -31,8 +31,9 @@ python scripts/backtest_multi.py \
 
 - **流程概覽**：GitHub Actions 觸發 `model-ci` workflow 後，`scripts/ci_orchestrator.py` 會先以 `scripts/train_h16_wf.py` 進行時間序交叉驗證訓練，再呼叫 `scripts/threshold_report.py` 回測門檻表現；若主要指標（預設 `roc_auc`）未達標，會自動展開小型參數搜尋（歷程紀錄於 `logs/ci_run.json`），最後依狀態透過 Telegram 通知。
 - **觸發方式**：支援 push（`main`、`work`、`ci/**`）、Pull Request、排程（週一 03:00 UTC）以及 workflow_dispatch 手動觸發。
-- **GitHub Secrets**：必須在專案設定中加入 `TELEGRAM_BOT_TOKEN` 以及 `TELEGRAM_CHAT_ID` 才能接收通知；若未設定將僅在 CI console 顯示結果。
-- **環境需求**：請確保保留 `scripts/__init__.py`（供 `python -m scripts.ci_orchestrator` 匯入）並安裝 `requests` 套件；CI 成功或失敗都會透過 Telegram 推播結果。
+- **GitHub Secrets**：必須在專案設定中加入 `TELEGRAM_BOT_TOKEN` 以及 `TELEGRAM_CHAT_ID` 才能接收通知；若未設定將僅在 CI console 顯示結果。若 workflow 由 fork 對 upstream 發起 PR 觸發，GitHub 會阻擋 secrets，因此請改在本倉庫分支上執行或改用其他事件（例如 `pull_request_target`，須自行評估權限風險）。
+- **環境需求**：請確保保留 `scripts/__init__.py`（供 `python -m scripts.ci_orchestrator` 匯入）並安裝 `requests` 套件；CI 成功或失敗都會透過 Telegram 推播結果。`scripts/ci_notify_from_log.py` 會在 workflow 結束時讀取 `logs/ci_run.json`，若有 `[SUMMARY ALL]` 開頭的行會原樣推送到 Telegram；否則會用預設格式（含 win_rate / total_return 百分比）通知結果。
+- **Secrets 設定**：可在 GitHub Repository → Settings → Secrets and variables → Actions 中新增 `TELEGRAM_BOT_TOKEN`（BotFather 發送）與 `TELEGRAM_CHAT_ID`（`@getidsbot` 或 `curl` 查詢）兩組 secrets。
 - **產出物**：
   - `logs/ci_run.json`：詳細記錄各次訓練、回測、門檻掃描與參數搜尋狀態，供失敗時貼給 ChatGPT 進行問題排查。
   - `logs/threshold_report.json`：最佳門檻的覆蓋率、Precision/F1 與平均報酬。
