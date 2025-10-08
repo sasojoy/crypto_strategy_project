@@ -15,6 +15,12 @@ python scripts/backtest_multi.py \
   --save-summary --out-dir reports --format both
 ```
 
+## 實盤
+
+- `scripts/realtime_loop.py` 在每次輪詢時會先等待約 5 秒，再以 `align_15m` 將當前 UTC 時間對齊至最近的 15 分鐘開盤時間，以確保資料源已生成最新一根 K 線的開盤價。
+- 推播前會檢查 `/tmp/realtime_state.json`，該狀態檔會記錄最後一次已推送的 `bar_open` 時間；若同一根 K 線已推播過會直接跳過，避免重複通知。
+- 只要狀態檔仍存在，即便系統重啟或服務重新啟動，也不會對同一根 K 線再次發送訊息。
+
 ## 設定說明
 
 - `execution.*`：進出場門檻與持有時間；`execution.atr.enabled=false` 可關閉以 ATR 為基礎的停利/停損（pt/sl）。
