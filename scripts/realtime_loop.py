@@ -8,6 +8,7 @@ import sys
 import math
 import traceback
 import socket
+from dataclasses import asdict
 
 import numpy as np
 import pandas as pd
@@ -18,7 +19,7 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from dateutil import tz
 
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 from pathlib import Path
 import hashlib, inspect
 import csp
@@ -29,6 +30,7 @@ from csp.utils.notifier import (
     notify_guard,
 )
 from csp.utils.bar_time import align_15m
+from csp.utils.signal_context import build_signal_context
 
 try:
     # 供 min_notional 檢查（若你之後移檔，這裡記得同步 import 路徑）
@@ -167,6 +169,140 @@ def sanitize_score(x):
     except Exception:
         return 0.0
 
+
+def _extract_threshold_value(data: Any, horizon: int) -> Optional[float]:
+    if isinstance(data, (int, float)) and not math.isnan(float(data)):
+        return float(data)
+    if isinstance(data, dict):
+        key = str(horizon)
+        if key in data:
+            val = data[key]
+            if isinstance(val, dict):
+                for inner_key in ("threshold", "thr", "value", "default"):
+                    inner_val = val.get(inner_key)
+                    if isinstance(inner_val, (int, float)):
+                        return float(inner_val)
+            elif isinstance(val, (int, float)):
+                return float(val)
+        for cand in ("threshold", "default_threshold", "default", "long", "value"):
+            val = data.get(cand)
+            if isinstance(val, (int, float)):
+                return float(val)
+        for val in data.values():
+            if isinstance(val, (int, float)):
+                return float(val)
+            if isinstance(val, dict):
+                nested = _extract_threshold_value(val, horizon)
+                if nested is not None:
+                    return nested
+    return None
+
+
+def load_thresholds_by_symbol(cfg: Dict[str, Any]) -> Dict[str, float]:
+    models_dir = Path(cfg.get("io", {}).get("models_dir", "models"))
+    horizon = int(cfg.get("train", {}).get("target_horizon_bars", 16))
+    thresholds: Dict[str, float] = {}
+
+    global_file = models_dir / "thresholds.json"
+    if global_file.exists():
+        try:
+            data = json.loads(global_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                for sym, val in data.items():
+                    thr = _extract_threshold_value(val, horizon)
+                    if thr is not None:
+                        thresholds[sym.upper()] = thr
+        except Exception:
+            pass
+
+    for sym in cfg.get("symbols", []):
+        sym_dir = models_dir / sym
+        for fname in ("thresholds.json", "threshold.json"):
+            f = sym_dir / fname
+            if not f.exists():
+                continue
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                thr = _extract_threshold_value(data, horizon)
+                if thr is not None:
+                    thresholds[sym.upper()] = thr
+            except Exception:
+                continue
+    return thresholds
+
+
+def compute_atr_from_history(df: pd.DataFrame, n: int) -> Optional[float]:
+    if df is None or df.empty:
+        return None
+    if len(df) < max(n, 2):
+        return None
+    try:
+        high = df["high"].astype(float)
+        low = df["low"].astype(float)
+        close = df["close"].astype(float)
+    except Exception:
+        return None
+    prev_close = close.shift(1)
+    tr = pd.concat(
+        [(high - low).abs(), (high - prev_close).abs(), (low - prev_close).abs()],
+        axis=1,
+    ).max(axis=1)
+    atr_series = tr.rolling(int(n)).mean()
+    atr_value = atr_series.iloc[-1]
+    if atr_value is None or math.isnan(float(atr_value)):
+        return None
+    return float(atr_value)
+
+
+def _state_signals(state: Dict[str, Any]) -> Dict[str, Any]:
+    sigs = state.get("signals")
+    if isinstance(sigs, dict):
+        return sigs
+    sigs = {}
+    state["signals"] = sigs
+    return sigs
+
+
+def cooldown_ok(symbol: str, bar_open_ts: pd.Timestamp, state: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    cooldown_bars = int(cfg.get("entry_filter", {}).get("reentry_cooldown_bars", 0))
+    if cooldown_bars <= 0:
+        return True
+    sigs = _state_signals(state)
+    last = sigs.get(symbol, {}).get("bar_open")
+    if not last:
+        return True
+    try:
+        last_ts = pd.Timestamp(last)
+    except Exception:
+        return True
+    diff = (bar_open_ts - last_ts) / pd.Timedelta(minutes=15)
+    try:
+        diff_val = float(diff)
+    except Exception:
+        return True
+    return diff_val >= cooldown_bars
+
+
+def current_drawdown_ok(symbol: str, state: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    # Placeholder: drawdown guard not implemented yet, always pass.
+    return True
+
+
+def session_ok(now_utc: pd.Timestamp, cfg: Dict[str, Any]) -> bool:
+    # Placeholder for session guard; allow all sessions by default.
+    return True
+
+
+def vol_ok(atr_value: Optional[float], cfg: Dict[str, Any]) -> bool:
+    # Basic volatility guard: if max_atr_pct configured, ensure atr/price within range.
+    max_pct = cfg.get("risk", {}).get("max_atr_pct")
+    if max_pct is None or atr_value is None:
+        return True
+    try:
+        return float(atr_value) <= float(max_pct)
+    except Exception:
+        return True
+
 TW = tz.gettz("Asia/Taipei")
 logger = logging.getLogger(__name__)
 
@@ -288,8 +424,7 @@ def predict_one(symbol: str, df_15m: pd.DataFrame, model, scaler, cfg_path: str 
             "reason": "predict_exception",
         }
 
-    side = "LONG" if score >= 0.75 else ("SHORT" if score <= 0.25 else "NONE")
-    out = {"symbol": symbol, "side": side, "score": score}
+    out = {"symbol": symbol, "score": score}
     if "proba_by_h" in locals():
         out["proba_by_h"] = proba_by_h
     if "chosen_h" in locals():
@@ -401,6 +536,11 @@ def process_symbol(
     *,
     prev_open_ts: pd.Timestamp,
     bar_open_ts: pd.Timestamp,
+    state: Dict[str, Any],
+    thresholds_by_symbol: Dict[str, float],
+    default_threshold: float,
+    horizon_bars: int,
+    now_utc_ts: pd.Timestamp,
 ):
     try:
         df = pd.read_csv(csv_path)
@@ -450,7 +590,7 @@ def process_symbol(
         except Exception:
             prev_close_px = float(df_hist.iloc[-1]["close"]) if not df_hist.empty else None
 
-        curr_open_px: float | None
+        curr_open_px: Optional[float]
         price_source = "bar_open"
         if bar_open_ts in df.index:
             curr_row = df.loc[bar_open_ts]
@@ -500,13 +640,72 @@ def process_symbol(
             scaler,
             cfg_path="csp/configs/strategy.yaml",
         )
+
+        raw_score = sig.get("score")
+        score = sanitize_score(raw_score)
+        atr_n = int(cfg.get("risk", {}).get("atr_n", 14))
+        atr_value = compute_atr_from_history(df_hist, atr_n)
+        filters = {
+            "cooldown_pass": cooldown_ok(symbol, bar_open_ts, state, cfg),
+            "dd_guard_pass": current_drawdown_ok(symbol, state, cfg),
+            "session_pass": session_ok(now_utc_ts, cfg),
+            "vol_pass": vol_ok(atr_value, cfg),
+            "extra_reasons": [],
+        }
+        if atr_value is None:
+            filters["extra_reasons"].append("atr=fallback")
+        sig_reason = sig.get("reason")
+        if sig_reason and sig_reason not in ("-", "OK"):
+            filters["extra_reasons"].append(f"model={sig_reason}")
+
+        threshold = thresholds_by_symbol.get(symbol, default_threshold)
+        ctx = build_signal_context(
+            symbol=symbol,
+            score=score,
+            entry_price=curr_open_px,
+            horizon_bars=horizon_bars,
+            threshold=float(threshold),
+            atr_value=atr_value,
+            filters=filters,
+            cfg=cfg,
+        )
+        ctx_dict = asdict(ctx)
+        prob_down = max(0.0, min(1.0, 1.0 - ctx.score))
+
+        result = {
+            "symbol": symbol,
+            "side": ctx.side,
+            "score": ctx.score,
+            "threshold": float(threshold),
+            "price": ctx.entry_price,
+            "prev_close": prev_close_px,
+            "price_source": price_source,
+            "bar_open_ts": bar_open_ts,
+            "prev_open_ts": prev_open_ts,
+            "ts": bar_open_ts.isoformat(),
+            "horizon_bars": ctx.h_bars,
+            "pt_ratio": ctx.pt,
+            "sl_ratio": ctx.sl,
+            "up_price": ctx.up_price,
+            "down_price": ctx.down_price,
+            "prob_up_max": ctx.score,
+            "prob_down_max": prob_down,
+            "reason": ctx.reason,
+            "filters": filters,
+            "atr_abs": atr_value,
+            "signal_context": ctx_dict,
+            "chosen_h": sig.get("chosen_h"),
+            "chosen_t": sig.get("chosen_t"),
+        }
+
         # ---- Trade guard ----
-        trade_cfg = cfg.get("trade", {}) if 'cfg' in locals() else {}
+        trade_cfg = cfg.get("trade", {}) if "cfg" in locals() else {}
         trade_mode = (trade_cfg.get("mode") or "signal_only").lower()
         if trade_mode == "signal_only":
+            result["_execution"] = "skipped(signal_only)"
             sig.setdefault("reason", "-")
             sig["_execution"] = "skipped(signal_only)"
-        else:
+        elif ctx.side in ("LONG", "SHORT"):
             try:
                 last_px = float(df["close"].iloc[-1])
             except Exception:
@@ -522,31 +721,38 @@ def process_symbol(
                 logger.warning(f"[WARN] cannot resolve min_notional for {symbol}, fallback=0")
                 min_need = 0.0
             if notional < min_need:
-                sig["reason"] = f"min_notional_reject  need≥{min_need:.2f} USDT, got={notional:.2f}"
+                msg = f"min_notional_reject  need≥{min_need:.2f} USDT, got={notional:.2f}"
+                result["_execution"] = "rejected(min_notional)"
+                result["reason"] = f"{result['reason']}; {msg}" if result.get("reason") else msg
+                filters.setdefault("extra_reasons", []).append("trade_guard=min_notional")
+                sig["reason"] = msg
                 sig["_execution"] = "rejected(min_notional)"
         # ---- /Trade guard ----
-        side = sig.get("side", "NONE")
-        score = sanitize_score(sig.get("score"))
-        result = {
-            "symbol": symbol,
-            "side": side,
-            "score": score,
-            "price": curr_open_px,
-            "chosen_h": sig.get("chosen_h"),
-            "chosen_t": sig.get("chosen_t"),
-            "prob_up_max": sig.get("prob_up_max"),
-            "prob_down_max": sig.get("prob_down_max"),
-            "prev_close": prev_close_px,
-            "price_source": price_source,
-            "bar_open_ts": bar_open_ts,
-            "prev_open_ts": prev_open_ts,
-        }
-        if side == "NONE":
-            result["reason"] = sig.get("reason", "below_threshold")
-        else:
-            result["reason"] = sig.get("reason", "-")
-        if sig.get("_execution"):
-            result["_execution"] = sig["_execution"]
+
+        ctx_dict["reason"] = result.get("reason")
+        sig.update(
+            {
+                "side": ctx.side,
+                "score": ctx.score,
+                "threshold": float(threshold),
+                "pt": ctx.pt,
+                "sl": ctx.sl,
+                "up_price": ctx.up_price,
+                "down_price": ctx.down_price,
+                "reason": result.get("reason"),
+                "ts": bar_open_ts.isoformat(),
+                "entry_price": ctx.entry_price,
+                "signal_context": ctx_dict,
+                "filters": filters,
+                "prob_up_max": ctx.score,
+                "prob_down_max": prob_down,
+                "chosen_h": sig.get("chosen_h"),
+                "chosen_t": sig.get("chosen_t"),
+            }
+        )
+        if result.get("_execution"):
+            sig["_execution"] = result["_execution"]
+
         return result
     except Exception as e:
         log_trace("LOOP_EXCEPTION", e)
@@ -617,6 +823,10 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
     log_diag(
         f"realtime_loop: models_loaded={len(models)} resources_dir={resources_dir}"
     )
+    thresholds_by_symbol = load_thresholds_by_symbol(cfg)
+    default_threshold = float(cfg.get("train", {}).get("default_threshold", 0.6))
+    horizon_bars = int(cfg.get("train", {}).get("target_horizon_bars", 16))
+    now_utc_ts_pd = pd.Timestamp(now_utc_dt)
     results = {}
     os.makedirs("logs/diag", exist_ok=True)
 
@@ -633,6 +843,11 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
                 csv_path,
                 prev_open_ts=prev_open_ts,
                 bar_open_ts=bar_open_ts,
+                state=state,
+                thresholds_by_symbol=thresholds_by_symbol,
+                default_threshold=default_threshold,
+                horizon_bars=horizon_bars,
+                now_utc_ts=now_utc_ts_pd,
             )
         except Exception as e:
             log_trace("LOOP_EXCEPTION", e)
@@ -727,6 +942,13 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
                     telegram_conf,
                 )
         results[sym] = res
+        if res.get("side") in ("LONG", "SHORT"):
+            sig_state = _state_signals(state)
+            sig_state[sym] = {
+                "bar_open": bar_open_ts.isoformat(),
+                "side": res.get("side"),
+                "score": res.get("score"),
+            }
 
     # snapshot if any bad scores
     bad = [
@@ -741,39 +963,61 @@ def run_once(cfg: dict | str, delay_sec: int | None = None) -> dict:
             json.dump(snap, f, ensure_ascii=False, indent=2)
         print("[DIAG] dumped logs/diag/realtime_nan_snapshot.json")
 
-    multi = {}
+    def pct(p: Optional[float]) -> str:
+        if p is None:
+            return "-"
+        try:
+            return f"{float(p)*100:.2f}%"
+        except Exception:
+            return "-"
+
+    def fmt_px(x: Optional[float]) -> str:
+        if x is None:
+            return "-"
+        try:
+            return f"{float(x):,.2f}"
+        except Exception:
+            return "-"
+
+    multi: Dict[str, Dict[str, Any]] = {}
     for sym, d in results.items():
+        ctx_dict = d.get("signal_context") or {}
         multi[sym] = {
             "symbol": sym,
-            "side": d.get("side"),
-            "score": sanitize_score(d.get("score")),
-            "reason": d.get("reason", "-"),
-            "price": d.get("price"),
-            "prev_close": d.get("prev_close"),
+            "side": ctx_dict.get("side", d.get("side")),
+            "score": ctx_dict.get("score", sanitize_score(d.get("score"))),
+            "threshold": ctx_dict.get("threshold", default_threshold),
+            "h": ctx_dict.get("h_bars", d.get("horizon_bars")),
+            "pt": ctx_dict.get("pt"),
+            "sl": ctx_dict.get("sl"),
+            "up_price": ctx_dict.get("up_price"),
+            "down_price": ctx_dict.get("down_price"),
+            "price": ctx_dict.get("entry_price", d.get("price")),
             "price_source": d.get("price_source"),
-            "chosen_h": d.get("chosen_h"),
-            "chosen_t": d.get("chosen_t"),
-            "prob_up_max": d.get("prob_up_max"),
-            "prob_down_max": d.get("prob_down_max"),
+            "reason": d.get("reason"),
+            "filters": d.get("filters"),
         }
 
     print(f"[NOTIFY] ⏱️ 多幣別即時訊號 (build={_BUILD}, host={host})")
     for sym in results:
         s = multi[sym]
-        def S(key, fmt=None, dash="-"):
-            v = s.get(key)
-            if v is None:
-                return dash
-            return format(v, fmt) if fmt else str(v)
-        print(
-            f"{sym}: {s.get('side','-')}"
-            f" | score={S('score','.3f')}"
-            f" | h={S('chosen_h')}"
-            f" | pt={S('chosen_t','+.2%')}"
-            f" | ↑={S('prob_up_max','.2%')} ↓={S('prob_down_max','.2%')}"
-            f" | price={S('price',',.2f')} ({s.get('price_source','-')})"
-            f" | reason={S('reason')}"
+        thr = s.get("threshold")
+        try:
+            thr_fmt = f"{float(thr):.2f}"
+        except Exception:
+            thr_fmt = "-"
+        line = (
+            f"{sym}: {s.get('side', 'NONE')} | "
+            f"score={s.get('score', 0.0):.3f} (thr={thr_fmt}) | "
+            f"h={s.get('h', '-')} | "
+            f"pt={pct(s.get('pt'))} sl={pct(s.get('sl'))} | "
+            f"↑={fmt_px(s.get('up_price'))} ↓={fmt_px(s.get('down_price'))} | "
+            f"price={fmt_px(s.get('price'))}"
         )
+        reason = s.get("reason")
+        if reason:
+            line += f" | reason={reason}"
+        print(line)
 
     if cfg.get("runtime", {}).get("notify", {}).get("telegram", False):
         tg_notify.notify(multi, build=_BUILD, host=host)

@@ -5,6 +5,7 @@ import requests
 import pytz
 
 from csp.utils.logger import get_logger
+from csp.utils.signal_context import SignalContext
 
 log = get_logger("notify")
 
@@ -64,6 +65,66 @@ def notify(message: str, telegram_conf: dict | None = None):
         log.exception(f"notify: telegram exception: {e}")
 
 
+def _ctx_from_signal(symbol: str, signal: dict) -> SignalContext:
+    data = signal.get("signal_context")
+    if isinstance(data, dict):
+        try:
+            return SignalContext(**data)
+        except TypeError:
+            pass
+    entry_price = signal.get("entry_price", signal.get("price"))
+    entry_price = float(entry_price) if entry_price not in (None, "") else 0.0
+    threshold = signal.get("threshold")
+    horizon = signal.get("horizon_bars") or signal.get("h") or 0
+    score_val = signal.get("score", 0.0)
+    try:
+        score_f = float(score_val)
+    except Exception:
+        score_f = 0.0
+    pt_val = signal.get("pt", signal.get("pt_ratio"))
+    sl_val = signal.get("sl", signal.get("sl_ratio"))
+    try:
+        pt_f = float(pt_val) if pt_val is not None else 0.0
+    except Exception:
+        pt_f = 0.0
+    try:
+        sl_f = float(sl_val) if sl_val is not None else 0.0
+    except Exception:
+        sl_f = 0.0
+    try:
+        thr_f = float(threshold) if threshold is not None else 0.0
+    except Exception:
+        thr_f = 0.0
+    return SignalContext(
+        side=str(signal.get("side", "NONE")),
+        score=score_f,
+        threshold=thr_f,
+        h_bars=int(horizon) if horizon else 0,
+        pt=pt_f,
+        sl=sl_f,
+        entry_price=entry_price,
+        up_price=signal.get("up_price"),
+        down_price=signal.get("down_price"),
+        reason=str(signal.get("reason", "-")),
+    )
+
+
+def _fmt_pct_ratio(x: float) -> str:
+    try:
+        return f"{x*100:.2f}%"
+    except Exception:
+        return "-"
+
+
+def _fmt_price(x) -> str:
+    if x is None:
+        return "-"
+    try:
+        return f"{float(x):,.2f}"
+    except Exception:
+        return "-"
+
+
 def notify_signal(
     symbol: str,
     signal: dict,
@@ -74,19 +135,17 @@ def notify_signal(
     """Notify latest tradable signal."""
     ts = signal.get("ts")
     local = _fmt_local(ts, tz)
-    side = signal.get("side", "NONE")
-    score = _fmt_num(signal.get("score", 0.0), 2)
-    pu = _fmt_num(signal.get("prob_up_max", 0.0), 2)
-    pd = _fmt_num(signal.get("prob_down_max", 0.0), 2)
-    h = signal.get("chosen_h")
-    t = _fmt_pct(signal.get("chosen_t", 0.0), 2)
-    msg = (
-        f"[🔔 最新訊號] {symbol} @ {local}\n"
-        f"side={side}  score={score}\n"
-        f"prob_up_max={pu}  prob_down_max={pd}\n"
-        f"chosen_h={h}  chosen_t={t}\n"
-        f"price={_fmt_num(price, 2)}"
+    ctx = _ctx_from_signal(symbol, signal)
+    line = (
+        f"{symbol}: {ctx.side} | "
+        f"score={ctx.score:.3f} (thr={ctx.threshold:.2f}) | "
+        f"h={ctx.h_bars} | "
+        f"pt={_fmt_pct_ratio(ctx.pt)} sl={_fmt_pct_ratio(ctx.sl)} | "
+        f"↑={_fmt_price(ctx.up_price)} ↓={_fmt_price(ctx.down_price)} | "
+        f"price={_fmt_price(ctx.entry_price)} | "
+        f"reason={ctx.reason}"
     )
+    msg = f"[🔔 最新訊號] {symbol} @ {local}\n{line}"
     notify(msg, telegram_conf)
 
 

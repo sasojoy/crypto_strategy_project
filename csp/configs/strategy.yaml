@@ -14,6 +14,17 @@ fetch:
   max_backfill_minutes: 360
   writeback_csv: true
 
+train:
+  target_horizon_bars: 16
+  default_threshold: 0.60
+
+risk:
+  atr_n: 14
+  pt_atr_mult: 1.0       # 目標 = 1 * ATR
+  sl_atr_mult: 0.6       # 停損 = 0.6 * ATR
+  fallback_pt_pct: 0.008 # 0.8%
+  fallback_sl_pct: 0.005 # 0.5%
+
 runtime:
   require_models: true
   notify:

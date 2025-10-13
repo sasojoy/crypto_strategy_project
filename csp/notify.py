@@ -17,19 +17,36 @@ def _fmt(val, fmt=None, dash="-"):
         return dash
 
 
+def _fmt_pct(val: float | None) -> str:
+    if val is None:
+        return "-"
+    try:
+        return f"{float(val)*100:.2f}%"
+    except Exception:
+        return "-"
+
+
 def render_multi_signals(signals: dict, build: str = "-", host: str = "-") -> str:
     lines = [f"⏱️ 多幣別即時訊號 (build={build}, host={host})"]
     for sym in sorted(signals.keys()):
         s = signals.get(sym, {}) or {}
-        lines.append(
-            f"{sym}: {s.get('side','-')}"
-            f" | score={_fmt(s.get('score'), '.3f')}"
-            f" | h={_fmt(s.get('chosen_h'))}"
-            f" | pt={_fmt(s.get('chosen_t'), '+.2%')}"
-            f" | ↑={_fmt(s.get('prob_up_max'), '.2%')} ↓={_fmt(s.get('prob_down_max'), '.2%')}"
-            f" | price={_fmt(s.get('price'), ',.2f')}"
-            f" | reason={_fmt(s.get('reason'))}"
+        thr = s.get("threshold")
+        try:
+            thr_fmt = f"{float(thr):.2f}"
+        except Exception:
+            thr_fmt = "-"
+        line = (
+            f"{sym}: {s.get('side', 'NONE')} | "
+            f"score={_fmt(s.get('score'), '.3f')} (thr={thr_fmt}) | "
+            f"h={_fmt(s.get('h'))} | "
+            f"pt={_fmt_pct(s.get('pt'))} sl={_fmt_pct(s.get('sl'))} | "
+            f"↑={_fmt(s.get('up_price'), ',.2f')} ↓={_fmt(s.get('down_price'), ',.2f')} | "
+            f"price={_fmt(s.get('price'), ',.2f')}"
         )
+        reason = s.get("reason")
+        if reason:
+            line += f" | reason={reason}"
+        lines.append(line)
     return "\n".join(lines)
 
 
