@@ -47,6 +47,32 @@ python scripts/backtest_multi.py \
   - `artifacts/ci/best_run.json`：最佳嘗試的摘要，方便下載檢視。
 - **失敗排查**：若門檻未達標，workflow 仍會完成並將 `logs/ci_run.json` 上傳成 Artifact，請將該檔案貼給 ChatGPT 或研發群組討論後續調整策略/資料品質。
 
+## Server 排程（每日 08:05 Asia/Taipei）
+
+- **每日流程腳本**：`scripts/run_daily_pipeline.sh` 會處理防重複鎖、統一 log（輸出在 `logs/daily_*.log`）與 `.env` 的環境變數載入，並呼叫 `python -m scripts.ci_orchestrator` 完成訓練/回測、最後一律透過 `scripts.notify_latest_backtest` 發送最新結果。
+- **systemd timer**（推薦）：`ops/systemd/model-ci.service` 與 `ops/systemd/model-ci.timer` 可部署至伺服器 `/etc/systemd/system/`，透過 `OnCalendar` 每日 08:05（Asia/Taipei）觸發。部署步驟：
+  ```bash
+  sudo cp ops/systemd/model-ci.* /etc/systemd/system/
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now model-ci.timer
+  # 手動立即跑一次（可選）
+  sudo systemctl start model-ci.service
+  # 看狀態/下一次時間
+  systemctl status model-ci.timer
+  systemctl list-timers | grep model-ci
+  ```
+- **cron 替代方案**：若環境不便使用 systemd，可執行 `ops/cron/install_cron.sh` 自動將排程寫入 `crontab`（同樣為每日 08:05 Asia/Taipei），log 會輸出到 `logs/cron.log`。
+- **環境變數設定**：可在 `/opt/strategy/.env`（或你自訂的 `ROOT_DIR`）配置 `TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID`、`CSV_PATH`、`MODELS_DIR`、`FEATURE_FUNC`、`FEATURE_KWARGS` 等設定，腳本會自動載入。
+
+## CI/CD Deploy 後執行一次
+
+- GitHub Actions 的 `model-ci` workflow 在訓練與回測成功後，會以 SSH（`appleboy/ssh-action`）連線到遠端伺服器（預設 `/opt/strategy`），執行 `git pull --rebase` 並立即觸發 `scripts/run_daily_pipeline.sh` 或相同流程的 systemd 服務。
+- Secrets 需在 GitHub Repository 設定 `SSH_HOST`、`SSH_USER`、`SSH_KEY` 才能成功連線；若是 fork PR，GitHub 不會注入 secrets，請改用本倉庫分支或手動觸發（`workflow_dispatch` / `schedule`）。
+
+## 通知
+
+- `scripts.ci_orchestrator` 與 `scripts.notify_latest_backtest` 會在 pipeline 結束時讀取 `logs/ci_run.json`，若存在 `[SUMMARY ALL] {...}` 會優先推播；若沒有則會退回推送最佳指標（win_rate / total_return / threshold）至 Telegram。
+
 ## 故障排除
 
 - **HTTP 451**：已將回測移至 VM；若仍遇到請檢查 VM 網路與 `fetch.base_url` 設定。

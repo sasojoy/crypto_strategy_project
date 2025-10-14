@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily model train/backtest pipeline
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/strategy
+# 建議把 repo clone 到 /opt/strategy，或改成你的實際路徑
+EnvironmentFile=/opt/strategy/.env
+ExecStart=/bin/bash scripts/run_daily_pipeline.sh
+User=ubuntu
+Group=ubuntu

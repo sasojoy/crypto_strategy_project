@@ -74,6 +74,19 @@ jobs:
           path: artifacts/ci
           if-no-files-found: warn
 
+      - name: Trigger daily pipeline on server (post-deploy)
+        if: ${{ success() && secrets.SSH_HOST != '' }}
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/strategy
+            git pull --rebase
+            /bin/bash scripts/run_daily_pipeline.sh
+
       - name: Telegram notify (always)
         if: always()
         env:
