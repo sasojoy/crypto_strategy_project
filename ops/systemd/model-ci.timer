@@ -1,0 +1,13 @@
+[Unit]
+Description=Run model-ci daily at 08:05 Asia/Taipei
+
+[Timer]
+# 08:05 local Taiwan
+OnCalendar=*-*-* 08:05
+# 需要較新的 systemd，若不支援 TimeZone 請改用 cron 或將系統時區設為 Asia/Taipei
+TimeZone=Asia/Taipei
+Persistent=true
+Unit=model-ci.service
+
+[Install]
+WantedBy=timers.target
