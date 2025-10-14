@@ -15,12 +15,21 @@ on:
       - 'requirements.txt'
       - 'pyproject.toml'
   schedule:
-    - cron: '0 3 * * 1'
+    - cron: '0 3 * * 1'   # 每週一 03:00 UTC
   workflow_dispatch:
 
 jobs:
   auto-train-backtest:
     runs-on: ubuntu-latest
+
+    # 將 secrets 先映射到 env，供步驟與 if: 安全取用（避免 "Unrecognized named-value: 'secrets'"）
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+      SSH_HOST:           ${{ secrets.SSH_HOST }}
+      SSH_USER:           ${{ secrets.SSH_USER }}
+      SSH_KEY:            ${{ secrets.SSH_KEY }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,8 +47,8 @@ jobs:
 
       - name: Run CI orchestrator
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ env.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ env.TELEGRAM_CHAT_ID }}
         run: |
           python -m scripts.ci_orchestrator \
             --csv resources/btc_15m.csv \
@@ -74,31 +83,34 @@ jobs:
           path: artifacts/ci
           if-no-files-found: warn
 
+      # 部署後觸發你的 server 跑 daily pipeline（只有 SSH_* 存在才會執行）
       - name: Trigger daily pipeline on server (post-deploy)
-        if: ${{ success() && secrets.SSH_HOST != '' }}
+        if: ${{ success() && env.SSH_HOST != '' && env.SSH_USER != '' && env.SSH_KEY != '' }}
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
+          host:     ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key:      ${{ env.SSH_KEY }}
           script: |
             set -e
             cd /opt/strategy
             git pull --rebase
             /bin/bash scripts/run_daily_pipeline.sh
 
+      # 失敗也一定會通知（讀 logs/ci_run.json）
       - name: Telegram notify (always)
-        if: always()
+        if: ${{ always() }}
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ env.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ env.TELEGRAM_CHAT_ID }}
         run: |
           python -m scripts.ci_notify_from_log
 
+      # 也推「最新回測摘要」（優先原樣轉發 [SUMMARY ALL] {...}）
       - name: Telegram notify latest backtest (always)
-        if: always()
+        if: ${{ always() }}
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ env.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ env.TELEGRAM_CHAT_ID }}
         run: |
           python -m scripts.notify_latest_backtest
