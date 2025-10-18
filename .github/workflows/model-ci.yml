@@ -115,8 +115,21 @@ jobs:
           set -euo pipefail
           PORT_OPT=""
           if [ -n "${SSH_PORT:-}" ]; then PORT_OPT="-p ${SSH_PORT}"; fi
-          ssh -o StrictHostKeyChecking=yes $PORT_OPT "${SSH_USER}@${SSH_HOST}" \
-            'set -euo pipefail; cd /opt/strategy && git pull --rebase && /bin/bash scripts/run_daily_pipeline.sh'
+          ssh -o StrictHostKeyChecking=yes $PORT_OPT "${SSH_USER}@${SSH_HOST}" '
+            set -euo pipefail
+            DST="/opt/crypto_strategy_project"   # 與 train_deploy.yml 保持一致
+            if [ ! -d "$DST" ]; then
+              echo "::error::Server path $DST not found. Run Train-Backtest-Deploy first." >&2
+              exit 1
+            fi
+            if [ ! -x "$DST/scripts/run_daily_pipeline.sh" ]; then
+              echo "::notice::Making pipeline script executable"
+              chmod +x "$DST/scripts/run_daily_pipeline.sh" || true
+            fi
+            cd "$DST"
+            git pull --rebase || true
+            /bin/bash scripts/run_daily_pipeline.sh
+          '
 
       # 失敗也一定會通知（讀 logs/ci_run.json）
       - name: Telegram notify (always)
