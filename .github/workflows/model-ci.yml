@@ -29,6 +29,7 @@ jobs:
       SSH_HOST:           ${{ secrets.SSH_HOST }}
       SSH_USER:           ${{ secrets.SSH_USER }}
       SSH_KEY:            ${{ secrets.SSH_KEY }}
+      SSH_PORT:           ${{ secrets.SSH_PORT }}
 
     steps:
       - name: Checkout repository
@@ -84,18 +85,38 @@ jobs:
           if-no-files-found: warn
 
       # 部署後觸發你的 server 跑 daily pipeline（只有 SSH_* 存在才會執行）
-      - name: Trigger daily pipeline on server (post-deploy)
-        if: ${{ success() && env.SSH_HOST != '' && env.SSH_USER != '' && env.SSH_KEY != '' }}
-        uses: appleboy/ssh-action@v1.0.0
+      - name: Preflight SSH env (skip if empty)
+        id: preflight_ssh
+        run: |
+          ok=1
+          [ -n "${SSH_HOST:-}" ] || ok=0
+          [ -n "${SSH_USER:-}" ] || ok=0
+          [ -n "${SSH_KEY:-}"  ] || ok=0
+          echo "has_ssh=$ok" >> "$GITHUB_OUTPUT"
+          if [ "$ok" != "1" ]; then
+            echo "::warning::SSH_* not set; server trigger will be skipped."
+          fi
+      - name: Start SSH agent
+        if: ${{ success() && steps.preflight_ssh.outputs.has_ssh == '1' }}
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          host:     ${{ env.SSH_HOST }}
-          username: ${{ env.SSH_USER }}
-          key:      ${{ env.SSH_KEY }}
-          script: |
-            set -e
-            cd /opt/strategy
-            git pull --rebase
-            /bin/bash scripts/run_daily_pipeline.sh
+          ssh-private-key: ${{ env.SSH_KEY }}
+      - name: Add host to known_hosts
+        if: ${{ success() && steps.preflight_ssh.outputs.has_ssh == '1' }}
+        run: |
+          ssh-keyscan -H "${SSH_HOST}" >> ~/.ssh/known_hosts
+      - name: Trigger daily pipeline on server (post-deploy)
+        if: ${{ success() && steps.preflight_ssh.outputs.has_ssh == '1' }}
+        env:
+          SSH_HOST: ${{ env.SSH_HOST }}
+          SSH_USER: ${{ env.SSH_USER }}
+          SSH_PORT: ${{ env.SSH_PORT }}
+        run: |
+          set -euo pipefail
+          PORT_OPT=""
+          if [ -n "${SSH_PORT:-}" ]; then PORT_OPT="-p ${SSH_PORT}"; fi
+          ssh -o StrictHostKeyChecking=yes $PORT_OPT "${SSH_USER}@${SSH_HOST}" \
+            'set -euo pipefail; cd /opt/strategy && git pull --rebase && /bin/bash scripts/run_daily_pipeline.sh'
 
       # 失敗也一定會通知（讀 logs/ci_run.json）
       - name: Telegram notify (always)
