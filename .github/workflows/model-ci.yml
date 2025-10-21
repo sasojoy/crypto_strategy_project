@@ -111,25 +111,30 @@ jobs:
           SSH_HOST: ${{ env.SSH_HOST }}
           SSH_USER: ${{ env.SSH_USER }}
           SSH_PORT: ${{ env.SSH_PORT }}
+          TELEGRAM_BOT_TOKEN: ${{ env.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ env.TELEGRAM_CHAT_ID }}
         run: |
           set -euo pipefail
           PORT_OPT=""
           if [ -n "${SSH_PORT:-}" ]; then PORT_OPT="-p ${SSH_PORT}"; fi
-          ssh -o StrictHostKeyChecking=yes $PORT_OPT "${SSH_USER}@${SSH_HOST}" '
-            set -euo pipefail
-            DST="/opt/crypto_strategy_project"   # 與 train_deploy.yml 保持一致
-            if [ ! -d "$DST" ]; then
-              echo "::error::Server path $DST not found. Run Train-Backtest-Deploy first." >&2
-              exit 1
-            fi
-            if [ ! -x "$DST/scripts/run_daily_pipeline.sh" ]; then
-              echo "::notice::Making pipeline script executable"
-              chmod +x "$DST/scripts/run_daily_pipeline.sh" || true
-            fi
-            cd "$DST"
-            git pull --rebase || true
-            /bin/bash scripts/run_daily_pipeline.sh
-          '
+          # 把 TELEGRAM_* 以環境變數傳給遠端；GitHub 會自動遮罩日誌
+          ssh -o StrictHostKeyChecking=yes $PORT_OPT "${SSH_USER}@${SSH_HOST}" " \
+            set -euo pipefail; \
+            export TELEGRAM_BOT_TOKEN='${TELEGRAM_BOT_TOKEN:-}'; \
+            export TELEGRAM_CHAT_ID='${TELEGRAM_CHAT_ID:-}'; \
+            DST='/opt/crypto_strategy_project'; \
+            if [ ! -d \"\$DST\" ]; then \
+              echo '::error::Server path '\$DST' not found. Run Train-Backtest-Deploy first.' >&2; exit 1; \
+            fi; \
+            cd \"\$DST\"; \
+            if [ -d .git ]; then git pull --rebase || true; else echo '::notice::Not a git repo, skip pull'; fi; \
+            # 確保 venv 存在與依賴就緒（和 train_deploy.yml 行為一致）
+            if [ ! -x .venv/bin/python ]; then python3 -m venv .venv; fi; \
+            ./.venv/bin/pip install --upgrade pip; \
+            if [ -f requirements.txt ]; then ./.venv/bin/pip install -r requirements.txt; fi; \
+            chmod +x scripts/run_daily_pipeline.sh || true; \
+            /bin/bash scripts/run_daily_pipeline.sh \
+          "
 
       # 失敗也一定會通知（讀 logs/ci_run.json）
       - name: Telegram notify (always)
