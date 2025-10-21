@@ -128,12 +128,25 @@ jobs:
             fi; \
             cd \"\$DST\"; \
             if [ -d .git ]; then git pull --rebase || true; else echo '::notice::Not a git repo, skip pull'; fi; \
-            # 確保 venv 存在與依賴就緒（和 train_deploy.yml 行為一致）
+            # === bootstrap venv & deps ===
             if [ ! -x .venv/bin/python ]; then python3 -m venv .venv; fi; \
             ./.venv/bin/pip install --upgrade pip; \
             if [ -f requirements.txt ]; then ./.venv/bin/pip install -r requirements.txt; fi; \
-            chmod +x scripts/run_daily_pipeline.sh || true; \
-            /bin/bash scripts/run_daily_pipeline.sh \
+            # === run with venv python (不依賴遠端腳本版本) ===
+            mkdir -p logs; LOG=\"logs/ci_remote_$(date -u +%Y%m%dT%H%M%SZ).log\"; set -x; \
+            ./.venv/bin/python -m scripts.ci_orchestrator \
+              --csv resources/btc_15m.csv \
+              --models-dir models/BTCUSDT \
+              --feature-func csp.features.build_features \
+              --horizon 16 \
+              --lookback-days 30 \
+              --target-win 0.70 \
+              --target-ret 0.10 \
+              --grid 0.50 0.75 0.01 \
+              --fees-bps 6 \
+              --slippage-bps 1 \
+              2>&1 | tee -a \"\$LOG\"; \
+            ./.venv/bin/python -m scripts.notify_latest_backtest 2>&1 | tee -a \"\$LOG\" || true \
           "
 
       # 失敗也一定會通知（讀 logs/ci_run.json）
