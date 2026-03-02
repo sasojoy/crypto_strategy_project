@@ -1,0 +1,16 @@
+name: Chore
+description: 例行任務
+title: "[Chore] "
+labels: ["chore"]
+projects: ["Product Board"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 任務描述
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 完成條件

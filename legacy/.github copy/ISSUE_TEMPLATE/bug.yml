@@ -1,0 +1,36 @@
+name: Bug report
+description: 回報程式錯誤
+title: "[Bug] "
+labels: ["bug"]
+projects: ["Product Board"]
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: 重現步驟
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 實際結果
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 預期結果
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 環境
+  - type: textarea
+    id: logs
+    attributes:
+      label: 截圖/Log
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 驗收標準
