@@ -96,6 +96,13 @@ def build_features_h16(df15: pd.DataFrame, horizon_bars: int = 16):
     # RSI 15m
     df["rsi14_15m"] = _rsi(c, 14)
 
+    # Pressure levels (Support/Resistance)
+    df["roll_high_100"] = h.rolling(100).max()
+    df["roll_low_100"]  = l.rolling(100).min()
+    df["dist_high_100"] = (df["roll_high_100"] - c) / (c + 1e-12)
+    df["dist_low_100"]  = (c - df["roll_low_100"]) / (c + 1e-12)
+    df["price_range_100"] = (c - df["roll_low_100"]) / (df["roll_high_100"] - df["roll_low_100"] + 1e-12)
+
     # cross-timeframe RSI (1h, 4h) → align back to 15m
     dfi = df.set_index("timestamp")
     c_1h = dfi["close"].resample("1h").last().dropna()
@@ -116,6 +123,7 @@ def build_features_h16(df15: pd.DataFrame, horizon_bars: int = 16):
         "vol_chg","vol_z48",
         "atr14","atr_ratio",
         "rsi14_15m","rsi14_1h","rsi14_4h",
+        "dist_high_100","dist_low_100","price_range_100",
     ]
 
     df = df.replace([np.inf, -np.inf], np.nan).dropna().reset_index(drop=True)
