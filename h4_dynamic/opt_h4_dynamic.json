@@ -1,6 +1,6 @@
 {
   "data_source": "local",
-  "horizon_bars": 16,
+  "horizon_bars": 4,
   "test_last_days": 90,
   "daily_target_tpd": 1.0,
   "allow_short": true,
@@ -58,18 +58,18 @@
   "rows_train": 26137,
   "rows_test": 8640,
   "best": {
-    "trades": 59,
-    "tpd": 0.655631438823938,
-    "win_rate": 0.6779661016949152,
-    "total_pnl": 16347.9837142857,
-    "max_drawdown": -1668.387428571441,
-    "profit_factor": 3.1566093520154754,
-    "th_long": 0.6639160156249999,
-    "th_short": 0.6872070312499999,
+    "trades": 63,
+    "tpd": 0.7000810278967473,
+    "win_rate": 0.7619047619047619,
+    "total_pnl": 18172.459857142807,
+    "max_drawdown": -776.1192857142887,
+    "profit_factor": 4.6528124959528965,
+    "th_long": 0.6792968749999999,
+    "th_short": 0.7184082031250001,
     "tpL": 1.6,
     "slL": 1.0,
     "tpS": 1.2,
     "slS": 0.8
   },
-  "runtime_sec": 10.49
+  "runtime_sec": 10.87
 }

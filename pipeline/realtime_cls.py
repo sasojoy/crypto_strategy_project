@@ -18,33 +18,43 @@ from pipeline.sync_to_sheets import sync_trade_to_sheet
 
 # ===== 檔案路徑 =====
 LIVE_DATA_PATH = "resources/live_data.csv"
-MODEL_PATH     = "h16_dynamic/cls_model_h16.pkl"
-SCALER_PATH    = "h16_dynamic/scaler_h16.joblib"
-OPT_PATH       = "h16_dynamic/opt_h16_dynamic.json"
 POSITION_PATH  = "resources/current_position.yaml"
 
+MODELS_CONFIG = {
+    "h16": {
+        "model_path": "h16_dynamic/cls_model_h16.pkl",
+        "scaler_path": "h16_dynamic/scaler_h16.joblib",
+        "opt_path": "h16_dynamic/opt_h16_dynamic.json",
+        "h": 16,
+    },
+    "h4": {
+        "model_path": "h4_dynamic/cls_model_h4.pkl",
+        "scaler_path": "h4_dynamic/scaler_h4.joblib",
+        "opt_path": "h4_dynamic/opt_h4_dynamic.json",
+        "h": 4,
+    }
+}
+
 # ===== 交易/持倉參數（與訓練一致）=====
-H                 = 16              # 最多持倉 16 根（=4h）
 ATR_N             = 14
 MIN_HOLD_BARS     = 2               # 至少持有 2 根再檢查收緊
-MAX_HOLD_BARS     = 16
 FETCH_MIN_BARS    = 500             # 特徵需要較長歷史（跨週期RSI/斜率）
 SYMBOL            = "BTCUSDT"
 
-# ===== 訓練門檻與TP/SL（從 opt_h16_dynamic.json 讀）=====
-with open(OPT_PATH, "r", encoding="utf-8") as f:
-    _opt = json.load(f)["best"]
-TH_LONG = float(_opt["th_long"])
-TH_SHORT= float(_opt["th_short"])
-TP_L    = float(_opt["tpL"])
-SL_L    = float(_opt["slL"])
-TP_S    = float(_opt["tpS"])
-SL_S    = float(_opt["slS"])
-
-# ===== 載入模型 & 標準化器 =====
-with open(MODEL_PATH, "rb") as f:
-    clf = pickle.load(f)
-scaler = joblib.load(SCALER_PATH)
+# ===== 載入模型 & 標準化器 & 參數 =====
+MODELS = {}
+for name, cfg in MODELS_CONFIG.items():
+    with open(cfg["model_path"], "rb") as f:
+        clf = pickle.load(f)
+    scaler = joblib.load(cfg["scaler_path"])
+    with open(cfg["opt_path"], "r", encoding="utf-8") as f:
+        opt = json.load(f)["best"]
+    MODELS[name] = {
+        "clf": clf,
+        "scaler": scaler,
+        "opt": opt,
+        "h": cfg["h"]
+    }
 
 # ================== 資料取得 ==================
 def _now_utc():
@@ -134,9 +144,10 @@ FEATURES = [
     "ema_fast_dist","ema_fast_slow_gap","mom_ratio",
     "vol_chg","vol_z48","atr14","atr_ratio",
     "rsi14_15m","rsi14_1h","rsi14_4h",
+    "dist_high_100","dist_low_100","price_range_100",
 ]
 
-def build_features_live(df15: pd.DataFrame) -> pd.DataFrame:
+def build_features_live(df15: pd.DataFrame, dropna: bool = True) -> pd.DataFrame:
     """
     與訓練版等價，但不產生 y_up、不丟掉尾巴；回傳含 FEATURES 欄位的 DataFrame（最後一列用來預測）
     """
@@ -171,6 +182,13 @@ def build_features_live(df15: pd.DataFrame) -> pd.DataFrame:
 
     df["rsi14_15m"] = _rsi(c, 14)
 
+    # Pressure levels (Support/Resistance)
+    df["roll_high_100"] = h.rolling(100).max()
+    df["roll_low_100"]  = l.rolling(100).min()
+    df["dist_high_100"] = (df["roll_high_100"] - c) / (c + 1e-12)
+    df["dist_low_100"]  = (c - df["roll_low_100"]) / (c + 1e-12)
+    df["price_range_100"] = (c - df["roll_low_100"]) / (df["roll_high_100"] - df["roll_low_100"] + 1e-12)
+
     di = df.set_index("timestamp")
     c_1h = di["close"].resample("1h").last().dropna()
     c_4h = di["close"].resample("4h").last().dropna()
@@ -188,7 +206,8 @@ def build_features_live(df15: pd.DataFrame) -> pd.DataFrame:
     # 清理
     df = df.replace([np.inf,-np.inf], np.nan)
     # 只去掉特徵計算不足的前期，保留最後一列
-    df = df.dropna(subset=FEATURES, how="any")
+    if dropna:
+        df = df.dropna(subset=FEATURES, how="any")
     return df.reset_index(drop=True)
 
 # ================== 濾網（與訓練一致） ==================
@@ -217,13 +236,13 @@ def build_regime_masks(px: pd.DataFrame):
     return mask_long, mask_short
 
 # ================== 市況與 TP/SL ==================
-def build_tp_sl_prices(side: str, entry_price: float, atr: float) -> tuple[float, float]:
+def build_tp_sl_prices(side: str, entry_price: float, atr: float, tp_mult: float, sl_mult: float) -> tuple[float, float]:
     if side == "LONG":
-        sl = round(entry_price - SL_L * atr, 2)
-        tp = round(entry_price + TP_L * atr, 2)
+        sl = round(entry_price - sl_mult * atr, 2)
+        tp = round(entry_price + tp_mult * atr, 2)
     else:
-        sl = round(entry_price + SL_S * atr, 2)
-        tp = round(entry_price - TP_S * atr, 2)
+        sl = round(entry_price + sl_mult * atr, 2)
+        tp = round(entry_price - tp_mult * atr, 2)
     return sl, tp
 
 def tighten_stop_only(side: str, current_sl: float, entry_price: float, atr_now: float) -> float:
@@ -236,10 +255,22 @@ def tighten_stop_only(side: str, current_sl: float, entry_price: float, atr_now:
         return min(current_sl, proposed)
 
 # ================== 推論 ==================
-def predict_prob(df15: pd.DataFrame):
-    feats = build_features_live(df15)
+def predict_prob(df15: pd.DataFrame, model_name: str):
+    m = MODELS[model_name]
+    clf = m["clf"]
+    scaler = m["scaler"]
+
+    feats = build_features_live(df15, dropna=True)
+    
     if feats.empty:
-        return None, None, None, None
+        # 嘗試找出缺失哪些特徵
+        df_full = build_features_live(df15, dropna=False)
+        if not df_full.empty:
+            last_row_full = df_full.iloc[-1]
+            missing = [f for f in FEATURES if pd.isna(last_row_full.get(f))]
+            print(f"❌ [{model_name}] 特徵缺失：{missing}")
+            return None, None, None, missing, None
+        return None, None, None, "All features missing", None
 
     X = feats[FEATURES].iloc[[-1]]            # keep last row as DataFrame
     X_np = X.to_numpy(dtype=float, copy=False) # <<< 轉成 numpy，避免警告
@@ -260,23 +291,34 @@ def predict_prob(df15: pd.DataFrame):
 # ================== 主流程 ==================
 def main():
     df = fetch_klines_and_append_to_local()
-    dn_prob, up_prob, atr_now, regime, latest = predict_prob(df)
-
-    if dn_prob is None:
-        notify(summary=None, signals=None,
-               current_price=float(df["close"].iloc[-1]) if not df.empty else None,
-               extra_msg="❌ 無法預測：特徵不足")
-        return
-
     current_price = float(df["close"].iloc[-1])
     position = load_current_position(POSITION_PATH)
 
+    # 收集所有模型的預測
+    results = {}
+    for name in MODELS:
+        dn_prob, up_prob, atr_now, regime, latest = predict_prob(df, name)
+        results[name] = {
+            "dn_prob": dn_prob, "up_prob": up_prob, "atr_now": atr_now,
+            "regime": regime, "latest": latest
+        }
+
     # ===== 已持倉：檢查 TP/SL 與超時等 =====
     if position:
+        model_name = position.get("horizon", "h16").replace("cls_", "")
+        res = results.get(model_name)
+        if res and res["dn_prob"] is not None:
+            up_prob = res["up_prob"]
+            atr_now = res["atr_now"]
+        else:
+            up_prob = 0.5
+            atr_now = position.get("atr_at_entry", 0.0)
+
         side = position.get("side", "LONG")
         entry_price = float(position["entry_price"])
         bars_held = int(position.get("bars_held", 0)) + 1
         position["bars_held"] = bars_held
+        max_hold_bars = position.get("max_hold_bars", 16)
 
         sl = position.get("sl"); tp = position.get("tp")
         hit_tp = hit_sl = False
@@ -296,7 +338,7 @@ def main():
                 "exit_price":  float(current_price),
                 "return": round(rtn, 6),
                 "holding_minutes": int(bars_held * 15),
-                "horizon": "cls_h16",
+                "horizon": f"cls_{model_name}",
                 "side": side,
                 "reason": "TP" if hit_tp else "SL",
                 "tp_sl_mode": "ATR_FIXED_FROM_OPT",
@@ -307,7 +349,7 @@ def main():
                 "atr_at_entry": float(position.get("atr_at_entry", 0.0)),
                 "atr_n": ATR_N,
                 "bars_held_close": int(bars_held),
-                "max_hold_bars": MAX_HOLD_BARS,
+                "max_hold_bars": max_hold_bars,
             }
             log_trade(trade); sync_trade_to_sheet(trade)
             notify(summary={"cls":[up_prob]}, current_price=current_price,
@@ -329,7 +371,7 @@ def main():
                 "exit_price":  float(current_price),
                 "return": round(rtn, 6),
                 "holding_minutes": int(exit_info["holding_minutes"]),
-                "horizon": "cls_h16",
+                "horizon": f"cls_{model_name}",
                 "side": side,
                 "reason": str(exit_info.get("reason","OTHER")),
                 "tp_sl_mode": "ATR_FIXED_FROM_OPT",
@@ -340,7 +382,7 @@ def main():
                 "atr_at_entry": float(position.get("atr_at_entry", 0.0)),
                 "atr_n": ATR_N,
                 "bars_held_close": int(position.get("bars_held", 0)),
-                "max_hold_bars": MAX_HOLD_BARS,
+                "max_hold_bars": max_hold_bars,
             }
             log_trade(trade); sync_trade_to_sheet(trade)
             notify(summary={"cls":[up_prob]}, current_price=current_price,
@@ -367,52 +409,74 @@ def main():
         return
 
     # ===== 無持倉：進場判斷（雙門檻 + 濾網）=====
-    side = None
-    long_ok  = (up_prob  >= TH_LONG)  and regime["regime_long_ok"]
-    short_ok = (dn_prob  >= TH_SHORT) and regime["regime_short_ok"]
-    if long_ok: side = "LONG"
-    elif short_ok: side = "SHORT"
+    for name, res in results.items():
+        if res["dn_prob"] is None: continue
+        
+        up_prob = res["up_prob"]
+        dn_prob = res["dn_prob"]
+        regime = res["regime"]
+        atr_now = res["atr_now"]
+        opt = MODELS[name]["opt"]
+        h = MODELS[name]["h"]
+        
+        th_long = float(opt["th_long"])
+        th_short = float(opt["th_short"])
+        
+        side = None
+        long_ok  = (up_prob  >= th_long)  and regime["regime_long_ok"]
+        short_ok = (dn_prob  >= th_short) and regime["regime_short_ok"]
+        if long_ok: side = "LONG"
+        elif short_ok: side = "SHORT"
 
-    if side:
-        entry_price = current_price
-        sl, tp = build_tp_sl_prices(side, entry_price, atr_now)
-        position = {
-            "entry_time": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-            "entry_price": float(entry_price),
-            "horizon": "cls_h16",
-            "side": side,
-            "sl": float(sl),
-            "tp": float(tp),
-            "atr_at_entry": float(atr_now),
-            "atr_n": ATR_N,
-            "tp_sl_mode": "ATR_FIXED_FROM_OPT",
-            "sl_mult": float(SL_L if side=="LONG" else SL_S),
-            "tp_mult": float(TP_L if side=="LONG" else TP_S),
-            "bars_held": 0,
-            "min_hold_bars": MIN_HOLD_BARS,
-            "max_hold_bars": MAX_HOLD_BARS
-        }
-        save_current_position(position, POSITION_PATH)
+        if side:
+            entry_price = current_price
+            tp_mult = float(opt["tpL"] if side=="LONG" else opt["tpS"])
+            sl_mult = float(opt["slL"] if side=="LONG" else opt["slS"])
+            sl, tp = build_tp_sl_prices(side, entry_price, atr_now, tp_mult, sl_mult)
+            position = {
+                "entry_time": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                "entry_price": float(entry_price),
+                "horizon": f"cls_{name}",
+                "side": side,
+                "sl": float(sl),
+                "tp": float(tp),
+                "atr_at_entry": float(atr_now),
+                "atr_n": ATR_N,
+                "tp_sl_mode": "ATR_FIXED_FROM_OPT",
+                "sl_mult": sl_mult,
+                "tp_mult": tp_mult,
+                "bars_held": 0,
+                "min_hold_bars": MIN_HOLD_BARS,
+                "max_hold_bars": h
+            }
+            save_current_position(position, POSITION_PATH)
 
-        msg = (f"➡️ 進場：{side}\n"
-               f"p_up={up_prob:.3f} / p_dn={dn_prob:.3f}\n"
-               f"門檻 L={TH_LONG:.3f} / S={TH_SHORT:.3f}\n"
-               f"ATR×(SL={position['sl_mult']:.2f}, TP={position['tp_mult']:.2f})\n"
-               f"TP={tp:.2f} / SL={sl:.2f}")
-        notify(summary={"cls":[up_prob]}, signals=True, current_price=current_price,
-               is_regression=False, side=side, sl=sl, tp=tp,
-               sl_mult=position["sl_mult"], tp_mult=position["tp_mult"],
-               tp_sl_mode="ATR_FIXED_FROM_OPT", atr_now=atr_now, extra_msg=msg)
-    else:
-        msg = (f"➡️ 無進場\n"
-               f"p_up={up_prob:.3f} / p_dn={dn_prob:.3f} | "
-               f"門檻 L={TH_LONG:.3f} / S={TH_SHORT:.3f}")
-        notify(summary={"cls":[up_prob]}, signals=False, current_price=current_price,
-               is_regression=False, extra_msg=msg)
+            msg = (f"➡️ 進場：{side} ({name})\n"
+                   f"p_up={up_prob:.3f} / p_dn={dn_prob:.3f}\n"
+                   f"門檻 L={th_long:.3f} / S={th_short:.3f}\n"
+                   f"TP：{tp:.2f} / SL：{sl:.2f}")
+            notify(summary={"cls":[up_prob]}, current_price=current_price,
+                   holding=True, entry_price=entry_price, entry_time=position["entry_time"],
+                   side=side, sl=sl, tp=tp,
+                   extra_msg=msg)
+            return
+
+    # ===== 無訊號：回報當前機率 =====
+    msg_parts = []
+    for name, res in results.items():
+        if res["up_prob"] is not None:
+            msg_parts.append(f"{name}: p_up={res['up_prob']:.3f}")
+    
+    notify(summary={"cls":[results[list(MODELS.keys())[0]]["up_prob"]]}, current_price=current_price,
+           extra_msg="⏳ 觀望中\n" + "\n".join(msg_parts))
 
 if __name__ == "__main__":
     while True:
-        main()
+        try:
+            main()
+        except Exception as e:
+            print(f"❌ Error in main loop: {e}")
+        
         # 等到下一個 15 分鐘整點
         now = datetime.utcnow()
         sleep_sec = (15 - (now.minute % 15)) * 60 - now.second
