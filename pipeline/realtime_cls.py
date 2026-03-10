@@ -33,7 +33,15 @@ SYMBOL            = "BTCUSDT"
 
 # ===== 訓練門檻與TP/SL（從 opt_h16_dynamic.json 讀）=====
 with open(OPT_PATH, "r", encoding="utf-8") as f:
-    _opt = json.load(f)["best"]
+    _opt_full = json.load(f)
+    _opt = _opt_full["best"]
+    FEATURES = _opt_full.get("features", [
+        "ret_1","ret_4","ret_16","ret_32",
+        "bb_z20","rv_16","slope_log_8","slope_log_16","slope_log_32",
+        "ema_fast_dist","ema_fast_slow_gap","mom_ratio",
+        "vol_chg","vol_z48","atr14","atr_ratio",
+        "rsi14_15m","rsi14_1h","rsi14_4h",
+    ])
 TH_LONG = float(_opt["th_long"])
 TH_SHORT= float(_opt["th_short"])
 TP_L    = float(_opt["tpL"])
@@ -45,6 +53,9 @@ SL_S    = float(_opt["slS"])
 with open(MODEL_PATH, "rb") as f:
     clf = pickle.load(f)
 scaler = joblib.load(SCALER_PATH)
+# 確保 scaler 有 feature_names_in_ 以避免警告，或在 transform 時用 numpy
+if not hasattr(scaler, "feature_names_in_"):
+    scaler.feature_names_in_ = np.array(FEATURES)
 
 # ================== 資料取得 ==================
 def _now_utc():
@@ -239,11 +250,28 @@ def tighten_stop_only(side: str, current_sl: float, entry_price: float, atr_now:
 def predict_prob(df15: pd.DataFrame):
     feats = build_features_live(df15)
     if feats.empty:
-        return None, None, None, None
+        print("⚠️ 特徵 DataFrame 為空，可能是資料不足以計算所有特徵")
+        return None, None, None, None, None
+
+    # 檢查特徵是否齊全
+    missing = [f for f in FEATURES if f not in feats.columns]
+    if missing:
+        print(f"⚠️ 缺失特徵：{missing}")
+        # 如果缺失，嘗試補 0 或 NaN，但通常這代表邏輯有誤
+        for f in missing:
+            feats[f] = np.nan
+    
+    # 檢查最後一列是否有 NaN
+    last_row_feats = feats[FEATURES].iloc[-1]
+    if last_row_feats.isna().any():
+        nan_cols = last_row_feats.index[last_row_feats.isna()].tolist()
+        print(f"⚠️ 最後一列特徵包含 NaN: {nan_cols}")
+        # 如果只有少數 NaN，可以考慮 fillna(0) 作為 fallback，但需謹慎
+        # 這裡我們選擇回傳 None 讓主流程處理
+        return None, None, None, None, None
 
     X = feats[FEATURES].iloc[[-1]]            # keep last row as DataFrame
-    X_np = X.to_numpy(dtype=float, copy=False) # <<< 轉成 numpy，避免警告
-    X_scaled = scaler.transform(X_np)          # <<< 用 numpy 給 scaler
+    X_scaled = scaler.transform(X)             # <<< 直接用 DataFrame，因為我們已經確保 scaler 有 feature_names_in_
 
     p_up = float(clf.predict_proba(X_scaled)[0,1])
     p_dn = 1.0 - p_up
@@ -263,9 +291,11 @@ def main():
     dn_prob, up_prob, atr_now, regime, latest = predict_prob(df)
 
     if dn_prob is None:
+        current_price = float(df["close"].iloc[-1]) if not df.empty else None
+        print(f"❌ 無法預測：特徵不足或包含 NaN。當前價格：{current_price}")
         notify(summary=None, signals=None,
-               current_price=float(df["close"].iloc[-1]) if not df.empty else None,
-               extra_msg="❌ 無法預測：特徵不足")
+               current_price=current_price,
+               extra_msg="❌ 無法預測：特徵不足或包含 NaN")
         return
 
     current_price = float(df["close"].iloc[-1])
