@@ -33,7 +33,16 @@ SYMBOL            = "BTCUSDT"
 
 # ===== 訓練門檻與TP/SL（從 opt_h16_dynamic.json 讀）=====
 with open(OPT_PATH, "r", encoding="utf-8") as f:
-    _opt = json.load(f)["best"]
+    _opt_full = json.load(f)
+    _opt = _opt_full["best"]
+    FEATURES = _opt_full.get("features", [
+        "ret_1","ret_4","ret_16","ret_32",
+        "bb_z20","rv_16","slope_log_8","slope_log_16","slope_log_32",
+        "ema_fast_dist","ema_fast_slow_gap","mom_ratio",
+        "vol_chg","vol_z48","atr14","atr_ratio",
+        "rsi14_15m","rsi14_1h","rsi14_4h",
+    ])
+
 TH_LONG = float(_opt["th_long"])
 TH_SHORT= float(_opt["th_short"])
 TP_L    = float(_opt["tpL"])
@@ -45,6 +54,16 @@ SL_S    = float(_opt["slS"])
 with open(MODEL_PATH, "rb") as f:
     clf = pickle.load(f)
 scaler = joblib.load(SCALER_PATH)
+
+# 檢查 Scaler 與 FEATURES 是否對齊
+if hasattr(scaler, "feature_names_in_"):
+    scaler_feats = list(scaler.feature_names_in_)
+    if scaler_feats != FEATURES:
+        print(f"⚠️ 警告：Scaler 特徵 ({len(scaler_feats)}) 與 FEATURES ({len(FEATURES)}) 不一致！")
+        print(f"Scaler: {scaler_feats}")
+        print(f"FEATURES: {FEATURES}")
+        # 以 Scaler 為準，避免 transform 報錯
+        FEATURES = scaler_feats
 
 # ================== 資料取得 ==================
 def _now_utc():
@@ -127,14 +146,6 @@ def _zscore(s, w):
     m = s.rolling(w).mean()
     sd = s.rolling(w).std(ddof=0)
     return (s - m) / (sd + 1e-12)
-
-FEATURES = [
-    "ret_1","ret_4","ret_16","ret_32",
-    "bb_z20","rv_16","slope_log_8","slope_log_16","slope_log_32",
-    "ema_fast_dist","ema_fast_slow_gap","mom_ratio",
-    "vol_chg","vol_z48","atr14","atr_ratio",
-    "rsi14_15m","rsi14_1h","rsi14_4h",
-]
 
 def build_features_live(df15: pd.DataFrame) -> pd.DataFrame:
     """
@@ -239,7 +250,17 @@ def tighten_stop_only(side: str, current_sl: float, entry_price: float, atr_now:
 def predict_prob(df15: pd.DataFrame):
     feats = build_features_live(df15)
     if feats.empty:
-        return None, None, None, None
+        # 找出哪些特徵缺失
+        df_tmp = build_features_live(df15.tail(FETCH_MIN_BARS)) # 再次嘗試以獲取中間過程
+        # 這裡簡化處理，直接在 build_features_live 之後檢查
+        return None, None, None, None, None
+
+    # 檢查是否有 NaN
+    last_row = feats.iloc[-1]
+    missing_cols = [c for c in FEATURES if pd.isna(last_row.get(c))]
+    if missing_cols:
+        print(f"⚠️ 警告：最後一列特徵缺失：{missing_cols}")
+        return None, None, None, None, None
 
     X = feats[FEATURES].iloc[[-1]]            # keep last row as DataFrame
     X_np = X.to_numpy(dtype=float, copy=False) # <<< 轉成 numpy，避免警告
@@ -254,18 +275,33 @@ def predict_prob(df15: pd.DataFrame):
     regime_short_ok = bool(mS[-1])
 
     atr_now = float(feats["atr14"].iloc[-1])
-    last_row = feats.iloc[-1]
     return p_dn, p_up, atr_now, dict(regime_long_ok=regime_long_ok, regime_short_ok=regime_short_ok), last_row
 
 # ================== 主流程 ==================
 def main():
     df = fetch_klines_and_append_to_local()
-    dn_prob, up_prob, atr_now, regime, latest = predict_prob(df)
-
-    if dn_prob is None:
+    
+    try:
+        dn_prob, up_prob, atr_now, regime, latest = predict_prob(df)
+    except Exception as e:
+        print(f"❌ 推論過程發生錯誤: {e}")
         notify(summary=None, signals=None,
                current_price=float(df["close"].iloc[-1]) if not df.empty else None,
-               extra_msg="❌ 無法預測：特徵不足")
+               extra_msg=f"❌ 推論錯誤: {str(e)}")
+        return
+
+    if dn_prob is None:
+        # Fallback 邏輯：如果特徵不足，嘗試用較少的資料或是回報具體缺失
+        msg = "❌ 無法預測：特徵不足"
+        if not df.empty:
+            # 檢查具體缺失
+            df_feat_check = df.copy()
+            # ... 可以在這裡加入更詳細的檢查 ...
+            msg += f" (目前資料共 {len(df)} 根)"
+        
+        notify(summary=None, signals=None,
+               current_price=float(df["close"].iloc[-1]) if not df.empty else None,
+               extra_msg=msg)
         return
 
     current_price = float(df["close"].iloc[-1])
