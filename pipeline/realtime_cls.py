@@ -402,10 +402,22 @@ def main():
                extra_msg=f"方向：{side}\n已持有：{bars_held*15} 分鐘\nTP：{position.get('tp',0):.2f} / SL：{position.get('sl',0):.2f}")
         return
 
-    # ===== 無持倉：進場判斷（雙門檻 + 濾網）=====
+    # ===== 無持倉：進場判斷（Iteration 99.0: High Conviction Filters）=====
+    # Tighten thresholds for Iteration 99.0 alignment
+    TH_LONG_99 = 0.85
+    TH_SHORT_99 = 0.85
+
+    # Hard Filters
+    ema_alignment_long = (current_price > features.get('ema_slow', 0))
+    ema_alignment_short = (current_price < features.get('ema_slow', 0))
+    vol_ok = features.get('volume', 0) > (features.get('vol_ma_24h', 0) * 1.5)
+    rsi_slope_long = features.get('rsi_slope', 0) > 1.0
+    rsi_slope_short = features.get('rsi_slope', 0) < -1.0
+
     side = None
-    long_ok  = (up_prob  >= TH_LONG)  and regime["regime_long_ok"]
-    short_ok = (dn_prob  >= TH_SHORT) and regime["regime_short_ok"]
+    long_ok  = (up_prob >= TH_LONG_99) and regime["regime_long_ok"] and ema_alignment_long and vol_ok and rsi_slope_long
+    short_ok = (dn_prob >= TH_SHORT_99) and regime["regime_short_ok"] and ema_alignment_short and vol_ok and rsi_slope_short
+    
     if long_ok: side = "LONG"
     elif short_ok: side = "SHORT"
 

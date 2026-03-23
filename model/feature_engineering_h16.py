@@ -81,6 +81,8 @@ def build_features_h16(df15: pd.DataFrame, horizon_bars: int = 16):
     # EMA structure
     ema_fast = _ema(c, 12)
     ema_slow = _ema(c, 48)
+    df["ema_fast"] = ema_fast
+    df["ema_slow"] = ema_slow
     df["ema_fast_dist"] = (c - ema_fast) / (abs(ema_fast) + 1e-12)
     df["ema_fast_slow_gap"] = (ema_fast - ema_slow) / (abs(ema_slow) + 1e-12)
     df["mom_ratio"] = (c - ema_fast) / (abs(ema_fast - ema_slow) + 1e-12)
@@ -88,6 +90,7 @@ def build_features_h16(df15: pd.DataFrame, horizon_bars: int = 16):
     # volume
     df["vol_chg"] = v.pct_change().replace([np.inf, -np.inf], np.nan).fillna(0)
     df["vol_z48"] = _zscore(v, 48)
+    df["vol_ma_24h"] = v.rolling(96).mean()
 
     # volatility
     df["atr14"] = _atr(df, 14)
@@ -95,6 +98,7 @@ def build_features_h16(df15: pd.DataFrame, horizon_bars: int = 16):
 
     # RSI 15m
     df["rsi14_15m"] = _rsi(c, 14)
+    df["rsi_slope"] = df["rsi14_15m"].diff().rolling(4).mean()
 
     # cross-timeframe RSI (1h, 4h) → align back to 15m
     dfi = df.set_index("timestamp")
