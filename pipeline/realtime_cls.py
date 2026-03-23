@@ -411,8 +411,8 @@ def main():
     ema_alignment_long = (current_price > features.get('ema_slow', 0))
     ema_alignment_short = (current_price < features.get('ema_slow', 0))
     vol_ok = features.get('volume', 0) > (features.get('vol_ma_24h', 0) * 1.5)
-    rsi_slope_long = features.get('rsi_slope', 0) > 1.0
-    rsi_slope_short = features.get('rsi_slope', 0) < -1.0
+    rsi_slope_long = features.get('rsi_slope', 0) > 2.0
+    rsi_slope_short = features.get('rsi_slope', 0) < -2.0
 
     side = None
     long_ok  = (up_prob >= TH_LONG_99) and regime["regime_long_ok"] and ema_alignment_long and vol_ok and rsi_slope_long
