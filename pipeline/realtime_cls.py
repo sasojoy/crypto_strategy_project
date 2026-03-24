@@ -229,14 +229,18 @@ def build_regime_masks(px: pd.DataFrame):
 
 # ================== 市況與 TP/SL ==================
 def build_tp_sl_prices(side: str, entry_price: float, atr: float) -> tuple[float, float]:
-    # Iteration 101.0: Corrected ATR Multiplier Logic
-    # Parameters from opt_h16_dynamic.json are multipliers (e.g. 1.6, 1.0)
+    # Iteration 101.1: Percentage Mode Refactoring
+    # CEO Requirement: Use percentage-based TP/SL (e.g., 1.6% = 0.016)
+    # Note: We convert the ATR-based multipliers to percentage equivalents for this iteration
+    tp_pct = 0.015 # 1.5% Target
+    sl_pct = 0.010 # 1.0% Stop
+    
     if side == "LONG":
-        sl = round(entry_price - SL_L * atr, 2)
-        tp = round(entry_price + TP_L * atr, 2)
+        sl = round(entry_price * (1 - sl_pct), 2)
+        tp = round(entry_price * (1 + tp_pct), 2)
     else:
-        sl = round(entry_price + SL_S * atr, 2)
-        tp = round(entry_price - TP_S * atr, 2)
+        sl = round(entry_price * (1 + sl_pct), 2)
+        tp = round(entry_price * (1 - tp_pct), 2)
     return sl, tp
 
 def tighten_stop_only(side: str, current_sl: float, entry_price: float, atr_now: float) -> float:
@@ -404,10 +408,19 @@ def main():
                extra_msg=f"方向：{side}\n已持有：{bars_held*15} 分鐘\nTP：{position.get('tp',0):.2f} / SL：{position.get('sl',0):.2f}")
         return
 
-    # ===== 無持倉：進場判斷（Iteration 99.0: High Conviction Filters）=====
-    # Tighten thresholds for Iteration 99.0 alignment
-    TH_LONG_99 = 0.85
-    TH_SHORT_99 = 0.85
+    # ===== 無持倉：進場判斷（Iteration 101.7: Expectation Structure Restructuring）=====
+    # CEO Requirement: Asymmetric thresholds and Reversed Volatility Compensation
+    TH_LONG_101 = 0.85
+    TH_SHORT_101 = 0.85
+    
+    # Reversed Volatility Compensation
+    atr_ratio = features.get('atr_ratio', 0)
+    vol_comp = 0.0
+    if atr_ratio < 0.005: vol_comp = 0.05 # Quiet Market -> More Cautious
+    elif atr_ratio > 0.015: vol_comp = 0.05 # Noisy Market -> Filter Noise
+    
+    current_th_long = TH_LONG_101 + vol_comp
+    current_th_short = TH_SHORT_101 + vol_comp
 
     # Hard Filters
     ema_alignment_long = (current_price > features.get('ema_slow', 0))
@@ -417,8 +430,8 @@ def main():
     rsi_slope_short = features.get('rsi_slope', 0) < -2.0
 
     side = None
-    long_ok  = (up_prob >= TH_LONG_99) and regime["regime_long_ok"] and ema_alignment_long and vol_ok and rsi_slope_long
-    short_ok = (dn_prob >= TH_SHORT_99) and regime["regime_short_ok"] and ema_alignment_short and vol_ok and rsi_slope_short
+    long_ok  = (up_prob >= current_th_long) and regime["regime_long_ok"] and ema_alignment_long and vol_ok and rsi_slope_long
+    short_ok = (dn_prob >= current_th_short) and regime["regime_short_ok"] and ema_alignment_short and vol_ok and rsi_slope_short
     
     if long_ok: side = "LONG"
     elif short_ok: side = "SHORT"

@@ -57,13 +57,17 @@ def check_exit_condition(position, current_price):
     sl = position.get("sl")
     tp = position.get("tp")
     
-    # Iteration 101.6: Breakeven Trigger (+1.0% gain moves SL to Entry)
+    # Iteration 101.7: Breakeven Buffering (+1.5% gain moves SL to Entry + 0.2%)
+    # CEO Requirement: Give price more "breathing space" and cover fees.
     unrealized_pnl = (current_price - entry_price) / entry_price if side == "LONG" else (entry_price - current_price) / entry_price
-    if unrealized_pnl >= 0.010:
+    if unrealized_pnl >= 0.015:
+        fee_buffer = 0.002 # 0.2% to cover fees
         if side == "LONG":
-            sl = max(sl, entry_price) if sl is not None else entry_price
+            new_sl = entry_price * (1 + fee_buffer)
+            sl = max(sl, new_sl) if sl is not None else new_sl
         else:
-            sl = min(sl, entry_price) if sl is not None else entry_price
+            new_sl = entry_price * (1 - fee_buffer)
+            sl = min(sl, new_sl) if sl is not None else new_sl
         position["sl"] = sl # Update position for persistence
 
     if sl is not None and tp is not None:
@@ -72,14 +76,16 @@ def check_exit_condition(position, current_price):
                 if holding_minutes >= min_hold_minutes:
                     return {"exit": True, "reason": "TP", "holding_minutes": holding_minutes}
             if current_price <= sl:
-                reason = "BREAKEVEN" if sl == entry_price else "SL"
+                # Iteration 101.7: Breakeven check (Entry + 0.2%)
+                reason = "BREAKEVEN" if sl > entry_price else "SL"
                 return {"exit": True, "reason": reason, "holding_minutes": holding_minutes}
         else:  # SHORT
             if current_price <= tp:
                 if holding_minutes >= min_hold_minutes:
                     return {"exit": True, "reason": "TP", "holding_minutes": holding_minutes}
             if current_price >= sl:
-                reason = "BREAKEVEN" if sl == entry_price else "SL"
+                # Iteration 101.7: Breakeven check (Entry - 0.2%)
+                reason = "BREAKEVEN" if sl < entry_price else "SL"
                 return {"exit": True, "reason": reason, "holding_minutes": holding_minutes}
 
     # --- 2) 原有固定條件（回溯相容） ---
