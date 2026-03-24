@@ -15,6 +15,7 @@ from datetime import datetime
 
 from data.data_module import load_data_from_file
 from data.feature_engineering import add_indicators  # 你提供的版本（含 core.add_features）
+from pipeline.realtime_cls import TradingStrategy
 
 # ===== 路徑與常數 =====
 DATA_PATH   = "data/btc_15m_data_3days.csv"
@@ -258,6 +259,9 @@ def main():
         raise RuntimeError("特徵為空，請檢查資料/特徵回看。")
 
     model, scaler = load_model_and_scaler()
+    
+    # Iteration 103.0: Logic Singularity
+    strategy = TradingStrategy("h16_dynamic/opt_h16_dynamic.json")
 
     trades = []
     in_pos = False; pos = {}
@@ -353,27 +357,27 @@ def main():
 
             continue  # 未出場 → 下一根
 
-        # 無持倉：進場判斷（使用訓練最佳門檻）
-        side = None
-        if up_p > thr:   side = "LONG"
-        elif down_p > thr: side = "SHORT"
+        # 無持倉：進場判斷（Iteration 103.0: Logic Singularity）
+        # Mock regime for backtest (assuming regime is always OK if prob is high)
+        regime = {"regime_long_ok": True, "regime_short_ok": True}
+        features = df_feat_all.iloc[i].to_dict()
+        features['close'] = float(df.loc[idx, "close"])
+        features['volume'] = float(df.loc[idx, "volume"])
+        
+        side = strategy.check_entry(up_p, down_p, features, regime)
 
         if side:
-            state = market_state_from_slice(dslice)
-            atr_now = state["atr_now"]
-            if not np.isfinite(atr_now) or atr_now <= 0:
-                continue
-            sl_mult, tp_mult = choose_multipliers(side, state)
             entry = float(df.loc[idx, "close"])
-            sl, tp = build_tp_sl(side, entry, atr_now, sl_mult, tp_mult)
+            sl, tp = strategy.build_tp_sl(side, entry)
             in_pos = True
             pos = dict(
                 entry_time = t.strftime("%Y-%m-%d %H:%M:%S"),
                 entry_price= float(entry),
                 side=side,
                 sl=float(sl), tp=float(tp),
-                atr_at_entry=float(atr_now),
-                sl_mult=float(sl_mult), tp_mult=float(tp_mult),
+                atr_at_entry=0.0, # Standardized
+                sl_mult=0.0, # Standardized
+                tp_mult=0.0, # Standardized
                 bars_held=0
             )
 
