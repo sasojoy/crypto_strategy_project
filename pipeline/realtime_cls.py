@@ -408,19 +408,33 @@ def main():
                extra_msg=f"方向：{side}\n已持有：{bars_held*15} 分鐘\nTP：{position.get('tp',0):.2f} / SL：{position.get('sl',0):.2f}")
         return
 
-    # ===== 無持倉：進場判斷（Iteration 101.7: Expectation Structure Restructuring）=====
-    # CEO Requirement: Asymmetric thresholds and Reversed Volatility Compensation
-    TH_LONG_101 = 0.85
-    TH_SHORT_101 = 0.85
+    # ===== 無持倉：進場判斷（Iteration 102.0: Bi-directional Hunting）=====
+    # CEO Requirement: Asymmetric thresholds, Panic Indicator, and BTC Correlation Filter
+    TH_BASE = 0.85
     
-    # Reversed Volatility Compensation
+    # 1. Asymmetric Shorting (EMA200 Trend-based)
+    # Note: ema_200 should be pre-calculated in features
+    ema_200 = features.get('ema_200', current_price)
+    trend_down = current_price < ema_200
+    
+    th_long = TH_BASE + 0.05 if trend_down else TH_BASE
+    th_short = TH_BASE - 0.05 if trend_down else TH_BASE
+    
+    # 2. Reversed Volatility Compensation
     atr_ratio = features.get('atr_ratio', 0)
-    vol_comp = 0.0
-    if atr_ratio < 0.005: vol_comp = 0.05 # Quiet Market -> More Cautious
-    elif atr_ratio > 0.015: vol_comp = 0.05 # Noisy Market -> Filter Noise
+    vol_comp = 0.05 if (atr_ratio < 0.005 or atr_ratio > 0.015) else 0.0
     
-    current_th_long = TH_LONG_101 + vol_comp
-    current_th_short = TH_SHORT_101 + vol_comp
+    current_th_long = th_long + vol_comp
+    current_th_short = th_short + vol_comp
+
+    # 3. BTC Correlation Filter (Block longs if BTC 5m change < -1.0%)
+    # Note: btc_change_5m should be passed in or fetched
+    btc_change_5m = features.get('btc_change_5m', 0.0)
+    btc_block_long = btc_change_5m < -0.010
+
+    # 4. Panic Indicator (Shorting only: Volume surge + BB lower band break)
+    # Note: bb_lower should be in features
+    panic_short = (features.get('volume', 0) > features.get('vol_ma_24h', 0) * 3.0) and (current_price < features.get('bb_lower', 0))
 
     # Hard Filters
     ema_alignment_long = (current_price > features.get('ema_slow', 0))
@@ -430,8 +444,8 @@ def main():
     rsi_slope_short = features.get('rsi_slope', 0) < -2.0
 
     side = None
-    long_ok  = (up_prob >= current_th_long) and regime["regime_long_ok"] and ema_alignment_long and vol_ok and rsi_slope_long
-    short_ok = (dn_prob >= current_th_short) and regime["regime_short_ok"] and ema_alignment_short and vol_ok and rsi_slope_short
+    long_ok  = (up_prob >= current_th_long) and regime["regime_long_ok"] and ema_alignment_long and vol_ok and rsi_slope_long and (not btc_block_long)
+    short_ok = (dn_prob >= current_th_short or panic_short) and regime["regime_short_ok"] and ema_alignment_short and vol_ok and rsi_slope_short
     
     if long_ok: side = "LONG"
     elif short_ok: side = "SHORT"

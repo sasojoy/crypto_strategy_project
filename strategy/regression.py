@@ -57,18 +57,37 @@ def check_exit_condition(position, current_price):
     sl = position.get("sl")
     tp = position.get("tp")
     
-    # Iteration 101.7: Breakeven Buffering (+1.5% gain moves SL to Entry + 0.2%)
-    # CEO Requirement: Give price more "breathing space" and cover fees.
+    # Iteration 102.0: Dynamic Trailing Stop-Loss (1.0% trail after +2.0% profit)
+    # CEO Requirement: Capture big moves (5%+) while protecting gains.
     unrealized_pnl = (current_price - entry_price) / entry_price if side == "LONG" else (entry_price - current_price) / entry_price
-    if unrealized_pnl >= 0.015:
-        fee_buffer = 0.002 # 0.2% to cover fees
+    
+    # Track High-Water Mark (HWM) for trailing
+    hwm = position.get("hwm", entry_price)
+    if side == "LONG":
+        hwm = max(hwm, current_price)
+    else:
+        hwm = min(hwm, current_price)
+    position["hwm"] = hwm
+
+    if unrealized_pnl >= 0.020:
+        trail_pct = 0.010 # 1.0% trail
+        if side == "LONG":
+            new_sl = hwm * (1 - trail_pct)
+            sl = max(sl, new_sl) if sl is not None else new_sl
+        else:
+            new_sl = hwm * (1 + trail_pct)
+            sl = min(sl, new_sl) if sl is not None else new_sl
+        position["sl"] = sl
+    elif unrealized_pnl >= 0.015:
+        # Iteration 101.7: Breakeven Buffering
+        fee_buffer = 0.002
         if side == "LONG":
             new_sl = entry_price * (1 + fee_buffer)
             sl = max(sl, new_sl) if sl is not None else new_sl
         else:
             new_sl = entry_price * (1 - fee_buffer)
             sl = min(sl, new_sl) if sl is not None else new_sl
-        position["sl"] = sl # Update position for persistence
+        position["sl"] = sl
 
     if sl is not None and tp is not None:
         if side == "LONG":
