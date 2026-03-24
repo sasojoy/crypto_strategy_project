@@ -1,5 +1,5 @@
 # realtime_cls.py —— 15m + 4h 特徵、雙門檻、多空不對稱 ATR TP/SL（與訓練一致）
-import sys, os, time, json, pickle
+import sys, os, time, json, pickle, hashlib
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import requests
@@ -22,6 +22,81 @@ MODEL_PATH     = "h16_dynamic/cls_model_h16.pkl"
 SCALER_PATH    = "h16_dynamic/scaler_h16.joblib"
 OPT_PATH       = "h16_dynamic/opt_h16_dynamic.json"
 POSITION_PATH  = "resources/current_position.yaml"
+
+
+
+
+
+
+class TradingStrategy:
+    """
+    Iteration 103.0: Standardized Trading Strategy Logic
+    Encapsulates entry/exit rules for both backtest and live trading.
+    """
+    def __init__(self, config_path):
+        with open(config_path, "r") as f:
+            content = f.read()
+            self.config_hash = hashlib.md5(content.encode()).hexdigest()
+            self.config = json.load(f) if not content else {}
+            # If file was empty or invalid, we might need a fallback
+            if not self.config:
+                with open(config_path, "r") as f2:
+                    self.config = json.load(f2)
+        
+        self.th_base = 0.85
+        self.tp_pct = 0.015
+        self.sl_pct = 0.010
+        self.min_hold_minutes = 30
+
+    def get_thresholds(self, current_price, ema_200, atr_ratio):
+        trend_down = current_price < ema_200
+        th_long = self.th_base + 0.05 if trend_down else self.th_base
+        th_short = self.th_base - 0.05 if trend_down else self.th_base
+        
+        vol_comp = 0.05 if (atr_ratio < 0.005 or atr_ratio > 0.015) else 0.0
+        return th_long + vol_comp, th_short + vol_comp
+
+    def check_entry(self, up_prob, dn_prob, features, regime):
+        current_price = features.get('close', 0)
+        ema_200 = features.get('ema_200', current_price)
+        atr_ratio = features.get('atr_ratio', 0)
+        
+        th_l, th_s = self.get_thresholds(current_price, ema_200, atr_ratio)
+        
+        btc_change_5m = features.get('btc_change_5m', 0.0)
+        btc_block_long = btc_change_5m < -0.010
+        
+        panic_short = (features.get('volume', 0) > features.get('vol_ma_24h', 0) * 3.0) and \
+                      (current_price < features.get('bb_lower', 0))
+
+        ema_alignment_long = (current_price > features.get('ema_slow', 0))
+        ema_alignment_short = (current_price < features.get('ema_slow', 0))
+        vol_ok = features.get('volume', 0) > (features.get('vol_ma_24h', 0) * 1.5)
+        rsi_slope_long = features.get('rsi_slope', 0) > 2.0
+        rsi_slope_short = features.get('rsi_slope', 0) < -2.0
+
+        long_ok = (up_prob >= th_l) and regime["regime_long_ok"] and \
+                  ema_alignment_long and vol_ok and rsi_slope_long and (not btc_block_long)
+        
+        short_ok = (dn_prob >= th_s or panic_short) and regime["regime_short_ok"] and \
+                   ema_alignment_short and vol_ok and rsi_slope_short
+        
+        if long_ok: return "LONG"
+        if short_ok: return "SHORT"
+        return None
+
+    def build_tp_sl(self, side, entry_price):
+        if side == "LONG":
+            sl = round(entry_price * (1 - self.sl_pct), 2)
+            tp = round(entry_price * (1 + self.tp_pct), 2)
+        else:
+            sl = round(entry_price * (1 + self.sl_pct), 2)
+            tp = round(entry_price * (1 - self.tp_pct), 2)
+        return sl, tp
+
+
+
+
 
 # ===== 交易/持倉參數（與訓練一致）=====
 H                 = 16              # 最多持倉 16 根（=4h）
@@ -229,19 +304,9 @@ def build_regime_masks(px: pd.DataFrame):
 
 # ================== 市況與 TP/SL ==================
 def build_tp_sl_prices(side: str, entry_price: float, atr: float) -> tuple[float, float]:
-    # Iteration 101.1: Percentage Mode Refactoring
-    # CEO Requirement: Use percentage-based TP/SL (e.g., 1.6% = 0.016)
-    # Note: We convert the ATR-based multipliers to percentage equivalents for this iteration
-    tp_pct = 0.015 # 1.5% Target
-    sl_pct = 0.010 # 1.0% Stop
-    
-    if side == "LONG":
-        sl = round(entry_price * (1 - sl_pct), 2)
-        tp = round(entry_price * (1 + tp_pct), 2)
-    else:
-        sl = round(entry_price * (1 + sl_pct), 2)
-        tp = round(entry_price * (1 - tp_pct), 2)
-    return sl, tp
+    # Iteration 103.0: Standardized TP/SL Logic
+    strategy = TradingStrategy(OPT_PATH)
+    return strategy.build_tp_sl(side, entry_price)
 
 def tighten_stop_only(side: str, current_sl: float, entry_price: float, atr_now: float) -> float:
     # 只收緊，不放寬；1.2×ATR 的追蹤
@@ -408,47 +473,11 @@ def main():
                extra_msg=f"方向：{side}\n已持有：{bars_held*15} 分鐘\nTP：{position.get('tp',0):.2f} / SL：{position.get('sl',0):.2f}")
         return
 
-    # ===== 無持倉：進場判斷（Iteration 102.0: Bi-directional Hunting）=====
-    # CEO Requirement: Asymmetric thresholds, Panic Indicator, and BTC Correlation Filter
-    TH_BASE = 0.85
+    # ===== 無持倉：進場判斷（Iteration 103.0: Standardized Logic）=====
+    strategy = TradingStrategy(OPT_PATH)
+    print(f"--- Strategy Config Hash: {strategy.config_hash} ---")
     
-    # 1. Asymmetric Shorting (EMA200 Trend-based)
-    # Note: ema_200 should be pre-calculated in features
-    ema_200 = features.get('ema_200', current_price)
-    trend_down = current_price < ema_200
-    
-    th_long = TH_BASE + 0.05 if trend_down else TH_BASE
-    th_short = TH_BASE - 0.05 if trend_down else TH_BASE
-    
-    # 2. Reversed Volatility Compensation
-    atr_ratio = features.get('atr_ratio', 0)
-    vol_comp = 0.05 if (atr_ratio < 0.005 or atr_ratio > 0.015) else 0.0
-    
-    current_th_long = th_long + vol_comp
-    current_th_short = th_short + vol_comp
-
-    # 3. BTC Correlation Filter (Block longs if BTC 5m change < -1.0%)
-    # Note: btc_change_5m should be passed in or fetched
-    btc_change_5m = features.get('btc_change_5m', 0.0)
-    btc_block_long = btc_change_5m < -0.010
-
-    # 4. Panic Indicator (Shorting only: Volume surge + BB lower band break)
-    # Note: bb_lower should be in features
-    panic_short = (features.get('volume', 0) > features.get('vol_ma_24h', 0) * 3.0) and (current_price < features.get('bb_lower', 0))
-
-    # Hard Filters
-    ema_alignment_long = (current_price > features.get('ema_slow', 0))
-    ema_alignment_short = (current_price < features.get('ema_slow', 0))
-    vol_ok = features.get('volume', 0) > (features.get('vol_ma_24h', 0) * 1.5)
-    rsi_slope_long = features.get('rsi_slope', 0) > 2.0
-    rsi_slope_short = features.get('rsi_slope', 0) < -2.0
-
-    side = None
-    long_ok  = (up_prob >= current_th_long) and regime["regime_long_ok"] and ema_alignment_long and vol_ok and rsi_slope_long and (not btc_block_long)
-    short_ok = (dn_prob >= current_th_short or panic_short) and regime["regime_short_ok"] and ema_alignment_short and vol_ok and rsi_slope_short
-    
-    if long_ok: side = "LONG"
-    elif short_ok: side = "SHORT"
+    side = strategy.check_entry(up_prob, dn_prob, features, regime)
 
     if side:
         entry_price = current_price
