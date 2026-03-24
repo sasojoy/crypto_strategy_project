@@ -56,19 +56,31 @@ def check_exit_condition(position, current_price):
     # --- 1) 先檢查 TP / SL（若存在） ---
     sl = position.get("sl")
     tp = position.get("tp")
+    
+    # Iteration 101.6: Breakeven Trigger (+1.0% gain moves SL to Entry)
+    unrealized_pnl = (current_price - entry_price) / entry_price if side == "LONG" else (entry_price - current_price) / entry_price
+    if unrealized_pnl >= 0.010:
+        if side == "LONG":
+            sl = max(sl, entry_price) if sl is not None else entry_price
+        else:
+            sl = min(sl, entry_price) if sl is not None else entry_price
+        position["sl"] = sl # Update position for persistence
+
     if sl is not None and tp is not None:
         if side == "LONG":
             if current_price >= tp:
                 if holding_minutes >= min_hold_minutes:
                     return {"exit": True, "reason": "TP", "holding_minutes": holding_minutes}
             if current_price <= sl:
-                return {"exit": True, "reason": "SL", "holding_minutes": holding_minutes}
+                reason = "BREAKEVEN" if sl == entry_price else "SL"
+                return {"exit": True, "reason": reason, "holding_minutes": holding_minutes}
         else:  # SHORT
             if current_price <= tp:
                 if holding_minutes >= min_hold_minutes:
                     return {"exit": True, "reason": "TP", "holding_minutes": holding_minutes}
             if current_price >= sl:
-                return {"exit": True, "reason": "SL", "holding_minutes": holding_minutes}
+                reason = "BREAKEVEN" if sl == entry_price else "SL"
+                return {"exit": True, "reason": reason, "holding_minutes": holding_minutes}
 
     # --- 2) 原有固定條件（回溯相容） ---
     if side == "SHORT":
