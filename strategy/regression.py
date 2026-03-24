@@ -48,6 +48,10 @@ def check_exit_condition(position, current_price):
     entry_price = float(position["entry_price"])
     side = position.get("side", "LONG")
     holding_minutes = _compute_holding_minutes(position)
+    
+    # Iteration 101.0: Minimum Hold Time Protection (30 minutes)
+    # Unless it's a hard SL, we don't allow TP before 30 minutes.
+    min_hold_minutes = 30
 
     # --- 1) 先檢查 TP / SL（若存在） ---
     sl = position.get("sl")
@@ -55,12 +59,14 @@ def check_exit_condition(position, current_price):
     if sl is not None and tp is not None:
         if side == "LONG":
             if current_price >= tp:
-                return {"exit": True, "reason": "TP", "holding_minutes": holding_minutes}
+                if holding_minutes >= min_hold_minutes:
+                    return {"exit": True, "reason": "TP", "holding_minutes": holding_minutes}
             if current_price <= sl:
                 return {"exit": True, "reason": "SL", "holding_minutes": holding_minutes}
         else:  # SHORT
             if current_price <= tp:
-                return {"exit": True, "reason": "TP", "holding_minutes": holding_minutes}
+                if holding_minutes >= min_hold_minutes:
+                    return {"exit": True, "reason": "TP", "holding_minutes": holding_minutes}
             if current_price >= sl:
                 return {"exit": True, "reason": "SL", "holding_minutes": holding_minutes}
 

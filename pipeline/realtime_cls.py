@@ -229,6 +229,8 @@ def build_regime_masks(px: pd.DataFrame):
 
 # ================== 市況與 TP/SL ==================
 def build_tp_sl_prices(side: str, entry_price: float, atr: float) -> tuple[float, float]:
+    # Iteration 101.0: Corrected ATR Multiplier Logic
+    # Parameters from opt_h16_dynamic.json are multipliers (e.g. 1.6, 1.0)
     if side == "LONG":
         sl = round(entry_price - SL_L * atr, 2)
         tp = round(entry_price + TP_L * atr, 2)
