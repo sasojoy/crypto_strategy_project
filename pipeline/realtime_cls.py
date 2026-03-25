@@ -1,5 +1,5 @@
 # realtime_cls.py —— 15m + 4h 特徵、雙門檻、多空不對稱 ATR TP/SL（與訓練一致）
-import sys, os, time, json, pickle
+import sys, os, time, json, pickle, hashlib
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import requests
@@ -14,6 +14,7 @@ from strategy.regression import (
     load_current_position, save_current_position,
     clear_position, log_trade, check_exit_condition,
 )
+from strategy.logic import TradingStrategy, compute_adx
 from pipeline.sync_to_sheets import sync_trade_to_sheet
 
 # ===== 檔案路徑 =====
@@ -22,6 +23,16 @@ MODEL_PATH     = "h16_dynamic/cls_model_h16.pkl"
 SCALER_PATH    = "h16_dynamic/scaler_h16.joblib"
 OPT_PATH       = "h16_dynamic/opt_h16_dynamic.json"
 POSITION_PATH  = "resources/current_position.yaml"
+
+
+
+
+
+
+
+
+
+
 
 # ===== 交易/持倉參數（與訓練一致）=====
 H                 = 16              # 最多持倉 16 根（=4h）
@@ -33,7 +44,16 @@ SYMBOL            = "BTCUSDT"
 
 # ===== 訓練門檻與TP/SL（從 opt_h16_dynamic.json 讀）=====
 with open(OPT_PATH, "r", encoding="utf-8") as f:
-    _opt = json.load(f)["best"]
+    _opt_full = json.load(f)
+    _opt = _opt_full["best"]
+    FEATURES = _opt_full.get("features", [
+        "ret_1","ret_4","ret_16","ret_32",
+        "bb_z20","rv_16","slope_log_8","slope_log_16","slope_log_32",
+        "ema_fast_dist","ema_fast_slow_gap","mom_ratio",
+        "vol_chg","vol_z48","atr14","atr_ratio",
+        "rsi14_15m","rsi14_1h","rsi14_4h",
+    ])
+
 TH_LONG = float(_opt["th_long"])
 TH_SHORT= float(_opt["th_short"])
 TP_L    = float(_opt["tpL"])
@@ -45,6 +65,16 @@ SL_S    = float(_opt["slS"])
 with open(MODEL_PATH, "rb") as f:
     clf = pickle.load(f)
 scaler = joblib.load(SCALER_PATH)
+
+# 檢查 Scaler 與 FEATURES 是否對齊
+if hasattr(scaler, "feature_names_in_"):
+    scaler_feats = list(scaler.feature_names_in_)
+    if scaler_feats != FEATURES:
+        print(f"⚠️ 警告：Scaler 特徵 ({len(scaler_feats)}) 與 FEATURES ({len(FEATURES)}) 不一致！")
+        print(f"Scaler: {scaler_feats}")
+        print(f"FEATURES: {FEATURES}")
+        # 以 Scaler 為準，避免 transform 報錯
+        FEATURES = scaler_feats
 
 # ================== 資料取得 ==================
 def _now_utc():
@@ -128,14 +158,6 @@ def _zscore(s, w):
     sd = s.rolling(w).std(ddof=0)
     return (s - m) / (sd + 1e-12)
 
-FEATURES = [
-    "ret_1","ret_4","ret_16","ret_32",
-    "bb_z20","rv_16","slope_log_8","slope_log_16","slope_log_32",
-    "ema_fast_dist","ema_fast_slow_gap","mom_ratio",
-    "vol_chg","vol_z48","atr14","atr_ratio",
-    "rsi14_15m","rsi14_1h","rsi14_4h",
-]
-
 def build_features_live(df15: pd.DataFrame) -> pd.DataFrame:
     """
     與訓練版等價，但不產生 y_up、不丟掉尾巴；回傳含 FEATURES 欄位的 DataFrame（最後一列用來預測）
@@ -218,13 +240,9 @@ def build_regime_masks(px: pd.DataFrame):
 
 # ================== 市況與 TP/SL ==================
 def build_tp_sl_prices(side: str, entry_price: float, atr: float) -> tuple[float, float]:
-    if side == "LONG":
-        sl = round(entry_price - SL_L * atr, 2)
-        tp = round(entry_price + TP_L * atr, 2)
-    else:
-        sl = round(entry_price + SL_S * atr, 2)
-        tp = round(entry_price - TP_S * atr, 2)
-    return sl, tp
+    # Iteration 103.0: Standardized TP/SL Logic
+    strategy = TradingStrategy(OPT_PATH)
+    return strategy.build_tp_sl(side, entry_price)
 
 def tighten_stop_only(side: str, current_sl: float, entry_price: float, atr_now: float) -> float:
     # 只收緊，不放寬；1.2×ATR 的追蹤
@@ -239,7 +257,17 @@ def tighten_stop_only(side: str, current_sl: float, entry_price: float, atr_now:
 def predict_prob(df15: pd.DataFrame):
     feats = build_features_live(df15)
     if feats.empty:
-        return None, None, None, None
+        # 找出哪些特徵缺失
+        df_tmp = build_features_live(df15.tail(FETCH_MIN_BARS)) # 再次嘗試以獲取中間過程
+        # 這裡簡化處理，直接在 build_features_live 之後檢查
+        return None, None, None, None, None
+
+    # 檢查是否有 NaN
+    last_row = feats.iloc[-1]
+    missing_cols = [c for c in FEATURES if pd.isna(last_row.get(c))]
+    if missing_cols:
+        print(f"⚠️ 警告：最後一列特徵缺失：{missing_cols}")
+        return None, None, None, None, None
 
     X = feats[FEATURES].iloc[[-1]]            # keep last row as DataFrame
     X_np = X.to_numpy(dtype=float, copy=False) # <<< 轉成 numpy，避免警告
@@ -254,18 +282,33 @@ def predict_prob(df15: pd.DataFrame):
     regime_short_ok = bool(mS[-1])
 
     atr_now = float(feats["atr14"].iloc[-1])
-    last_row = feats.iloc[-1]
     return p_dn, p_up, atr_now, dict(regime_long_ok=regime_long_ok, regime_short_ok=regime_short_ok), last_row
 
 # ================== 主流程 ==================
 def main():
     df = fetch_klines_and_append_to_local()
-    dn_prob, up_prob, atr_now, regime, latest = predict_prob(df)
-
-    if dn_prob is None:
+    
+    try:
+        dn_prob, up_prob, atr_now, regime, latest = predict_prob(df)
+    except Exception as e:
+        print(f"❌ 推論過程發生錯誤: {e}")
         notify(summary=None, signals=None,
                current_price=float(df["close"].iloc[-1]) if not df.empty else None,
-               extra_msg="❌ 無法預測：特徵不足")
+               extra_msg=f"❌ 推論錯誤: {str(e)}")
+        return
+
+    if dn_prob is None:
+        # Fallback 邏輯：如果特徵不足，嘗試用較少的資料或是回報具體缺失
+        msg = "❌ 無法預測：特徵不足"
+        if not df.empty:
+            # 檢查具體缺失
+            df_feat_check = df.copy()
+            # ... 可以在這裡加入更詳細的檢查 ...
+            msg += f" (目前資料共 {len(df)} 根)"
+        
+        notify(summary=None, signals=None,
+               current_price=float(df["close"].iloc[-1]) if not df.empty else None,
+               extra_msg=msg)
         return
 
     current_price = float(df["close"].iloc[-1])
@@ -366,16 +409,15 @@ def main():
                extra_msg=f"方向：{side}\n已持有：{bars_held*15} 分鐘\nTP：{position.get('tp',0):.2f} / SL：{position.get('sl',0):.2f}")
         return
 
-    # ===== 無持倉：進場判斷（雙門檻 + 濾網）=====
-    side = None
-    long_ok  = (up_prob  >= TH_LONG)  and regime["regime_long_ok"]
-    short_ok = (dn_prob  >= TH_SHORT) and regime["regime_short_ok"]
-    if long_ok: side = "LONG"
-    elif short_ok: side = "SHORT"
+    # ===== 無持倉：進場判斷（Iteration 105.1: High Conviction）=====
+    strategy = TradingStrategy(OPT_PATH)
+    print(f"--- Strategy Config Hash: {strategy.config_hash} ---")
+    
+    side, size_mult = strategy.check_entry(up_prob, dn_prob, latest, regime)
 
     if side:
         entry_price = current_price
-        sl, tp = build_tp_sl_prices(side, entry_price, atr_now)
+        sl, tp = strategy.build_tp_sl(side, entry_price)
         position = {
             "entry_time": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             "entry_price": float(entry_price),
@@ -386,18 +428,19 @@ def main():
             "atr_at_entry": float(atr_now),
             "atr_n": ATR_N,
             "tp_sl_mode": "ATR_FIXED_FROM_OPT",
-            "sl_mult": float(SL_L if side=="LONG" else SL_S),
-            "tp_mult": float(TP_L if side=="LONG" else TP_S),
+            "sl_mult": float(strategy.sl_pct * 100),
+            "tp_mult": float(strategy.tp_pct * 100),
             "bars_held": 0,
             "min_hold_bars": MIN_HOLD_BARS,
-            "max_hold_bars": MAX_HOLD_BARS
+            "max_hold_bars": MAX_HOLD_BARS,
+            "size_mult": float(size_mult)
         }
         save_current_position(position, POSITION_PATH)
 
         msg = (f"➡️ 進場：{side}\n"
                f"p_up={up_prob:.3f} / p_dn={dn_prob:.3f}\n"
-               f"門檻 L={TH_LONG:.3f} / S={TH_SHORT:.3f}\n"
-               f"ATR×(SL={position['sl_mult']:.2f}, TP={position['tp_mult']:.2f})\n"
+               f"門檻={strategy.th_base:.3f}\n"
+               f"TP={strategy.tp_pct*100:.1f}% / SL={strategy.sl_pct*100:.1f}%\n"
                f"TP={tp:.2f} / SL={sl:.2f}")
         notify(summary={"cls":[up_prob]}, signals=True, current_price=current_price,
                is_regression=False, side=side, sl=sl, tp=tp,

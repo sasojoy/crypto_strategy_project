@@ -1,0 +1,44 @@
+{
+  "parameter_sweep": [
+    {
+      "win_rate": 0.59375,
+      "profit_factor": 0.9031416627079487,
+      "max_dd": 0.01828156593242008,
+      "total_ret": -0.006738832263690098,
+      "trades": 32,
+      "threshold": 0.6
+    },
+    {
+      "win_rate": 0.6363636363636364,
+      "profit_factor": 1.0075930201440682,
+      "max_dd": 0.008984553258622267,
+      "total_ret": 6.524242247962775e-05,
+      "trades": 11,
+      "threshold": 0.65
+    },
+    {
+      "win_rate": 1.0,
+      "profit_factor": Infinity,
+      "max_dd": 0.0,
+      "total_ret": 0.005955751626706363,
+      "trades": 2,
+      "threshold": 0.7
+    }
+  ],
+  "vol_filter_comparison": {
+    "vol_on": {
+      "win_rate": 0.6363636363636364,
+      "profit_factor": 1.0075930201440682,
+      "max_dd": 0.008984553258622267,
+      "total_ret": 6.524242247962775e-05,
+      "trades": 11
+    },
+    "vol_off": {
+      "win_rate": 0.5263157894736842,
+      "profit_factor": 0.5502492880785811,
+      "max_dd": 0.05013967447763021,
+      "total_ret": -0.03823078102144584,
+      "trades": 57
+    }
+  }
+}
