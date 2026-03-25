@@ -14,6 +14,7 @@ from strategy.regression import (
     load_current_position, save_current_position,
     clear_position, log_trade, check_exit_condition,
 )
+from strategy.logic import TradingStrategy, compute_adx
 from pipeline.sync_to_sheets import sync_trade_to_sheet
 
 # ===== 檔案路徑 =====
@@ -28,71 +29,6 @@ POSITION_PATH  = "resources/current_position.yaml"
 
 
 
-class TradingStrategy:
-    """
-    Iteration 103.0: Standardized Trading Strategy Logic
-    Encapsulates entry/exit rules for both backtest and live trading.
-    """
-    def __init__(self, config_path):
-        with open(config_path, "r") as f:
-            content = f.read()
-            self.config_hash = hashlib.md5(content.encode()).hexdigest()
-            self.config = json.load(f) if not content else {}
-            # If file was empty or invalid, we might need a fallback
-            if not self.config:
-                with open(config_path, "r") as f2:
-                    self.config = json.load(f2)
-        
-        self.th_base = 0.85
-        self.tp_pct = 0.015
-        self.sl_pct = 0.010
-        self.min_hold_minutes = 30
-
-    def get_thresholds(self, current_price, ema_200, atr_ratio):
-        trend_down = current_price < ema_200
-        th_long = self.th_base + 0.05 if trend_down else self.th_base
-        th_short = self.th_base - 0.05 if trend_down else self.th_base
-        
-        vol_comp = 0.05 if (atr_ratio < 0.005 or atr_ratio > 0.015) else 0.0
-        return th_long + vol_comp, th_short + vol_comp
-
-    def check_entry(self, up_prob, dn_prob, features, regime):
-        current_price = features.get('close', 0)
-        ema_200 = features.get('ema_200', current_price)
-        atr_ratio = features.get('atr_ratio', 0)
-        
-        th_l, th_s = self.get_thresholds(current_price, ema_200, atr_ratio)
-        
-        btc_change_5m = features.get('btc_change_5m', 0.0)
-        btc_block_long = btc_change_5m < -0.010
-        
-        panic_short = (features.get('volume', 0) > features.get('vol_ma_24h', 0) * 3.0) and \
-                      (current_price < features.get('bb_lower', 0))
-
-        ema_alignment_long = (current_price > features.get('ema_slow', 0))
-        ema_alignment_short = (current_price < features.get('ema_slow', 0))
-        vol_ok = features.get('volume', 0) > (features.get('vol_ma_24h', 0) * 1.5)
-        rsi_slope_long = features.get('rsi_slope', 0) > 2.0
-        rsi_slope_short = features.get('rsi_slope', 0) < -2.0
-
-        long_ok = (up_prob >= th_l) and regime["regime_long_ok"] and \
-                  ema_alignment_long and vol_ok and rsi_slope_long and (not btc_block_long)
-        
-        short_ok = (dn_prob >= th_s or panic_short) and regime["regime_short_ok"] and \
-                   ema_alignment_short and vol_ok and rsi_slope_short
-        
-        if long_ok: return "LONG"
-        if short_ok: return "SHORT"
-        return None
-
-    def build_tp_sl(self, side, entry_price):
-        if side == "LONG":
-            sl = round(entry_price * (1 - self.sl_pct), 2)
-            tp = round(entry_price * (1 + self.tp_pct), 2)
-        else:
-            sl = round(entry_price * (1 + self.sl_pct), 2)
-            tp = round(entry_price * (1 - self.tp_pct), 2)
-        return sl, tp
 
 
 
@@ -473,15 +409,15 @@ def main():
                extra_msg=f"方向：{side}\n已持有：{bars_held*15} 分鐘\nTP：{position.get('tp',0):.2f} / SL：{position.get('sl',0):.2f}")
         return
 
-    # ===== 無持倉：進場判斷（Iteration 103.0: Standardized Logic）=====
+    # ===== 無持倉：進場判斷（Iteration 105.1: High Conviction）=====
     strategy = TradingStrategy(OPT_PATH)
     print(f"--- Strategy Config Hash: {strategy.config_hash} ---")
     
-    side = strategy.check_entry(up_prob, dn_prob, features, regime)
+    side, size_mult = strategy.check_entry(up_prob, dn_prob, latest, regime)
 
     if side:
         entry_price = current_price
-        sl, tp = build_tp_sl_prices(side, entry_price, atr_now)
+        sl, tp = strategy.build_tp_sl(side, entry_price)
         position = {
             "entry_time": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             "entry_price": float(entry_price),
@@ -492,18 +428,19 @@ def main():
             "atr_at_entry": float(atr_now),
             "atr_n": ATR_N,
             "tp_sl_mode": "ATR_FIXED_FROM_OPT",
-            "sl_mult": float(SL_L if side=="LONG" else SL_S),
-            "tp_mult": float(TP_L if side=="LONG" else TP_S),
+            "sl_mult": float(strategy.sl_pct * 100),
+            "tp_mult": float(strategy.tp_pct * 100),
             "bars_held": 0,
             "min_hold_bars": MIN_HOLD_BARS,
-            "max_hold_bars": MAX_HOLD_BARS
+            "max_hold_bars": MAX_HOLD_BARS,
+            "size_mult": float(size_mult)
         }
         save_current_position(position, POSITION_PATH)
 
         msg = (f"➡️ 進場：{side}\n"
                f"p_up={up_prob:.3f} / p_dn={dn_prob:.3f}\n"
-               f"門檻 L={TH_LONG:.3f} / S={TH_SHORT:.3f}\n"
-               f"ATR×(SL={position['sl_mult']:.2f}, TP={position['tp_mult']:.2f})\n"
+               f"門檻={strategy.th_base:.3f}\n"
+               f"TP={strategy.tp_pct*100:.1f}% / SL={strategy.sl_pct*100:.1f}%\n"
                f"TP={tp:.2f} / SL={sl:.2f}")
         notify(summary={"cls":[up_prob]}, signals=True, current_price=current_price,
                is_regression=False, side=side, sl=sl, tp=tp,

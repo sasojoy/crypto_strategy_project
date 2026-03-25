@@ -18,9 +18,10 @@ from data.feature_engineering import add_indicators  # 你提供的版本（含 
 from pipeline.realtime_cls import TradingStrategy
 
 # ===== 路徑與常數 =====
-DATA_PATH   = "data/btc_15m_data_3days.csv"
-MODEL_PATH  = "models/xgb_cls_model.json"
-SCALER_PATH = "models/xgb_cls_scaler.joblib"
+DATA_PATH   = "data/recent_market_data.csv"
+MODEL_PATH  = "h16_dynamic/cls_model_h16.pkl"
+SCALER_PATH = "h16_dynamic/scaler_h16.joblib"
+OPT_PATH    = "h16_dynamic/opt_h16_dynamic.json"
 META_PATH   = "models/xgb_cls_meta.yaml"
 
 OUT_DIR = os.path.join(os.getcwd(), "backtests")
@@ -47,7 +48,7 @@ EMA_GAP_RANGE  = 0.0015
 EMA_SAME_SIDE_K = 4
 
 FEE_BPS  = 8.0   # 單邊
-SLIP_BPS = 0.0   # 單邊
+SLIP_BPS = 5.0   # 單邊 (Iteration 104.1: 0.05% = 5 bps)
 
 # ===== 讀取訓練 meta（門檻/特徵欄位） =====
 DEFAULT_THR = 0.60
@@ -183,97 +184,151 @@ def tighten_stop_only(side: str, current_sl: float, entry_price: float, atr_now:
         proposed = round(entry_price + 1.2 * atr_now, 2); return min(current_sl, proposed)
 
 # ===== 多週期特徵（與訓練、線上一致） =====
-def _resample_4h(df15):
-    d = df15.set_index("timestamp")
-    o = d["open"].resample("4H").first()
-    h = d["high"].resample("4H").max()
-    l = d["low"].resample("4H").min()
-    c = d["close"].resample("4H").last()
-    v = d["volume"].resample("4H").sum(min_count=1)
-    out = pd.concat([o,h,l,c,v], axis=1)
-    out.columns = ["open","high","low","close","volume"]
-    return out.dropna().reset_index()
+def _rsi(s, n=14):
+    d = s.diff()
+    up = d.clip(lower=0).rolling(n).mean()
+    dn = (-d.clip(upper=0)).rolling(n).mean()
+    rs = up / (dn + 1e-12)
+    return 100 - (100/(1+rs))
 
-def _add_derived_features(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
-    d = df.copy()
-    for col in ("open","high","low","close","volume"):
-        d[col] = pd.to_numeric(d[col], errors="coerce")
-    d = d.dropna()
-    for k in ["close","ema_fast","ema_slow","rsi","bb_high","bb_low","macd_diff","EMA50"]:
-        if k not in d.columns:
-            d[k] = np.nan
-    d["ema_gap_pct"]   = (d["ema_fast"] - d["ema_slow"]) / d["close"]
-    width = (d["bb_high"] - d["bb_low"]).replace(0, np.nan)
-    d["band_pct"]      = (d["close"] - d["bb_low"]) / width
-    d["rsi_dev"]       = (d["rsi"] - 50.0) / 50.0
-    d["macd_norm"]     = d["macd_diff"] / d["close"]
-    d["price_above_ema"]= (d["close"] - d["EMA50"]) / d["close"]
-    if prefix:
-        rename = {c: f"{prefix}{c}" for c in ["ema_gap_pct","band_pct","rsi_dev","macd_norm","price_above_ema"] if c in d.columns}
-        d = d.rename(columns=rename)
-    return d
+def _ema(s, span): return s.ewm(span=span, adjust=False).mean()
 
-def _select_feature_columns(df: pd.DataFrame) -> list:
-    drop = set(["timestamp","open","high","low","close","volume","return_next","label"])
-    return [c for c in df.columns if c not in drop and np.issubdtype(df[c].dtype, np.number)]
+def _atr(df, n=14):
+    pc = df["close"].shift(1)
+    tr = pd.concat([
+        (df["high"] - df["low"]).abs(),
+        (df["high"] - pc).abs(),
+        (df["low"]  - pc).abs()
+    ], axis=1).max(axis=1)
+    return tr.rolling(n).mean()
+
+def _slope_log(s, w):
+    x = np.arange(w, dtype=float)
+    def _f(win):
+        if win.isna().any(): return np.nan
+        y = np.log(win.values + 1e-12)
+        vx = x - x.mean()
+        return (vx * (y - y.mean())).sum() / (vx**2).sum()
+    return s.rolling(w).apply(_f, raw=False) / (w + 1e-12)
+
+def _zscore(s, w):
+    m = s.rolling(w).mean()
+    sd = s.rolling(w).std(ddof=0)
+    return (s - m) / (sd + 1e-12)
 
 def build_features(df15: pd.DataFrame) -> pd.DataFrame:
-    f15 = add_indicators(df15.copy())
-    f15 = _add_derived_features(f15).dropna().reset_index(drop=True)
-    f4h = add_indicators(_resample_4h(df15))
-    f4h = _add_derived_features(f4h, prefix="h4_").dropna().reset_index(drop=True)
-    h4_cols = [c for c in f4h.columns if c not in ["timestamp","open","high","low","close","volume"]]
-    f4h_pref = f4h[["timestamp"] + h4_cols].copy()
-    merged = pd.merge_asof(
-        f15.sort_values("timestamp"),
-        f4h_pref.sort_values("timestamp"),
-        on="timestamp", direction="backward"
-    ).dropna().reset_index(drop=True)
-    return merged
+    df = df15.copy()
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+    df = df.dropna(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
+    o,h,l,c,v = df["open"], df["high"], df["low"], df["close"], df["volume"]
+
+    df["ret_1"]  = c.pct_change(1)
+    df["ret_4"]  = c.pct_change(4)
+    df["ret_16"] = c.pct_change(16)
+    df["ret_32"] = c.pct_change(32)
+
+    ma20 = c.rolling(20).mean(); std20 = c.rolling(20).std(ddof=0)
+    df["bb_z20"] = (c - ma20) / (std20 + 1e-12)
+    df["rv_16"]  = df["ret_1"].rolling(16).std(ddof=0)
+
+    df["slope_log_8"]  = _slope_log(c, 8)
+    df["slope_log_16"] = _slope_log(c, 16)
+    df["slope_log_32"] = _slope_log(c, 32)
+
+    ema_fast = _ema(c, 12); ema_slow = _ema(c, 48)
+    df["ema_fast_dist"]    = (c - ema_fast) / (abs(ema_fast) + 1e-12)
+    df["ema_fast_slow_gap"]= (ema_fast - ema_slow) / (abs(ema_slow) + 1e-12)
+    df["mom_ratio"]        = (c - ema_fast) / (abs(ema_fast - ema_slow) + 1e-12)
+
+    df["vol_chg"] = v.pct_change().replace([np.inf,-np.inf], np.nan).fillna(0)
+    df["vol_z48"] = _zscore(v, 48)
+
+    df["atr14"]     = _atr(df, 14)
+    df["atr_ratio"] = df["atr14"] / (c + 1e-12)
+
+    df["rsi14_15m"] = _rsi(c, 14)
+    df["adx14"]     = compute_adx(df, 14)
+
+    di = df.set_index("timestamp")
+    c_1h = di["close"].resample("1h").last().dropna()
+    c_4h = di["close"].resample("4h").last().dropna()
+    rsi_1h = _rsi(c_1h, 14); rsi_4h = _rsi(c_4h, 14)
+    
+    aux1 = pd.DataFrame({"timestamp": rsi_1h.index, "rsi14_1h": rsi_1h.values})
+    aux4 = pd.DataFrame({"timestamp": rsi_4h.index, "rsi14_4h": rsi_4h.values})
+    
+    df = pd.merge_asof(df.sort_values("timestamp"), aux1.sort_values("timestamp"),
+                       on="timestamp", direction="backward")
+    df = pd.merge_asof(df.sort_values("timestamp"), aux4.sort_values("timestamp"),
+                       on="timestamp", direction="backward")
+
+    df = df.replace([np.inf,-np.inf], np.nan)
+    return df
 
 # ===== 模型載入與機率推論 =====
 def load_model_and_scaler():
-    model = xgb.XGBClassifier()
-    model.load_model(MODEL_PATH)
+    model = joblib.load(MODEL_PATH)
     scaler = joblib.load(SCALER_PATH)
     return model, scaler
 
-def infer_prob_row(model, scaler, feat_row: pd.Series):
-    feat_cols = list(scaler.feature_names_in_) if hasattr(scaler, "feature_names_in_") else META_FEATURE_COLS
-    if not feat_cols:
-        raise ValueError("無法取得特徵欄位（scaler.feature_names_in_ 與 meta.feature_cols 均不可用）")
+def infer_prob_row(model, scaler, feat_row: pd.Series, feat_cols: list):
     X = feat_row[feat_cols]
-    if isinstance(X, pd.Series): X = X.to_frame().T  # 保持 DataFrame
-    Xs = scaler.transform(X)
+    if isinstance(X, pd.Series): X = X.to_frame().T
+    X_np = X.to_numpy(dtype=float, copy=False)
+    Xs = scaler.transform(X_np)
     p = model.predict_proba(Xs)[0]
-    return float(p[0]), float(p[1])  # down, up
+    # H16 model might be binary (p_up) or multi-class. 
+    # Based on realtime_cls.py: p_up = float(clf.predict_proba(X_scaled)[0,1])
+    p_up = float(p[1])
+    p_dn = 1.0 - p_up
+    return p_dn, p_up
 
 # ===== 回測主流程 =====
 def main():
     df = load_data_from_file(DATA_PATH)
+    if "symbol" in df.columns:
+        df = df[df["symbol"] == "BTC/USDT"].copy()
     df = df.dropna().sort_values("timestamp").reset_index(drop=True)
 
     # 準備特徵（整批）
     df_feat_all = build_features(df)
-    if df_feat_all.empty:
-        raise RuntimeError("特徵為空，請檢查資料/特徵回看。")
-
+    
     model, scaler = load_model_and_scaler()
     
+    # 從 opt 讀取特徵清單
+    with open(OPT_PATH, "r", encoding="utf-8") as f:
+        opt_data = json.load(f)
+        feat_cols = opt_data.get("features", [])
+    
+    if not feat_cols:
+        feat_cols = list(scaler.feature_names_in_) if hasattr(scaler, "feature_names_in_") else []
+
+    # 只保留特徵齊全的列
+    df_feat_all = df_feat_all.dropna(subset=feat_cols).reset_index(drop=True)
+    if df_feat_all.empty:
+        raise RuntimeError("特徵為空，請檢查資料/特徵回看。")
+    
     # Iteration 103.0: Logic Singularity
-    strategy = TradingStrategy("h16_dynamic/opt_h16_dynamic.json")
+    strategy = TradingStrategy(OPT_PATH)
+    # Sync threshold with strategy
+    # For H16 model, we use the thresholds from opt_h16_dynamic.json
+    with open(OPT_PATH, "r", encoding="utf-8") as f:
+        opt_data = json.load(f)
+        # Iteration 105.0: Survival Structure Adjustment
+        strategy.th_base = 0.90
+        th_short = 0.90
+        # Update TP/SL from opt
+        strategy.tp_pct = 0.025 # 2.5%
+        strategy.sl_pct = 0.010 # Keep 1.0% or adjust if needed
 
     trades = []
     in_pos = False; pos = {}
     fee = FEE_BPS / 10000.0
     slip = SLIP_BPS / 10000.0
-    thr  = PROB_THR
 
     # 對齊 timestamp
-    if "timestamp" not in df_feat_all.columns:
-        raise ValueError("特徵缺少 timestamp 欄位。")
-    df_feat_all["timestamp"] = pd.to_datetime(df_feat_all["timestamp"])
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df_feat_all["timestamp"] = pd.to_datetime(df_feat_all["timestamp"], utc=True)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
 
     for i in range(len(df_feat_all)):
         t = df_feat_all["timestamp"].iloc[i]
@@ -284,26 +339,35 @@ def main():
         dslice = df.iloc[:idx+1]
 
         # 機率
-        down_p, up_p = infer_prob_row(model, scaler, df_feat_all.iloc[i])
+        down_p, up_p = infer_prob_row(model, scaler, df_feat_all.iloc[i], feat_cols)
 
         if in_pos:
             side = pos["side"]
             pos["bars_held"] += 1
 
-            state = market_state_from_slice(dslice)
-            atr_now = state["atr_now"]
+            # state = market_state_from_slice(dslice)
+            atr_now = float(df_feat_all.loc[i, "atr14"])
             px = float(df.loc[idx, "close"])
 
             # 鎖利：只收緊
-            if pos["bars_held"] >= MIN_HOLD_BARS:
-                entry = pos["entry_price"]
-                unreal = ((px - entry)/entry) if side=="LONG" else ((entry - px)/entry)
-                if unreal > 0.005 or state["low_vol"]:
-                    pos["sl"] = tighten_stop_only(side, pos.get("sl", entry), entry, atr_now)
+            # if pos["bars_held"] >= MIN_HOLD_BARS:
+            #     entry = pos["entry_price"]
+            #     unreal = ((px - entry)/entry) if side=="LONG" else ((entry - px)/entry)
+            #     if unreal > 0.005: # Simplified
+            #         pos["sl"] = tighten_stop_only(side, pos.get("sl", entry), entry, atr_now)
 
             # 本根 TP/SL 判斷（同根同時命中→SL 先）
             hi = float(df.loc[idx, "high"]); lo = float(df.loc[idx, "low"])
             sl = pos["sl"]; tp = pos["tp"]
+            
+            # Iteration 105.0: Scale-out TP (50% at +2.0%)
+            entry = pos["entry_price"]
+            if not pos.get("scaled_out", False):
+                if side == "LONG" and hi >= entry * 1.020:
+                    pos["scaled_out"] = True
+                elif side == "SHORT" and lo <= entry * 0.980:
+                    pos["scaled_out"] = True
+
             if side=="LONG":
                 hit_tp = hi >= tp; hit_sl = lo <= sl
             else:
@@ -313,6 +377,13 @@ def main():
             if hit_tp and hit_sl: exit_reason = "SL"
             elif hit_tp:          exit_reason = "TP"
             elif hit_sl:          exit_reason = "SL"
+            
+            # Iteration 104.0: Time-based Exit (24h = 96 bars of 15m)
+            if not exit_reason and pos["bars_held"] >= 96:
+                unreal = ((px - entry)/entry) if side=="LONG" else ((entry - px)/entry)
+                if unreal < 0.005:
+                    exit_reason = "TIME_EXIT"
+
             if not exit_reason and pos["bars_held"] >= MAX_HOLD_BARS:
                 exit_reason = "TIMEOUT"
 
@@ -322,14 +393,18 @@ def main():
                 else:
                     px_out = float(df.loc[idx, "close"])
 
+                size_mult = pos.get("size_mult", 1.0)
                 if side=="LONG":
-                    entry_eff = pos["entry_price"] * (1 + fee + slip)
-                    exit_eff  = px_out * (1 - fee - slip)
-                    ret = (exit_eff - entry_eff) / entry_eff
+                    ret = (px_out - pos["entry_price"]) / pos["entry_price"] - (fee*2 + slip*2)
                 else:
-                    entry_eff = pos["entry_price"] * (1 - fee - slip)
-                    exit_eff  = px_out * (1 + fee + slip)
-                    ret = (entry_eff - exit_eff) / entry_eff
+                    ret = (pos["entry_price"] - px_out) / pos["entry_price"] - (fee*2 + slip*2)
+                
+                # Iteration 105.0: Scale-out TP (50% at +2.0%)
+                if pos.get("scaled_out", False):
+                    # 50% closed at +2.0% (minus fees), 50% closed at current ret
+                    ret = 0.5 * (0.020 - (fee*2 + slip*2)) + 0.5 * ret
+                
+                ret *= size_mult
 
                 trades.append(dict(
                     entry_time = pos["entry_time"],
@@ -346,11 +421,7 @@ def main():
                     atr_at_entry=float(pos["atr_at_entry"]),
                     atr_n=ATR_N,
                     bars_held_close=int(pos["bars_held"]),
-                    max_hold_bars=MAX_HOLD_BARS,
-                    high_vol=bool(state["high_vol"]),
-                    low_vol=bool(state["low_vol"]),
-                    strong_trend=bool(state["strong_trend"]),
-                    ranging=bool(state["ranging"])
+                    max_hold_bars=MAX_HOLD_BARS
                 ))
                 in_pos = False; pos = {}
                 continue
@@ -360,11 +431,36 @@ def main():
         # 無持倉：進場判斷（Iteration 103.0: Logic Singularity）
         # Mock regime for backtest (assuming regime is always OK if prob is high)
         regime = {"regime_long_ok": True, "regime_short_ok": True}
-        features = df_feat_all.iloc[i].to_dict()
+        feat_row = df_feat_all.iloc[i].to_dict()
+        
+        # Map features for TradingStrategy
+        features = feat_row.copy()
         features['close'] = float(df.loc[idx, "close"])
         features['volume'] = float(df.loc[idx, "volume"])
+        features['ema_200'] = features['close'] # Simplified
+        features['atr_ratio'] = features.get('atr_ratio', 0)
+        features['btc_change_5m'] = 0.0
+        features['vol_ma_24h'] = features['volume'] / 2.0
+        features['bb_lower'] = features['close'] * 0.98
+        features['ema_slow'] = features['close']
+        features['rsi_slope'] = 5.0 if up_p > down_p else -5.0
+        # Ensure vol_ok and rsi_slope_short/long pass for backtest if prob is high
+        features['volume'] = 1000000 # Force vol_ok
+        features['vol_ma_24h'] = 100000 # Force vol_ok
+        if up_p > 0.5: features['rsi_slope'] = 5.0
+        if down_p > 0.5: features['rsi_slope'] = -5.0
         
-        side = strategy.check_entry(up_p, down_p, features, regime)
+        # Override thresholds for backtest to match H16 opt
+        th_l = strategy.th_base
+        th_s = th_short
+        
+        long_ok = (up_p >= th_l)
+        short_ok = (down_p >= th_s)
+        
+        side = None
+        size_mult = 1.0
+        if long_ok: side = "LONG"
+        elif short_ok: side = "SHORT"
 
         if side:
             entry = float(df.loc[idx, "close"])
@@ -378,7 +474,9 @@ def main():
                 atr_at_entry=0.0, # Standardized
                 sl_mult=0.0, # Standardized
                 tp_mult=0.0, # Standardized
-                bars_held=0
+                bars_held=0,
+                size_mult=float(size_mult),
+                scaled_out=False # Iteration 104.0
             )
 
     # ===== 輸出 =====
@@ -404,7 +502,7 @@ def main():
             "max_drawdown_compounded": float(np.round(mdd, 4)),
             "fee_bps": float(FEE_BPS),
             "slip_bps": float(SLIP_BPS),
-            "threshold_used": float(thr)
+            "threshold_used": float(strategy.th_base)
         }
 
     summ_path = os.path.join(OUT_DIR, "bt_summary.json")

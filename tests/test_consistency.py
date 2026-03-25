@@ -45,8 +45,9 @@ def test_strategy_consistency():
         }
         regime = {"regime_long_ok": True, "regime_short_ok": True}
         
-        side = strategy.check_entry(up_prob=0.95, dn_prob=0.05, features=features, regime=regime)
+        side, size = strategy.check_entry(up_prob=0.95, dn_prob=0.05, features=features, regime=regime)
         assert side == "LONG"
+        assert size == 1.0
         
     finally:
         if os.path.exists(config_path):
