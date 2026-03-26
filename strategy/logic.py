@@ -1,99 +1,76 @@
-
-import os
-import json
-import hashlib
-import numpy as np
 import pandas as pd
+import numpy as np
+import joblib
+import pickle
+import os
+from datetime import datetime, timedelta
 
 class TradingStrategy:
-    """
-    Iteration 105.1: Standardized Trading Strategy Logic
-    Encapsulates entry/exit rules for both backtest and live trading.
-    """
-    def __init__(self, config_path=None, th_base=0.92, tp_pct=0.025, sl_pct=0.010):
-        self.config = {}
-        self.config_hash = "default"
-        if config_path and os.path.exists(config_path):
-            with open(config_path, "r") as f:
-                content = f.read()
-                self.config_hash = hashlib.md5(content.encode()).hexdigest()
-                f.seek(0)
-                try:
-                    self.config = json.load(f)
-                except:
-                    self.config = {}
-        
-        self.th_base = th_base
-        self.tp_pct = tp_pct
-        self.sl_pct = sl_pct
-        self.adx_threshold = 30
+    def __init__(self):
+        # Models
+        self.core_model_path = 'h16_dynamic/model_h1_v111.pkl'
+        self.core_scaler_path = 'h16_dynamic/scaler_h1_v111.joblib'
+        self.alt_model_path = 'h16_dynamic/model_alt_v113.pkl'
+        self.alt_scaler_path = 'h16_dynamic/scaler_alt_v113.joblib'
 
-    @property
-    def min_hold_minutes(self):
-        return 30
+        with open(self.core_model_path, 'rb') as f: self.core_model = pickle.load(f)
+        self.core_scaler = joblib.load(self.core_scaler_path)
+        with open(self.alt_model_path, 'rb') as f: self.alt_model = pickle.load(f)
+        self.alt_scaler = joblib.load(self.alt_scaler_path)
 
-    def get_thresholds(self, current_price, ema_200, atr_ratio, btc_falling=False):
-        # Iteration 105.1: High Conviction
-        th_long = self.th_base
-        th_short = self.th_base
-        return th_long, th_short
+        # Feature Lists
+        self.core_features = ['ret_1', 'ret_4', 'ret_12', 'ret_24', 'dist_ma_12', 'dist_ma_48', 'rsi14', 'atr_ratio']
+        self.alt_features = ['ret_1', 'ret_4', 'ret_12', 'rsi14', 'atr_ratio', 'rel_strength']
 
-    def check_entry(self, up_prob, dn_prob, features, regime):
-        current_price = features.get('close', 0)
-        ema_200 = features.get('ema_200', current_price)
-        atr_ratio = features.get('atr_ratio', 0)
-        btc_change_5m = features.get('btc_change_5m', 0.0)
-        btc_falling = btc_change_5m < 0
-        
-        # ADX Filter
-        adx = features.get('adx14', 0)
-        if adx < self.adx_threshold:
-            return None, 1.0
+        # Config
+        self.max_total_equity = 1000.0
+        self.cooldown_hours = 4
+        self.last_exit_time = {} # {symbol: datetime}
 
-        th_l, th_s = self.get_thresholds(current_price, ema_200, atr_ratio, btc_falling)
+        self.slippage_map = {
+            'BTCUSDT': 5, 'ETHUSDT': 5, 'SOLUSDT': 15, 'AVAXUSDT': 15, 'FETUSDT': 30
+        }
 
-        # Basic filters
-        ema_alignment_long = (current_price > features.get('ema_slow', 0))
-        ema_alignment_short = (current_price < features.get('ema_slow', 0))
-        
-        long_ok = (up_prob >= th_l) and regime.get("regime_long_ok", True) and ema_alignment_long
-        short_ok = (dn_prob >= th_s) and regime.get("regime_short_ok", True) and ema_alignment_short
+    def get_signal(self, symbol, row):
+        if symbol in self.last_exit_time:
+            if datetime.now() < self.last_exit_time[symbol] + timedelta(hours=self.cooldown_hours):
+                return None, 0
 
-        if long_ok: return "LONG", 1.0
-        if short_ok: return "SHORT", 1.0
-        return None, 1.0
+        is_core = symbol in ['BTCUSDT', 'ETHUSDT', 'BTC/USDT', 'ETH/USDT']
+        model = self.core_model if is_core else self.alt_model
+        scaler = self.core_scaler if is_core else self.alt_scaler
+        features = self.core_features if is_core else self.alt_features
+        threshold = 0.85 if is_core else 0.75
 
-    def build_tp_sl(self, side, entry_price):
-        if side == "LONG":
-            sl = round(entry_price * (1 - self.sl_pct), 2)
-            tp = round(entry_price * (1 + self.tp_pct), 2)
+        X_df = pd.DataFrame([row[features].values], columns=features)
+        probs = model.predict_proba(scaler.transform(X_df))[0]
+
+        if is_core:
+            p_long, p_short = probs[1], probs[2]
+            if p_long >= threshold: return 'LONG', p_long
+            if p_short >= threshold: return 'SHORT', p_short
+            return None, max(p_long, p_short)
         else:
-            sl = round(entry_price * (1 + self.sl_pct), 2)
-            tp = round(entry_price * (1 - self.tp_pct), 2)
-        return sl, tp
+            p_long = probs[1]
+            if p_long >= threshold and row.get('trend_1h', True):
+                return 'LONG', p_long
+            return None, p_long
 
-def compute_adx(df: pd.DataFrame, n: int = 14) -> pd.Series:
-    h = pd.to_numeric(df["high"], errors="coerce").ffill()
-    l = pd.to_numeric(df["low"], errors="coerce").ffill()
-    c = pd.to_numeric(df["close"], errors="coerce").ffill()
-    up_move   = np.r_[np.nan, np.diff(h)]
-    down_move = -np.r_[np.nan, np.diff(l)]
-    plus_dm   = np.where((up_move > down_move) & (up_move > 0),  up_move, 0.0)
-    minus_dm  = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
-    
-    pc = c.shift(1)
-    tr = pd.concat([
-        (h - l).abs(),
-        (h - pc).abs(),
-        (l - pc).abs()
-    ], axis=1).max(axis=1)
-    
-    def _rma(s, n):
-        return s.ewm(alpha=1/n, adjust=False).mean()
-        
-    atr = _rma(tr, n)
-    plus_di  = 100 * _rma(pd.Series(plus_dm, index=df.index), n) / (atr + 1e-12)
-    minus_di = 100 * _rma(pd.Series(minus_dm, index=df.index), n) / (atr + 1e-12)
-    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-12)
-    adx = _rma(dx, n)
-    return adx
+    def get_tp_sl(self, symbol, side, price, atr_ratio):
+        is_core = symbol in ['BTCUSDT', 'ETHUSDT', 'BTC/USDT', 'ETH/USDT']
+        atr = price * atr_ratio
+        if is_core:
+            tp = price * (1.05 if side == 'LONG' else 0.95)
+            sl = price - 1.5 * atr if side == 'LONG' else price + 1.5 * atr
+        else:
+            base_tp = 0.03
+            slip_comp = 0.005 if self.slippage_map.get(symbol, 30) >= 30 else 0
+            tp = price * (1 + base_tp + slip_comp) if side == 'LONG' else price * (1 - (base_tp + slip_comp))
+            sl = price - 1.5 * atr if side == 'LONG' else price + 1.5 * atr
+        return tp, sl
+
+    def get_slippage(self, symbol):
+        return self.slippage_map.get(symbol, 30)
+
+    def record_exit(self, symbol):
+        self.last_exit_time[symbol] = datetime.now()
