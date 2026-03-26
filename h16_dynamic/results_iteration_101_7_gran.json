@@ -1,0 +1,282 @@
+[
+  {
+    "th_long": 0.83,
+    "th_short": 0.84,
+    "trades": 29,
+    "win_rate": 0.5172413793103449,
+    "total_pnl": 0.006499758870132686
+  },
+  {
+    "th_long": 0.83,
+    "th_short": 0.85,
+    "trades": 28,
+    "win_rate": 0.5357142857142857,
+    "total_pnl": 0.018099758870132727
+  },
+  {
+    "th_long": 0.83,
+    "th_short": 0.86,
+    "trades": 28,
+    "win_rate": 0.5357142857142857,
+    "total_pnl": 0.018099758870132727
+  },
+  {
+    "th_long": 0.83,
+    "th_short": 0.87,
+    "trades": 28,
+    "win_rate": 0.5357142857142857,
+    "total_pnl": 0.018099758870132727
+  },
+  {
+    "th_long": 0.83,
+    "th_short": 0.88,
+    "trades": 28,
+    "win_rate": 0.5357142857142857,
+    "total_pnl": 0.018099758870132727
+  },
+  {
+    "th_long": 0.83,
+    "th_short": 0.89,
+    "trades": 28,
+    "win_rate": 0.5357142857142857,
+    "total_pnl": 0.018099758870132727
+  },
+  {
+    "th_long": 0.83,
+    "th_short": 0.9,
+    "trades": 28,
+    "win_rate": 0.5357142857142857,
+    "total_pnl": 0.018099758870132727
+  },
+  {
+    "th_long": 0.83,
+    "th_short": 0.91,
+    "trades": 28,
+    "win_rate": 0.5357142857142857,
+    "total_pnl": 0.018099758870132727
+  },
+  {
+    "th_long": 0.84,
+    "th_short": 0.84,
+    "trades": 25,
+    "win_rate": 0.52,
+    "total_pnl": 0.0028997588701329957
+  },
+  {
+    "th_long": 0.84,
+    "th_short": 0.85,
+    "trades": 24,
+    "win_rate": 0.5416666666666666,
+    "total_pnl": 0.014499758870133045
+  },
+  {
+    "th_long": 0.84,
+    "th_short": 0.86,
+    "trades": 24,
+    "win_rate": 0.5416666666666666,
+    "total_pnl": 0.014499758870133045
+  },
+  {
+    "th_long": 0.84,
+    "th_short": 0.87,
+    "trades": 24,
+    "win_rate": 0.5416666666666666,
+    "total_pnl": 0.014499758870133045
+  },
+  {
+    "th_long": 0.84,
+    "th_short": 0.88,
+    "trades": 24,
+    "win_rate": 0.5416666666666666,
+    "total_pnl": 0.014499758870133045
+  },
+  {
+    "th_long": 0.84,
+    "th_short": 0.89,
+    "trades": 24,
+    "win_rate": 0.5416666666666666,
+    "total_pnl": 0.014499758870133045
+  },
+  {
+    "th_long": 0.84,
+    "th_short": 0.9,
+    "trades": 24,
+    "win_rate": 0.5416666666666666,
+    "total_pnl": 0.014499758870133045
+  },
+  {
+    "th_long": 0.84,
+    "th_short": 0.91,
+    "trades": 24,
+    "win_rate": 0.5416666666666666,
+    "total_pnl": 0.014499758870133045
+  },
+  {
+    "th_long": 0.85,
+    "th_short": 0.84,
+    "trades": 21,
+    "win_rate": 0.5714285714285714,
+    "total_pnl": 0.01739999999999895
+  },
+  {
+    "th_long": 0.85,
+    "th_short": 0.85,
+    "trades": 20,
+    "win_rate": 0.6,
+    "total_pnl": 0.028999999999999006
+  },
+  {
+    "th_long": 0.85,
+    "th_short": 0.86,
+    "trades": 20,
+    "win_rate": 0.6,
+    "total_pnl": 0.028999999999999006
+  },
+  {
+    "th_long": 0.85,
+    "th_short": 0.87,
+    "trades": 20,
+    "win_rate": 0.6,
+    "total_pnl": 0.028999999999999006
+  },
+  {
+    "th_long": 0.85,
+    "th_short": 0.88,
+    "trades": 20,
+    "win_rate": 0.6,
+    "total_pnl": 0.028999999999999006
+  },
+  {
+    "th_long": 0.85,
+    "th_short": 0.89,
+    "trades": 20,
+    "win_rate": 0.6,
+    "total_pnl": 0.028999999999999006
+  },
+  {
+    "th_long": 0.85,
+    "th_short": 0.9,
+    "trades": 20,
+    "win_rate": 0.6,
+    "total_pnl": 0.028999999999999006
+  },
+  {
+    "th_long": 0.85,
+    "th_short": 0.91,
+    "trades": 20,
+    "win_rate": 0.6,
+    "total_pnl": 0.028999999999999006
+  },
+  {
+    "th_long": 0.86,
+    "th_short": 0.84,
+    "trades": 21,
+    "win_rate": 0.5238095238095238,
+    "total_pnl": -0.007600000000000915
+  },
+  {
+    "th_long": 0.86,
+    "th_short": 0.85,
+    "trades": 20,
+    "win_rate": 0.55,
+    "total_pnl": 0.003999999999999136
+  },
+  {
+    "th_long": 0.86,
+    "th_short": 0.86,
+    "trades": 20,
+    "win_rate": 0.55,
+    "total_pnl": 0.003999999999999136
+  },
+  {
+    "th_long": 0.86,
+    "th_short": 0.87,
+    "trades": 20,
+    "win_rate": 0.55,
+    "total_pnl": 0.003999999999999136
+  },
+  {
+    "th_long": 0.86,
+    "th_short": 0.88,
+    "trades": 20,
+    "win_rate": 0.55,
+    "total_pnl": 0.003999999999999136
+  },
+  {
+    "th_long": 0.86,
+    "th_short": 0.89,
+    "trades": 20,
+    "win_rate": 0.55,
+    "total_pnl": 0.003999999999999136
+  },
+  {
+    "th_long": 0.86,
+    "th_short": 0.9,
+    "trades": 20,
+    "win_rate": 0.55,
+    "total_pnl": 0.003999999999999136
+  },
+  {
+    "th_long": 0.86,
+    "th_short": 0.91,
+    "trades": 20,
+    "win_rate": 0.55,
+    "total_pnl": 0.003999999999999136
+  },
+  {
+    "th_long": 0.87,
+    "th_short": 0.84,
+    "trades": 16,
+    "win_rate": 0.4375,
+    "total_pnl": -0.04960000000000041
+  },
+  {
+    "th_long": 0.87,
+    "th_short": 0.85,
+    "trades": 15,
+    "win_rate": 0.4666666666666667,
+    "total_pnl": -0.03800000000000036
+  },
+  {
+    "th_long": 0.87,
+    "th_short": 0.86,
+    "trades": 15,
+    "win_rate": 0.4666666666666667,
+    "total_pnl": -0.03800000000000036
+  },
+  {
+    "th_long": 0.87,
+    "th_short": 0.87,
+    "trades": 15,
+    "win_rate": 0.4666666666666667,
+    "total_pnl": -0.03800000000000036
+  },
+  {
+    "th_long": 0.87,
+    "th_short": 0.88,
+    "trades": 15,
+    "win_rate": 0.4666666666666667,
+    "total_pnl": -0.03800000000000036
+  },
+  {
+    "th_long": 0.87,
+    "th_short": 0.89,
+    "trades": 15,
+    "win_rate": 0.4666666666666667,
+    "total_pnl": -0.03800000000000036
+  },
+  {
+    "th_long": 0.87,
+    "th_short": 0.9,
+    "trades": 15,
+    "win_rate": 0.4666666666666667,
+    "total_pnl": -0.03800000000000036
+  },
+  {
+    "th_long": 0.87,
+    "th_short": 0.91,
+    "trades": 15,
+    "win_rate": 0.4666666666666667,
+    "total_pnl": -0.03800000000000036
+  }
+]

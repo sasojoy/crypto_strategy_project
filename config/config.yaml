@@ -1,0 +1,5 @@
+BOT_TOKEN: '7978688690:AAEYbCQMqoyCskxzms7gK-Moh1eYhF4X0rs'
+CHAT_ID: '-4949591915'
+training:
+  epochs: 100
+  learning_rate: 0.01
