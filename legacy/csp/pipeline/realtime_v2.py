@@ -177,10 +177,16 @@ def _compute_tp_sl(price: float, atr: float, side: str, atr_cfg: Dict[str, Any])
     return float(tp), float(sl)
 
 
-def _decide_side(proba_up: float, long_thr: float, short_thr: float) -> Optional[str]:
+def _decide_side(proba_up: float, long_thr: float, short_thr: float, price: float = None, resistance: float = None, support: float = None) -> Optional[str]:
     if proba_up >= long_thr:
+        if price is not None and resistance is not None:
+            if price >= resistance * 0.995: # Near resistance, avoid long
+                return None
         return "long"
     if (1.0 - proba_up) >= short_thr:
+        if price is not None and support is not None:
+            if price <= support * 1.005: # Near support, avoid short
+                return None
         return "short"
     return None
 
@@ -273,9 +279,14 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
 
     X = feats[feature_cols]
     idx, row = pick_latest_valid_row(X, k=3)
+
     if row is None:
+        # Identify which features are missing/NaN in the last row
+        last_row_all = feats.iloc[-1]
+        missing_feats = [c for c in feature_cols if c not in last_row_all or pd.isna(last_row_all[c])]
         logging.warning(
-            f"[WARN] no valid feature row for {sym} (last 3 bars contain NaN/inf)."
+            f"[WARN] no valid feature row for {sym} (last 3 bars contain NaN/inf). "
+            f"Missing/NaN features in latest bar: {missing_feats}"
         )
         last = feats.iloc[-1]
         return {
@@ -284,8 +295,9 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
             "proba_up": 0.0,
             "score": None,
             "side": "NONE",
-            "reason": "no_valid_features",
+            "reason": f"no_valid_features: missing {missing_feats[:5]}...",
         }
+
 
     # --- Diagnostics around feature matrix ---
     os.makedirs("logs/diag", exist_ok=True)
@@ -376,8 +388,12 @@ def run_once(csv_path: str, cfg: Dict[str, Any] | str, *, df: pd.DataFrame | Non
     proba_up = float(score) if np.isfinite(score) else np.nan
     long_thr = float(cfg["execution"]["long_prob_threshold"])
     short_thr = float(cfg["execution"]["short_prob_threshold"])
-    atr_cfg = cfg["execution"]["atr_tp_sl"]
-    side = _decide_side(proba_up, long_thr, short_thr) if np.isfinite(proba_up) else None
+    atr_cfg = cfg["execution"]["atr"]
+    
+    resistance = float(last.get("resistance_h4", np.nan))
+    support = float(last.get("support_h4", np.nan))
+    
+    side = _decide_side(proba_up, long_thr, short_thr, price=price, resistance=resistance, support=support) if np.isfinite(proba_up) else None
 
     log.info(f"最新訊號 [{sym}] @ {ts}")
     log.info(f"price={price:.2f}, proba_up={proba_up:.3f}, atr_h4={atr_h4:.2f}")

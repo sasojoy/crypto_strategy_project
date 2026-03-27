@@ -57,14 +57,14 @@ models:
 resources_dir: resources
 
 execution:
-  long_prob_threshold: 0.70
-  short_prob_threshold: 0.70
+  long_prob_threshold: 0.6272
+  short_prob_threshold: 0.6499
   max_holding_minutes: 240
   atr:
-    enabled: false
+    enabled: true
     h4_col: "atr_h4"
-    long:  { tp_mult: 1.5, sl_mult: 1.0 }
-    short: { tp_mult: 1.5, sl_mult: 1.0 }
+    long:  { tp_mult: 1.6, sl_mult: 1.0 }
+    short: { tp_mult: 1.2, sl_mult: 0.8 }
 
 backtest:
   initial_capital: 10000

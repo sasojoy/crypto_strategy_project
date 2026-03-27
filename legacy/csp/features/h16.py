@@ -114,12 +114,17 @@ def build_features_15m_4h(
     h4["ema_h4_21"] = _ema(h4["close"], 21)
     h4["ema_h4_50"] = _ema(h4["close"], 50)
 
+    # Support and Resistance (based on 4H)
+    h4["resistance_h4"] = h4["high"].rolling(20).max()
+    h4["support_h4"] = h4["low"].rolling(20).min()
+
+
     # 將 4H 指標對齊回 15m（每個 4H 區間內 forward-fill）
     h4_to_15 = h4.reindex(df.index, method="ffill")
 
     # 合併：維持 15m 時間軸
     feats = pd.concat(
-        [df, h4_to_15[["atr_h4", "rsi_h4", "ema_h4_21", "ema_h4_50"]]],
+        [df, h4_to_15[["atr_h4", "rsi_h4", "ema_h4_21", "ema_h4_50", "resistance_h4", "support_h4"]]],
         axis=1
     )
     feats = safe_reset_index(feats, name="timestamp", overwrite=True)
